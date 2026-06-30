@@ -1,0 +1,551 @@
+---
+title: "Predictive Models for the Whole-Bacterial Assays (PTNA, SBA, WT_IgG) at the InfMon2 Baseline"
+subtitle: "Hierarchical model building, effector (FcγR2a / ADCD) extension, and a concurrent-vs-prior (MatBirth) circularity probe"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: show
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 4.2)
+options(stringsAsFactors = FALSE)
+
+## ---- libraries (hard requirements) ----
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr)
+})
+## ---- optional packages: degrade gracefully if missing ----
+has_car      <- requireNamespace("car",      quietly = TRUE)
+has_relaimpo <- requireNamespace("relaimpo", quietly = TRUE)
+has_lmtest   <- requireNamespace("lmtest",   quietly = TRUE)
+has_broom    <- requireNamespace("broom",    quietly = TRUE)
+```
+
+# Purpose and design
+
+This module builds a predictive model for each of the three whole-bacterial
+functional assays at the pre-primary **InfMon2** baseline — **PTNA**
+(`WHOLE_PTNA`), **SBA** (`WHOLE_SBA`) and **WT_IgG** (`WHOLE_WT_IgG`) — starting
+from the models proposed in `summary_03_concurrent_networks` (forward question
+*c*) and then doing three things:
+
+1. **Hierarchical build.** Maternal arm → clinical confounders → matched
+   antigen total IgG → matched IgG1 → an **effector block** (FcγR2a and ADCD for
+   *all six* antigens: PT, FHA, PRN, DT, TT, FIM), evaluating each block's
+   incremental adjusted-R².
+2. **Concurrent-vs-prior (circularity) probe.** The same matched IgG / IgG1
+   terms are entered from two timepoints: **concurrent** (InfMon2, the *same*
+   blood draw as the outcome) and **maternal-at-delivery** (MatBirth, a
+   temporally *prior*, different occasion). Because part of what a whole-cell
+   assay (e.g. PTNA) measures is re-measured by the antigen-specific assay
+   (PT_IgG / PT_IgG1) **on the same sample**, the concurrent terms can share
+   variance with the outcome and **deflate the residual variance / inflate R²
+   artificially**. The MatBirth terms cannot share a measurement occasion, so
+   contrasting the two quantifies how much apparent prediction is honest
+   forward prediction versus same-sample co-measurement. (This is the basis of
+   a likely reviewer comment, so it is made explicit.)
+3. **Reporting (a–d) for every model / comparison.**
+   a. significant terms with estimates, **Type I** (sequential) and **Type III**
+      (marginal) tests, and 95% confidence intervals;
+   b. component contributions to variance reduction (relative importance, lmg),
+      overall fit, and residual statistics;
+   c. correlation between predictor parameter estimates (and VIF / predictor
+      collinearity);
+   d. overall model selection for prediction (in-sample fit **and** k-fold
+      cross-validated out-of-sample error).
+
+> **Note on cross-validation vs the circularity concern.** k-fold CV controls
+> *over-fitting / optimism* but does **not** remove the conceptual same-occasion
+> confound (a concurrent predictor co-measures the outcome inside every fold
+> too). The MatBirth contrast — not CV — is what addresses the confound. Both
+> are reported so the two issues are kept separate.
+
+```{r config-load}
+## --- locate and source the project config + helpers --------------------
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+source(find_proj_file("config/endpoints.R"))
+source(find_proj_file("R/serology_helpers.R"))
+
+## --- load data ---------------------------------------------------------
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+clin     <- load_clinical_data(find_proj_file("data/clin_assess.RData"))
+```
+
+# Building the modelling frame
+
+```{r build-wide}
+## Analytes and antigens this module needs.
+ANTI6     <- ANTIGEN_ORDER   # canonical order from config/endpoints.R
+EFFECTORS <- c("FcgR2a", "ADCD")                 # bound to each of the 6 antigens
+PRED_VISITS <- c("MatBirth", "InfMon2")          # prior vs concurrent
+OUTCOME_FEATURES <- c("WHOLE_PTNA", "WHOLE_SBA", "WHOLE_WT_IgG")
+
+## Feature strings we will try to pull (antigen_analyte). IgG / IgG1 exist at
+## BOTH MatBirth and InfMon2; FcγR2a / ADCD exist at infant visits only.
+igg_feats  <- paste0(rep(ANTI6, each = 2), "_", c("IgG", "IgG1"))
+eff_feats  <- as.vector(t(outer(ANTI6, EFFECTORS, paste, sep = "_")))
+want_feats <- unique(c(OUTCOME_FEATURES, igg_feats, eff_feats))
+
+## Resolve the requested feature strings against the data's ACTUAL feature
+## levels, case-insensitively (the data may be PT_FCGR2A while we wrote
+## PT_FcgR2a). This guarantees the filter below pulls the real columns; a
+## case mismatch would otherwise silently pull nothing.
+avail_feats <- as.character(unique(data_raw$feature))
+resolve_feat <- function(w) {
+  hit <- avail_feats[toupper(avail_feats) == toupper(w)]
+  if (length(hit)) hit[[1]] else NA_character_
+}
+want_resolved    <- stats::na.omit(vapply(want_feats, resolve_feat, character(1)))
+outcome_resolved <- stats::na.omit(vapply(OUTCOME_FEATURES, resolve_feat, character(1)))
+dropped <- setdiff(want_feats, as.character(want_resolved))
+if (length(dropped))
+  message("Features not present in data (dropped): ", paste(dropped, collapse = ", "))
+
+## Long -> wide (one row per subject; columns = feature_visit).
+## id_cols = subject + maternal arm only. We deliberately DROP infant_arm:
+## it is constant per dyad but is coded NA at maternal/cord visits in the long
+## data, and including it in id_cols would split a subject into separate rows
+## per visit. values_fn = mean collapses any residual duplicate cell to a
+## scalar, guaranteeing atomic (non-list) numeric columns for lm().
+## The outcome features are included here too (they live at InfMon2), so there
+## is no separate outcome pivot / join (which previously duplicated the
+## WHOLE_*_InfMon2 columns).
+wide <- data_raw %>%
+  dplyr::filter(feature %in% want_resolved,
+                visit_name %in% PRED_VISITS) %>%
+  dplyr::select(subject_accession, arm_name, feature, visit_name, log_assay_value) %>%
+  tidyr::pivot_wider(id_cols     = c(subject_accession, arm_name),
+                     names_from  = c(feature, visit_name),
+                     values_from = log_assay_value,
+                     values_fn   = function(x) mean(x, na.rm = TRUE),
+                     names_sep   = "_")
+
+## Attach clinical covariates (merge by subject_accession, like prepare_clinical()).
+## Select only the key + covariates so no column-name collisions occur on join.
+clin_keep <- c("subject_accession", "maternal_age", "maternal_Hb",
+               "maternal_bmi", "birth_weight", "gestational_age_birth")
+clin_keep <- intersect(clin_keep, names(clin))
+wide <- wide %>% dplyr::left_join(clin[, clin_keep], by = "subject_accession")
+
+## Maternal arm: model the vaccine effect with TT (comparator) as reference.
+wide$arm_name <- stats::relevel(factor(wide$arm_name), ref = "TT")
+
+## Sanity: confirm the three outcome columns are present and atomic.
+oc_cols <- paste0(outcome_resolved, "_InfMon2")
+oc_present <- oc_cols[oc_cols %in% names(wide)]
+if (!length(oc_present)) stop("No outcome columns found after pivot: ", paste(oc_cols, collapse = ", "))
+list_cols <- names(wide)[vapply(wide, is.list, logical(1))]
+if (length(list_cols)) warning("List-columns present (will break lm): ", paste(list_cols, collapse = ", "))
+
+cat(sprintf("Wide frame: %d subjects, %d columns. Outcomes present: %s\n",
+            nrow(wide), ncol(wide), paste(oc_present, collapse = ", ")))
+```
+
+```{r resolve-cols}
+## Robust, case-aware column resolver (guards against the IgG/IGG casing issue
+## flagged in the config patch header). Returns the *actual* column names that
+## exist, warns about any that don't.
+resolve_cols <- function(wanted, available = names(wide)) {
+  out <- character(0); miss <- character(0)
+  up <- toupper(available)
+  for (w in wanted) {
+    if (w %in% available) { out <- c(out, w); next }
+    alt <- available[up == toupper(w)]
+    if (length(alt)) { out <- c(out, alt[[1]])
+    } else miss <- c(miss, w)
+  }
+  if (length(miss))
+    warning("resolve_cols(): not found and dropped: ",
+            paste(miss, collapse = ", "), call. = FALSE)
+  out
+}
+
+## quick availability audit of the new (DT/TT/FIM + effector) features
+audit <- data.frame(
+  feature = want_feats,
+  InfMon2 = paste0(want_feats, "_InfMon2") %in% names(wide),
+  MatBirth = paste0(want_feats, "_MatBirth") %in% names(wide)
+)
+knitr::kable(audit, caption = "Feature availability in the wide frame (by visit).")
+```
+
+# Reusable analysis machinery
+
+```{r engine}
+## ---- fit a *family* of models on a common complete-case frame ----------
+## All models in a family are fit on the SAME rows (union of their predictors
+## with no missing), so AIC / CV / nested F-tests are comparable.
+fit_family <- function(formulas, data) {
+  vars <- unique(unlist(lapply(formulas, function(f) all.vars(as.formula(f)))))
+  vars <- intersect(vars, names(data))
+  cc   <- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+  fits <- lapply(formulas, function(f) stats::lm(as.formula(f), data = cc))
+  list(fits = fits, n = nrow(cc), data = cc, vars = vars)
+}
+
+## ---- k-fold cross-validated RMSE and R^2 (honest out-of-sample) ---------
+cv_metrics <- function(formula, data, K = 10, seed = 20240614) {
+  formula <- as.formula(formula); set.seed(seed)
+  n <- nrow(data); K <- min(K, n)
+  folds <- sample(rep(seq_len(K), length.out = n))
+  yhat <- rep(NA_real_, n)
+  for (k in seq_len(K)) {
+    tr <- data[folds != k, , drop = FALSE]; te <- data[folds == k, , drop = FALSE]
+    m  <- tryCatch(stats::lm(formula, tr), error = function(e) NULL)
+    if (!is.null(m)) yhat[folds == k] <- stats::predict(m, te)
+  }
+  y <- data[[all.vars(formula)[1]]]
+  ok <- is.finite(yhat) & is.finite(y)
+  resid <- y[ok] - yhat[ok]
+  c(CV_RMSE = sqrt(mean(resid^2)),
+    CV_R2   = 1 - sum(resid^2) / sum((y[ok] - mean(y[ok]))^2))
+}
+
+kp <- function(x, cap = NULL, digits = 4) {
+  print(knitr::kable(x, caption = cap, digits = digits)); cat("\n\n")
+}
+
+## ---- (a) coefficients: estimate + 95% CI + t-test ----------------------
+coef_table <- function(m) {
+  est <- summary(m)$coefficients
+  ci  <- suppressMessages(stats::confint(m))
+  df  <- data.frame(term = rownames(est),
+                    estimate = est[, "Estimate"],
+                    std_error = est[, "Std. Error"],
+                    t = est[, "t value"],
+                    p = est[, "Pr(>|t|)"],
+                    CI_low  = ci[rownames(est), 1],
+                    CI_high = ci[rownames(est), 2],
+                    row.names = NULL)
+  df$sig <- cut(df$p, c(-Inf, .001, .01, .05, .1, Inf),
+                labels = c("***", "**", "*", ".", ""))
+  df
+}
+
+## ---- (a) Type I (sequential) and Type III (marginal) ANOVA --------------
+type1_table <- function(m) {
+  a <- stats::anova(m)
+  data.frame(term = rownames(a), df = a$Df, sumsq = a$`Sum Sq`,
+             meansq = a$`Mean Sq`, F = a$`F value`, p = a$`Pr(>F)`,
+             row.names = NULL)
+}
+type3_table <- function(m) {
+  if (!has_car) return(data.frame(note = "car not installed; Type III skipped"))
+  oc <- options(contrasts = c("contr.sum", "contr.poly")); on.exit(options(oc))
+  ## refit from the model's own frame (sum contrasts) so we don't depend on the
+  ## per-family complete-case object still being in scope
+  m3 <- stats::lm(stats::formula(m), data = stats::model.frame(m))
+  a  <- car::Anova(m3, type = 3)
+  data.frame(term = rownames(a), sumsq = a$`Sum Sq`, df = a$Df,
+             F = a$`F value`, p = a$`Pr(>F)`, row.names = NULL)
+}
+
+## ---- (b) relative importance (lmg, sums to R^2) -------------------------
+relimp_table <- function(m) {
+  if (!has_relaimpo) return(data.frame(note = "relaimpo not installed"))
+  np <- length(attr(stats::terms(m), "term.labels"))
+  if (np < 2) return(data.frame(note = "relimp needs >= 2 predictors"))
+  ri <- tryCatch(relaimpo::calc.relimp(m, type = "lmg"), error = function(e) NULL)
+  if (is.null(ri)) return(data.frame(note = "relimp failed"))
+  data.frame(predictor = names(ri@lmg),
+             lmg = as.numeric(ri@lmg),
+             lmg_pct_of_R2 = 100 * as.numeric(ri@lmg) / sum(ri@lmg),
+             row.names = NULL) %>% dplyr::arrange(dplyr::desc(lmg))
+}
+
+## ---- (b) one-line fit + residual diagnostics ---------------------------
+fit_stats <- function(m, label = "") {
+  s <- summary(m); r <- stats::residuals(m)
+  shapiro_p <- tryCatch(stats::shapiro.test(r)$p.value, error = function(e) NA)
+  bp_p <- if (has_lmtest) tryCatch(lmtest::bptest(m)$p.value, error = function(e) NA) else NA
+  data.frame(model = label,
+             n = length(r), k = length(stats::coef(m)) - 1,
+             R2 = s$r.squared, adj_R2 = s$adj.r.squared,
+             sigma_RMSE = s$sigma,
+             F = unname(s$fstatistic[1]),
+             AIC = stats::AIC(m), BIC = stats::BIC(m),
+             resid_normal_p = shapiro_p, het_BP_p = bp_p,
+             row.names = NULL)
+}
+
+## ---- (c) correlation of coefficient estimates + VIF --------------------
+coef_corr <- function(m) {
+  V <- stats::vcov(m); cc <- stats::cov2cor(V)
+  keep <- setdiff(rownames(cc), "(Intercept)")
+  round(cc[keep, keep, drop = FALSE], 3)
+}
+vif_table <- function(m) {
+  if (!has_car) return(data.frame(note = "car not installed; VIF skipped"))
+  np <- length(attr(stats::terms(m), "term.labels"))
+  if (np < 2) return(data.frame(note = "VIF needs >= 2 predictors"))
+  v <- tryCatch(car::vif(m), error = function(e) NULL)
+  if (is.null(v)) return(data.frame(note = "VIF failed (aliased terms?)"))
+  if (is.matrix(v)) v <- v[, "GVIF^(1/(2*Df))"]^2
+  data.frame(predictor = names(v), VIF = as.numeric(v), row.names = NULL) %>%
+    dplyr::arrange(dplyr::desc(VIF))
+}
+
+## ---- full per-model report (a, b, c) -----------------------------------
+report_model <- function(m, label) {
+  cat("\n\n#### ", label, "\n\n")
+  kp(coef_table(m),  "(a) Coefficients: estimate, SE, t, p, 95% CI")
+  kp(type1_table(m), "(a) Type I (sequential) ANOVA")
+  kp(type3_table(m), "(a) Type III (marginal) ANOVA")
+  kp(relimp_table(m), "(b) Relative importance (lmg; shares of R\u00b2)")
+  kp(fit_stats(m, label), "(b) Fit + residual diagnostics")
+  kp(vif_table(m), "(c) Variance inflation (predictor collinearity)")
+  cat("(c) Correlation between coefficient estimates:\n\n")
+  kp(as.data.frame(coef_corr(m)))
+}
+
+## ---- (d) selection table across a family + nested ladder ---------------
+selection_table <- function(fam, labels) {
+  rows <- Map(function(m, lab) {
+    fs <- fit_stats(m, lab); cv <- cv_metrics(stats::formula(m), fam$data)
+    cbind(fs, CV_RMSE = cv["CV_RMSE"], CV_R2 = cv["CV_R2"])
+  }, fam$fits, labels)
+  do.call(rbind, rows)
+}
+```
+
+```{r endpoint-spec}
+## Per-endpoint specification (matched antigens from summary_03's proposal).
+SPEC <- list(
+  PTNA = list(outcome = "WHOLE_PTNA_InfMon2",   conf = "maternal_age",
+              lead = "PT",  totals = "PT_IgG",  igg1 = "PT_IgG1", extra = character(0)),
+  SBA  = list(outcome = "WHOLE_SBA_InfMon2",    conf = "maternal_Hb",
+              lead = "PRN", totals = "PRN_IgG", igg1 = "PRN_IgG1", extra = "FIM_IgG"),
+  WT_IgG = list(outcome = "WHOLE_WT_IgG_InfMon2", conf = "maternal_age",
+              lead = "PRN", totals = c("PRN_IgG", "PT_IgG", "FHA_IgG"),
+              igg1 = character(0), extra = "FIM_IgG")
+)
+CONF_FULL <- c("maternal_age", "maternal_Hb", "maternal_bmi",
+               "birth_weight", "gestational_age_birth")
+
+## Engine: runs the full a-d analysis for one endpoint.
+analyze_endpoint <- function(ep) {
+  sp <- SPEC[[ep]]
+  Iv <- function(x) if (length(x)) paste0(x, "_InfMon2")  else character(0)
+  Mv <- function(x) if (length(x)) paste0(x, "_MatBirth") else character(0)
+  y  <- resolve_cols(sp$outcome)
+  conf_full <- resolve_cols(intersect(CONF_FULL, names(wide)))
+  eff <- resolve_cols(Iv(as.vector(t(outer(ANTI6, EFFECTORS, paste, sep = "_")))))
+
+  rhs <- function(...) paste(c("arm_name", ...), collapse = " + ")
+  f   <- function(...) paste(y, "~", rhs(...))
+
+  ## ---------- Family 1: proposed + concurrent hierarchical build --------
+  base_conf <- resolve_cols(sp$conf)
+  tot_I  <- resolve_cols(Iv(c(sp$totals, sp$extra)))
+  igg1_I <- resolve_cols(Iv(sp$igg1))                        # proposed IgG1 (empty for WT_IgG)
+  lead1_I <- resolve_cols(Iv(paste0(sp$lead, "_IgG1")))      # lead-antigen IgG1 for the build step
+  fam1_formulas <- list(
+    "B0: arm + confounder"        = f(base_conf),
+    "B1: + matched total IgG"     = f(base_conf, tot_I),
+    "B2: + lead-antigen IgG1"     = f(base_conf, tot_I, lead1_I),
+    "B3: + effector (FcgR2a/ADCD, 6 antigens)" = f(base_conf, tot_I, lead1_I, eff),
+    "Proposed (summary_03)"       = f(base_conf, tot_I, igg1_I)
+  )
+  ## drop empties (e.g. WT_IgG has no IgG1 term in the proposal)
+  fam1_formulas <- lapply(fam1_formulas, function(s) gsub("\\+\\s*\\+", "+", s))
+  fam1 <- fit_family(fam1_formulas, wide)
+
+  ## ---------- Family 2: full-confounder vs proposed-confounder ----------
+  fam2_formulas <- list(
+    "Proposed confounder only" = f(base_conf, tot_I, igg1_I),
+    "Full confounder block"    = f(conf_full, tot_I, igg1_I)
+  )
+  fam2 <- fit_family(fam2_formulas, wide)
+
+  ## ---------- Family 3: concurrent vs prior (MatBirth) probe ------------
+  lead_I  <- resolve_cols(Iv(c(paste0(sp$lead, "_IgG"), paste0(sp$lead, "_IgG1"))))
+  lead_M  <- resolve_cols(Mv(c(paste0(sp$lead, "_IgG"), paste0(sp$lead, "_IgG1"))))
+  fam3_formulas <- list(
+    "Concurrent (InfMon2 lead IgG+IgG1)" = f(base_conf, lead_I),
+    "Prior (MatBirth lead IgG+IgG1)"     = f(base_conf, lead_M),
+    "Both timepoints"                    = f(base_conf, lead_I, lead_M)
+  )
+  fam3 <- fit_family(fam3_formulas, wide)
+
+  ## ---------- Family 4: IgG vs IgG1 vs IgG+IgG1, prior & concurrent ------
+  ## Requirement #6 (Sections E/G): make total IgG, IgG1, and IgG+IgG1 directly
+  ## comparable as predictors at MatBirth (prior) and InfMon2 (concurrent),
+  ## using the lead antigen. All six specs are fit on ONE complete-case frame
+  ## (union of predictors), so R2 / CV are comparable across specifications.
+  lead_igg_I  <- resolve_cols(Iv(paste0(sp$lead, "_IgG")))
+  lead_igg1_I <- resolve_cols(Iv(paste0(sp$lead, "_IgG1")))
+  lead_igg_M  <- resolve_cols(Mv(paste0(sp$lead, "_IgG")))
+  lead_igg1_M <- resolve_cols(Mv(paste0(sp$lead, "_IgG1")))
+  fam4_formulas <- list(
+    "InfMon2: IgG only"    = f(base_conf, lead_igg_I),
+    "InfMon2: IgG1 only"   = f(base_conf, lead_igg1_I),
+    "InfMon2: IgG + IgG1"  = f(base_conf, lead_igg_I, lead_igg1_I),
+    "MatBirth: IgG only"   = f(base_conf, lead_igg_M),
+    "MatBirth: IgG1 only"  = f(base_conf, lead_igg1_M),
+    "MatBirth: IgG + IgG1" = f(base_conf, lead_igg_M, lead_igg1_M)
+  )
+  fam4_formulas <- lapply(fam4_formulas, function(s) gsub("\\+\\s*\\+", "+", s))
+  ## keep only specs that actually carry an antibody term (a missing column
+  ## would otherwise collapse the spec to arm + confounder and duplicate B0).
+  has_ab <- function(s) grepl(paste0(sp$lead, "_IgG"), s)
+  fam4_formulas <- fam4_formulas[vapply(fam4_formulas, has_ab, logical(1))]
+  fam4 <- fit_family(fam4_formulas, wide)
+
+  list(ep = ep, sp = sp, fam1 = fam1, fam2 = fam2, fam3 = fam3, fam4 = fam4,
+       lab1 = names(fam1_formulas), lab2 = names(fam2_formulas),
+       lab3 = names(fam3_formulas), lab4 = names(fam4_formulas))
+}
+
+render_endpoint <- function(R) {
+  cat("\n\n## ", R$ep, " — predictive models\n\n")
+
+  cat("\n\n### Family 1 — proposed model and concurrent hierarchical build",
+      sprintf("(common n = %d)\n\n", R$fam1$n))
+  cat("**(d) Model selection — in-sample fit and 10-fold CV:**\n\n")
+  kp(selection_table(R$fam1, R$lab1), "Selection across the hierarchy")
+  cat("Incremental nested tests (Type I ladder B0\u2192B3):\n\n")
+  ladder <- R$fam1$fits[c("B0: arm + confounder", "B1: + matched total IgG",
+                          "B2: + lead-antigen IgG1",
+                          "B3: + effector (FcgR2a/ADCD, 6 antigens)")]
+  ladder <- ladder[!vapply(ladder, is.null, logical(1))]
+  if (length(ladder) >= 2) {
+    lad <- tryCatch(do.call(stats::anova, unname(ladder)), error = function(e) NULL)
+    if (!is.null(lad)) {
+      print(knitr::kable(broomish_anova(lad), caption = "Sequential partial-F tests"))
+    } else cat("*Sequential ANOVA unavailable (models not strictly comparable).*")
+    cat("\n\n")
+  }
+  for (lab in R$lab1) report_model(R$fam1$fits[[lab]], lab)
+
+  cat("\n\n### Family 2 — proposed vs full confounder block",
+      sprintf("(common n = %d)\n\n", R$fam2$n))
+  kp(selection_table(R$fam2, R$lab2), "Does the wider confounder set help?")
+  for (lab in R$lab2) report_model(R$fam2$fits[[lab]], lab)
+
+  cat("\n\n### Family 3 — concurrent vs prior (MatBirth): the circularity probe",
+      sprintf("(common n = %d)\n\n", R$fam3$n))
+  cat("If the concurrent model's advantage is mostly same-sample co-measurement,",
+      "expect: concurrent R\u00b2 \u226b prior R\u00b2, concurrent residual sigma much smaller,",
+      "and in 'Both timepoints' the **concurrent** terms retain significance while",
+      "the prior terms attenuate. The prior model is the honest forward predictor.\n\n")
+  kp(selection_table(R$fam3, R$lab3), "Concurrent vs prior vs both")
+  for (lab in R$lab3) report_model(R$fam3$fits[[lab]], lab)
+
+  cat("\n\n### Family 4 — IgG vs IgG1 vs IgG+IgG1, prior (MatBirth) & concurrent (InfMon2)",
+      sprintf("(common n = %d)\n\n", R$fam4$n))
+  cat("Directly compares total IgG, IgG1, and their combination (IgG + IgG1) as",
+      "predictors of the outcome, at the prior (MatBirth) and concurrent (InfMon2)",
+      sprintf("timepoints, using the lead antigen (%s). ", R$sp$lead),
+      "All specs share one complete-case frame, so in-sample and 10-fold CV fit are",
+      "comparable; reading down each timepoint shows whether IgG1 adds to total IgG,",
+      "and reading across timepoints shows whether the answer is the same prior vs",
+      "concurrent.\n\n")
+  kp(selection_table(R$fam4, R$lab4), "IgG vs IgG1 vs IgG+IgG1 (prior & concurrent)")
+  for (lab in R$lab4) report_model(R$fam4$fits[[lab]], lab)
+}
+
+## tidy an anova() comparison object into a data frame
+broomish_anova <- function(a) {
+  data.frame(model = paste0("step ", seq_len(nrow(a))),
+             Res_Df = a$Res.Df, RSS = a$RSS, Df = a$Df,
+             SumSq = a$`Sum of Sq`, F = a$F, p = a$`Pr(>F)`,
+             row.names = NULL)
+}
+```
+
+```{r run-ptna, results='asis', fig.keep='none'}
+R_PTNA <- analyze_endpoint("PTNA");   render_endpoint(R_PTNA)
+```
+
+```{r run-sba, results='asis', fig.keep='none'}
+R_SBA <- analyze_endpoint("SBA");     render_endpoint(R_SBA)
+```
+
+```{r run-wt, results='asis', fig.keep='none'}
+R_WT <- analyze_endpoint("WT_IgG");   render_endpoint(R_WT)
+```
+
+# Residual diagnostics for the selected models
+
+```{r diag, fig.height=7, fig.width=8}
+sel <- list(
+  PTNA   = R_PTNA$fam3$fits[["Prior (MatBirth lead IgG+IgG1)"]],
+  SBA    = R_SBA$fam1$fits[["B2: + lead-antigen IgG1"]],
+  WT_IgG = R_WT$fam1$fits[["Proposed (summary_03)"]]
+)
+op <- par(mfrow = c(3, 2), mar = c(4, 4, 2, 1))
+for (nm in names(sel)) {
+  m <- sel[[nm]]
+  plot(fitted(m), resid(m), main = paste(nm, "resid vs fitted"),
+       xlab = "fitted", ylab = "residual"); abline(h = 0, lty = 2)
+  stats::qqnorm(resid(m), main = paste(nm, "Q-Q")); stats::qqline(resid(m))
+}
+par(op)
+```
+
+# Cross-endpoint synthesis (model selection)
+
+```{r synthesis, results='asis'}
+collect <- function(R, fam, labs) cbind(endpoint = R$ep, selection_table(fam, labs))
+all_sel <- rbind(
+  collect(R_PTNA, R_PTNA$fam3, R_PTNA$lab3),
+  collect(R_SBA,  R_SBA$fam3,  R_SBA$lab3),
+  collect(R_WT,   R_WT$fam3,   R_WT$lab3)
+)
+kp(all_sel[, c("endpoint", "model", "n", "R2", "adj_R2", "sigma_RMSE",
+               "AIC", "CV_RMSE", "CV_R2")],
+   "Circularity probe across endpoints: concurrent vs prior vs both")
+```
+
+**How to read the selection (d).** For each endpoint compare three things across
+the candidate models: **adjusted-R²** (in-sample fit penalised for parameters),
+**AIC/BIC** (parsimony), and **CV-RMSE / CV-R²** (honest out-of-sample error).
+Prefer the model with the best CV error that is not beaten on AIC by a simpler
+one; do **not** select on raw R² alone.
+
+**On the circularity question specifically.** Read the Family-3 table together
+with the VIF and coefficient-correlation panels:
+
+- A large gap **concurrent R² ≫ prior R²**, with a much smaller concurrent
+  residual `sigma`, is the signature that the concurrent antigen IgG is partly
+  re-measuring the outcome on the same sample rather than predicting it.
+- In the **Both timepoints** model, if the concurrent IgG / IgG1 terms stay
+  significant while the MatBirth terms collapse (and VIF between same-antigen
+  IgG and IgG1 is high), the concurrent terms are absorbing shared
+  measurement variance — they will look like strong "predictors" but inflate
+  fit and shrink the standard errors of the antibody coefficients.
+- The **prior (MatBirth)** model is the defensible forward predictor for a
+  causal/temporal claim, because its predictors precede the outcome and cannot
+  share its measurement occasion. Report it as the primary predictive model and
+  present the concurrent model as a descriptive upper bound, noting the
+  shared-variance caveat.
+
+This separation (concurrent = descriptive ceiling; prior = honest prediction)
+is exactly the distinction a reviewer would probe, and the tables above let you
+state the magnitude of the inflation rather than argue it qualitatively.
+
+```{r sessioninfo}
+sessionInfo()
+```

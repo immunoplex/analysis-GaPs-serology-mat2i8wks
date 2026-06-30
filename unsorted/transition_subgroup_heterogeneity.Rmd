@@ -1,0 +1,101 @@
+---
+title: "Transition-response subgroup heterogeneity (per antigen × transition)"
+output: html_document
+params:
+  analytes: !r c("IgG", "IgG1", "IgG2", "IgG3", "IgG4")
+  min_complete: 20
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+suppressPackageStartupMessages({ library(tidyverse) })
+
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R \u2014 place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+source(find_proj_file("config/endpoints.R"),       local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),      local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/within_visit_helpers.R"),  local = FALSE, encoding = "UTF-8")
+
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+
+TRANSITIONS <- list(
+  c(from = "PregEarly", to = "MatBirth",  label = "Production (PregEarly\u2192MatBirth)"),
+  c(from = "MatBirth",  to = "CordBlood", label = "Transfer (MatBirth\u2192CordBlood)"),
+  c(from = "CordBlood", to = "InfMon2",   label = "Decay (CordBlood\u2192InfMon2)"))
+tr_lab <- vapply(TRANSITIONS, `[`, "", "label")
+```
+
+# Transition-response subgroup heterogeneity
+
+For each vaccine antigen (`r paste(ANTIGEN_ORDER, collapse = ", ")`) and each of the
+three within-subject transitions, subjects are clustered on their per-analyte change
+(Δlog₁₀ = later − earlier visit) across total IgG and IgG1–IgG4. The question is
+whether the transition response is **heterogeneous** — i.e. splits into distinct
+subgroups (for example strong vs weak placental transfer) — rather than a single
+population. Clustering uses PAM with a silhouette-chosen *k* (2–4) when the `cluster`
+package is available and ≥ `r params$min_complete` subjects have paired data;
+otherwise a transparent tertile split on the total-IgG change is used. The maternal-arm
+association column tests whether the detected subgroups line up with the randomised
+maternal arm (Fisher exact, simulated *p*). This is an exploratory secondary output.
+
+```{r scan}
+scan <- transition_subgroup_scan(
+  data_raw, ANTIGEN_ORDER, TRANSITIONS,
+  analytes     = params$analytes,
+  min_complete = as.integer(params$min_complete))
+
+summ <- scan$summary %>%
+  mutate(antigen    = factor(antigen,    levels = ANTIGEN_ORDER),
+         transition = factor(transition, levels = tr_lab)) %>%
+  arrange(transition, antigen)
+
+knitr::kable(
+  summ,
+  col.names = c("Transition", "Antigen", "Method", "n", "Silhouette",
+                "Subgroups (n, median Δ)", "p (arm assoc.)"),
+  caption = paste0("Subgroup heterogeneity of the within-subject change, per antigen ",
+                   "and per transition. Higher silhouette = cleaner separation; the ",
+                   "subgroup column gives each subgroup's size and median total-IgG ",
+                   "change. p (arm assoc.) tests subgroup \u00d7 maternal-arm independence."))
+```
+
+## Distribution of the total-IgG change by detected subgroup
+
+```{r fig-dist, fig.width=11, fig.height=7}
+asn <- scan$assignments %>%
+  mutate(antigen    = factor(antigen,    levels = ANTIGEN_ORDER),
+         transition = factor(transition, levels = tr_lab))
+
+ggplot(asn, aes(x = antigen, y = total_delta, fill = subgroup)) +
+  geom_hline(yintercept = 0, colour = "grey60", linewidth = 0.4) +
+  geom_boxplot(outlier.size = 0.5, linewidth = 0.35, position = position_dodge2(preserve = "single")) +
+  facet_wrap(~ transition, ncol = 1, scales = "free_y") +
+  scale_fill_brewer(palette = "RdBu", direction = -1, name = "Subgroup") +
+  labs(x = "Antigen", y = expression("total-IgG " * Delta * "log"[10] * " (later \u2212 earlier)"),
+       title = "Transition-response subgroups separate high- vs low-change subjects per antigen") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.x = element_blank(),
+        strip.text = element_text(face = "bold"))
+```
+
+*Each box is one detected subgroup within an antigen × transition cell; clean vertical
+separation indicates the response is heterogeneous (distinct high/low-change subjects)
+rather than a single population. Antigens whose subclasses are unavailable before
+InfMon2 (FIM) are clustered on total IgG alone for the production and transfer panels.*

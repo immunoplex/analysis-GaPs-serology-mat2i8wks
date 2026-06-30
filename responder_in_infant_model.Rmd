@@ -1,0 +1,346 @@
+---
+title: "GaPs: does the maternal responder score earn a place predicting infant two-month function?"
+subtitle: |
+  An equal-chance test. Brings the Phase-07/08 maternal responder score into the
+  infant InfMon2 functional models on the same footing as the matched antigen-specific
+  antibody, using order-independent (Shapley) variance attribution, an orthogonalised
+  breadth predictor for the genuinely non-redundant signal, honest out-of-sample
+  (cross-validated) increments, and a within-arm de-confounding check.
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+    code_folding: show
+params:
+  responder_features: !r c("PT_IgG", "FHA_IgG", "PRN_IgG")
+  maternal_visits:    !r c("PregEarly", "MatBirth")
+  predictor_visit:    "MatBirth"     # forward predictor (maternal-at-delivery); not concurrent
+  outcome_visit:      "InfMon2"
+  breadth_thresh:     0.6
+  min_coverage:       0.6
+  min_breadth_feats:  5              # require >= this many non-matched maternal features for the breadth index
+  cv_folds:           10
+  boot_B:             1000           # bootstrap reps for Shapley-share CIs
+  seed:               20260628
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align = "center")
+suppressPackageStartupMessages({ library(dplyr); library(tidyr); library(ggplot2); library(knitr) })
+has_relaimpo <- requireNamespace("relaimpo", quietly = TRUE)   # optional cross-check for LMG
+has_car      <- requireNamespace("car",      quietly = TRUE)   # optional VIF
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+source(find_proj_file("config/endpoints.R"),             local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),           local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/maternal_responder_helpers.R"), local = FALSE, encoding = "UTF-8")
+
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))     # applies VISIT_RECODE
+clin     <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")), error = function(e) NULL)
+if (is.null(clin)) { .e <- new.env(); load(find_proj_file("data/clin_assess.RData"), envir = .e); clin <- get("clin_assess", envir = .e) }
+clin_age <- clin %>% dplyr::select(subject_accession, maternal_age) %>% distinct()
+has_cluster <- requireNamespace("cluster", quietly = TRUE)
+ACCENT <- "#8A1538"; MARM_COL <- c(TdaP = "#1b5aa0", TT = "#c0297a")
+```
+
+# What this tests
+
+The responder score is a function of maternal PT/PRN IgG and IgG1 — the same antibodies that
+already dominate the Section C–E infant-function models. A fair ("equal-chance") test must therefore
+(1) put the score in the **same** InfMon2 outcome frame and CV protocol as those models, (2) credit
+shared variance by an **order-independent Shapley decomposition** rather than by entry order, (3) isolate
+the genuinely non-redundant part of the Phase-08 signal as a **breadth predictor orthogonalised to the
+matched antibody**, and (4) keep the test **forward** (maternal-at-delivery) and **within-arm** so the
+score cannot win by proxying the matched antigen or the vaccine label.
+
+Matched antibody per outcome: **PT IgG1 → PTNA**, **PRN IgG1 → SBA and whole-cell IgG**.
+
+```{r build-score}
+RESP_FEATS <- params$responder_features
+MAT_VIS    <- params$maternal_visits
+
+mat_cls <- build_maternal_responder_class(data_raw, MAT_VIS, RESP_FEATS,
+                                          breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
+# expected columns: subject_accession, responder (Low/High), score (continuous)
+stopifnot(all(c("subject_accession", "responder", "score") %in% names(mat_cls)))
+arm_tbl <- subject_maternal_arm(data_raw)
+
+# Maternal serology matrix (Blom-standardised; score-defining features excluded) for the breadth index
+W_all <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = RESP_FEATS,
+                                        min_coverage = params$min_coverage)
+feat_cols <- setdiff(names(W_all), "subject_accession")
+```
+
+```{r helpers}
+## case-insensitive feature resolver
+.avail <- as.character(unique(data_raw$feature))
+resolve_feat <- function(w) { hit <- .avail[toupper(.avail) == toupper(w)]; if (length(hit)) hit[[1]] else NA_character_ }
+
+## per-subject log value of one feature at one visit
+subj_value <- function(feat, visit, newname) {
+  f <- resolve_feat(feat); if (is.na(f)) return(NULL)
+  data_raw %>%
+    dplyr::filter(feature == f, visit_name == visit) %>%
+    dplyr::group_by(subject_accession) %>%
+    dplyr::summarise(!!newname := mean(log_assay_value, na.rm = TRUE), .groups = "drop")
+}
+
+## breadth index for an outcome = rowMeans of Blom-standardised maternal features,
+## EXCLUDING every feature of the matched antigen (so it is non-redundant with the matched antibody)
+breadth_index <- function(matched_antigen) {
+  drop <- feat_cols[startsWith(sub("@.*$", "", feat_cols), paste0(matched_antigen, "_"))]
+  keep <- setdiff(feat_cols, drop)
+  M <- as.matrix(W_all[, keep, drop = FALSE])
+  nok <- rowSums(is.finite(M))
+  br <- ifelse(nok >= params$min_breadth_feats, rowMeans(M, na.rm = TRUE), NA_real_)
+  tibble::tibble(subject_accession = W_all$subject_accession, breadth_raw = br)
+}
+
+## k-fold CV R^2, folds stratified by maternal arm so every fold has both levels
+cv_r2 <- function(formula, data, k = params$cv_folds, seed = params$seed) {
+  set.seed(seed)
+  resp <- all.vars(formula)[1]
+  fold <- integer(nrow(data))
+  for (a in unique(data$arm)) { idx <- which(data$arm == a); fold[idx] <- sample(rep(seq_len(k), length.out = length(idx))) }
+  pred <- numeric(nrow(data))
+  for (i in seq_len(k)) {
+    tr <- data[fold != i, , drop = FALSE]; te <- data[fold == i, , drop = FALSE]
+    m  <- lm(formula, tr)
+    pred[fold == i] <- tryCatch(predict(m, te), error = function(e) rep(mean(tr[[resp]]), nrow(te)))
+  }
+  y <- data[[resp]]
+  1 - sum((y - pred)^2) / sum((y - mean(y))^2)
+}
+r2_of <- function(terms, base, resp, data) summary(lm(reformulate(c(base, terms), resp), data))$r.squared
+
+## Shapley shares of candidate predictors over the R^2 increment beyond a fixed base set
+shapley <- function(resp, base, cands, data) {
+  k <- length(cands)
+  subsets_of <- function(v) unlist(lapply(0:length(v), function(m) combn(v, m, simplify = FALSE)), recursive = FALSE)
+  phi <- setNames(numeric(k), cands)
+  for (j in cands) {
+    others <- setdiff(cands, j)
+    for (S in subsets_of(others)) {
+      w <- factorial(length(S)) * factorial(k - length(S) - 1) / factorial(k)
+      phi[j] <- phi[j] + w * (r2_of(c(S, j), base, resp, data) - r2_of(S, base, resp, data))
+    }
+  }
+  phi  # sums to R2(full) - R2(base)
+}
+```
+
+```{r outcome-spec}
+OUTCOMES <- list(
+  PTNA = list(out = "WHOLE_PTNA",   antigen = "PT",  matched = "PT_IgG1",  label = "PT-neutralising activity"),
+  SBA  = list(out = "WHOLE_SBA",    antigen = "PRN", matched = "PRN_IgG1", label = "serum bactericidal activity"),
+  WT   = list(out = "WHOLE_WT_IgG", antigen = "PRN", matched = "PRN_IgG1", label = "whole-cell IgG binding")
+)
+
+## Build the per-outcome modelling frame and z-score predictors within the analysis sample.
+build_df <- function(spec) {
+  y  <- subj_value(spec$out,     params$outcome_visit,   "y")
+  ab <- subj_value(spec$matched, params$predictor_visit, "ab")
+  if (is.null(y) || is.null(ab)) return(NULL)
+  br <- breadth_index(spec$antigen)
+  d <- y %>%
+    dplyr::inner_join(ab, by = "subject_accession") %>%
+    dplyr::inner_join(mat_cls[, c("subject_accession", "score", "responder")], by = "subject_accession") %>%
+    dplyr::inner_join(arm_tbl, by = "subject_accession") %>%
+    dplyr::left_join(clin_age, by = "subject_accession") %>%
+    dplyr::left_join(br, by = "subject_accession") %>%
+    dplyr::filter(as.character(arm_name) %in% MATERNAL_ARMS, is.finite(y), is.finite(ab),
+                  is.finite(score), is.finite(maternal_age))
+  d$arm <- relevel(factor(as.character(d$arm_name), levels = MATERNAL_ARMS), ref = "TT")
+  z <- function(v) as.numeric(scale(v))
+  d$ab_z <- z(d$ab); d$score_z <- z(d$score); d$age_z <- z(d$maternal_age); d$y <- as.numeric(scale(d$y))
+  # orthogonalise breadth to the matched antibody (the non-redundant part), on rows where breadth exists
+  d$breadth_resid_z <- NA_real_
+  ok <- is.finite(d$breadth_raw)
+  if (sum(ok) > 20) {
+    bz <- z(d$breadth_raw[ok])
+    d$breadth_resid_z[ok] <- as.numeric(scale(residuals(lm(bz ~ d$ab_z[ok]))))
+  }
+  d
+}
+DFS <- lapply(OUTCOMES, build_df)
+```
+
+# 1. Nested models — does the score add out-of-sample beyond the matched antibody?
+
+All predictors are maternal-at-delivery (forward). Base = maternal arm + maternal age. We report in-sample
+R^2/adjusted R^2 and honest 10-fold cross-validated R^2 (CV-R^2). The score earns its place only if it
+improves **CV-R^2** beyond the matched antibody — in-sample gains alone do not count.
+
+```{r nested, results='asis'}
+nested_tbl <- function(spec, d) {
+  base <- c("arm", "age_z")
+  models <- list(
+    "Base (arm + age)"                 = base,
+    "+ matched IgG1"                   = c(base, "ab_z"),
+    "+ responder score"               = c(base, "score_z"),
+    "+ matched IgG1 + score"          = c(base, "ab_z", "score_z"),
+    "+ matched IgG1 + breadth(resid)" = c(base, "ab_z", "breadth_resid_z")
+  )
+  rows <- lapply(names(models), function(nm) {
+    tr <- models[[nm]]
+    dd <- d[stats::complete.cases(d[, intersect(tr, names(d)), drop = FALSE]), , drop = FALSE]
+    f  <- reformulate(tr, "y")
+    m  <- lm(f, dd)
+    data.frame(Model = nm, n = nrow(dd),
+               R2 = round(summary(m)$r.squared, 3),
+               adjR2 = round(summary(m)$adj.r.squared, 3),
+               CV_R2 = round(cv_r2(f, dd), 3))
+  })
+  do.call(rbind, rows)
+}
+for (k in names(OUTCOMES)) {
+  d <- DFS[[k]]; if (is.null(d)) next
+  cat(sprintf("\n\n### %s (%s); n = %d\n\n", k, OUTCOMES[[k]]$label, nrow(d)))
+  print(kable(nested_tbl(OUTCOMES[[k]], d), row.names = FALSE,
+        caption = sprintf("Nested forward models for infant %s. The decisive rows are '+ matched IgG1' vs '+ matched IgG1 + score' (does the score add beyond the antibody already used?) and '+ matched IgG1 + breadth(resid)' (does the orthogonal breadth add?). Judge on CV-R\u00b2.", k)))
+}
+```
+
+# 2. Equal-chance variance attribution (Shapley)
+
+Entry order decides nothing here: each predictor's share of the explained variance (beyond arm + age) is
+averaged over all entry orders. We do this for the matched antibody vs the score (how much is *shared* vs
+*unique to the score*), and for the matched antibody vs the orthogonal breadth.
+
+```{r shapley, results='asis'}
+boot_shapley <- function(resp, base, cands, data, B = params$boot_B, seed = params$seed) {
+  obs <- shapley(resp, base, cands, data)
+  set.seed(seed)
+  M <- matrix(NA_real_, B, length(cands), dimnames = list(NULL, cands))
+  for (b in seq_len(B)) {
+    db <- data[sample(nrow(data), replace = TRUE), , drop = FALSE]
+    M[b, ] <- tryCatch(shapley(resp, base, cands, db), error = function(e) rep(NA, length(cands)))
+  }
+  ci <- apply(M, 2, function(v) round(quantile(v, c(.025, .975), na.rm = TRUE), 3))
+  data.frame(predictor = cands, shapley_R2 = round(obs, 3),
+             ci_low = ci[1, ], ci_high = ci[2, ], row.names = NULL)
+}
+for (k in names(OUTCOMES)) {
+  d <- DFS[[k]]; if (is.null(d)) next
+  base <- c("arm", "age_z")
+  cat(sprintf("\n\n### %s\n\n", k))
+  s1 <- boot_shapley("y", base, c("ab_z", "score_z"), d[stats::complete.cases(d[, c("ab_z","score_z")]), ])
+  print(kable(s1, row.names = FALSE,
+        caption = sprintf("Shapley shares (matched antibody vs responder score) for %s. A score share near zero with the antibody share carrying the increment means the score is redundant; a non-trivial score share with a CI excluding ~0 means it carries information the matched antibody does not.", k)))
+  db <- d[stats::complete.cases(d[, c("ab_z","breadth_resid_z")]), ]
+  if (nrow(db) > 30) {
+    s2 <- boot_shapley("y", base, c("ab_z", "breadth_resid_z"), db)
+    print(kable(s2, row.names = FALSE,
+          caption = sprintf("Shapley shares (matched antibody vs orthogonal maternal breadth) for %s. The breadth term is the part of the coordinated maternal panel that is NOT the matched antigen; a non-trivial, CI-positive share here is the result that would license including the breadth construct in the model.", k)))
+  }
+}
+```
+
+# 3. Collinearity — how much do the score and the matched antibody overlap?
+
+```{r collinearity, results='asis'}
+co <- lapply(names(OUTCOMES), function(k) {
+  d <- DFS[[k]]; if (is.null(d)) return(NULL)
+  r <- cor(d$ab_z, d$score_z, use = "complete.obs")
+  vif <- 1 / (1 - r^2)   # 2-predictor VIF for {matched antibody, score}
+  rb <- suppressWarnings(cor(d$ab_z, d$breadth_resid_z, use = "complete.obs"))
+  data.frame(Outcome = k, `cor(antibody, score)` = round(r, 3), `VIF` = round(vif, 2),
+             `cor(antibody, breadth_resid)` = round(rb, 3), check.names = FALSE)
+})
+kable(do.call(rbind, co), row.names = FALSE,
+      caption = "Overlap diagnostics. A high antibody-score correlation (and VIF) is exactly why entry order would mislead and why the Shapley split is needed. The orthogonal breadth term should correlate ~0 with the matched antibody by construction.")
+```
+
+# 4. Within-arm de-confounding (Tdap-IPV mothers only)
+
+If the score predicts infant function only because it labels the vaccine arm, it should add nothing
+*within* an arm. Refit the decisive increments among Tdap-IPV mothers (where responder status is not the
+arm), dropping the arm term.
+
+```{r within-arm, results='asis'}
+within_tbl <- function(spec, d) {
+  d <- d[d$arm == "TdaP", , drop = FALSE]
+  if (nrow(d) < 40) return(data.frame(note = sprintf("Too few Tdap-IPV mothers (n=%d) for a stable within-arm fit.", nrow(d))))
+  base <- c("age_z")
+  out <- function(tr, nm) { dd <- d[stats::complete.cases(d[, intersect(tr, names(d))]), ]; f <- reformulate(tr, "y")
+    data.frame(Model = nm, n = nrow(dd), CV_R2 = round(cv_r2(f, dd), 3)) }
+  rbind(out(c(base, "ab_z"), "+ matched IgG1"),
+        out(c(base, "ab_z", "score_z"), "+ matched IgG1 + score"),
+        out(c(base, "ab_z", "breadth_resid_z"), "+ matched IgG1 + breadth(resid)"))
+}
+for (k in names(OUTCOMES)) {
+  d <- DFS[[k]]; if (is.null(d)) next
+  cat(sprintf("\n\n### %s — within Tdap-IPV\n\n", k))
+  print(kable(within_tbl(OUTCOMES[[k]], d), row.names = FALSE,
+        caption = sprintf("Within-arm CV-R\u00b2 for %s. A score/breadth CV gain that survives here is not the vaccine label.", k)))
+}
+```
+
+# 5. Decision summary and how to read it
+
+```{r decision, results='asis'}
+summ <- lapply(names(OUTCOMES), function(k) {
+  d <- DFS[[k]]; if (is.null(d)) return(NULL)
+  base <- c("arm", "age_z")
+  f_ab   <- reformulate(c(base, "ab_z"), "y")
+  f_both <- reformulate(c(base, "ab_z", "score_z"), "y")
+  f_brd  <- reformulate(c(base, "ab_z", "breadth_resid_z"), "y")
+  d2  <- d[stats::complete.cases(d[, c("ab_z","score_z")]), ]
+  db  <- d[stats::complete.cases(d[, c("ab_z","breadth_resid_z")]), ]
+  sh  <- shapley("y", base, c("ab_z", "score_z"), d2)
+  shb <- if (nrow(db) > 30) shapley("y", base, c("ab_z", "breadth_resid_z"), db) else c(breadth_resid_z = NA)
+  data.frame(
+    Outcome = k,
+    `CV gain: score beyond antibody`  = round(cv_r2(f_both, d2) - cv_r2(f_ab, d2), 3),
+    `CV gain: breadth beyond antibody`= if (nrow(db) > 30) round(cv_r2(f_brd, db) - cv_r2(f_ab, db), 3) else NA,
+    `Shapley share: score`            = round(unname(sh["score_z"]), 3),
+    `Shapley share: breadth`          = round(unname(shb["breadth_resid_z"]), 3),
+    check.names = FALSE)
+})
+kable(do.call(rbind, summ), row.names = FALSE,
+      caption = "Decision table. Positive CV gain + a Shapley share whose bootstrap CI (section 2) excludes ~0 + survival within-arm (section 4) = the construct earns a place in the model. A null here empirically confirms the current caveat (the score is a re-packaging of antibodies already modelled), which is itself a stronger statement than 'not tested'.")
+```
+
+**Reading the result.**
+
+* *Score, beyond the matched antibody.* Expected to be small/redundant — the score contains the matched
+  antibody. The honest report is the Shapley split: how much of the explained variance is shared vs unique
+  to the score.
+* *Orthogonal breadth.* This is the term that can change the conclusion. If it adds CV-R^2 beyond the
+  matched antibody, holds a CI-positive Shapley share, and survives within-arm, then the coordinated
+  maternal breadth phenotype has **incremental forward predictive value for infant function**, and the
+  responder construct moves from a side-analysis to a modelled predictor.
+* *Causality remains bounded.* Even a positive breadth result is associational and partly mediated by the
+  antibody the mother transfers; the within-arm + forward + orthogonalised design makes it a credible
+  *independent maternal contribution*, not a causal claim. The "Phase 08 does not test infant function"
+  caveat is retired either way, because this analysis tests exactly that.
+
+```{r session}
+sessionInfo()
+```

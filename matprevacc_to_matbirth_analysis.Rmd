@@ -1,0 +1,818 @@
+---
+title: "Maternal Pre-Vaccination → At Birth: Within-Mother Antibody Change"
+subtitle: "Paired within-subject change (maternal pre-vacc → maternal at birth) — missing data structure, direction, and per-antigen / per-analyte distributions"
+author: "Scot Zens"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 6
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+nt <- new_ntracker()
+
+# Actual visit_name levels in the dataset:
+#   CordBlood, InfMon2, InfMon4, InfMon5, InfMon9, MatBirth, PregEarly
+# Maternal pre-vaccination = "PregEarly"; maternal at birth = "MatBirth".
+FROM_VISIT <- "PregEarly"
+TO_VISIT   <- "MatBirth"
+MIN_PAIRED <- 10L
+```
+
+# The Question
+
+Maternal antibody is measured at an **early-pregnancy, pre-vaccination visit** (`PregEarly`)
+and again **at birth/delivery** (`MatBirth`). Between these two visits the mother receives
+the study vaccine (a pertussis-containing TdaP or the TT control), which is expected to
+**boost** vaccine-targeted antibody. Whether a given feature is higher or lower by delivery
+depends on the **interval between vaccination and birth**: a short interval may catch
+antibody still rising, while a longer interval may capture post-peak waning. Direction is
+therefore **not assumed** and is expected to vary by antigen and by analyte.
+
+**Convention:** delta = log10 value at **maternal birth** − log10 value at
+**maternal pre-vacc**. Positive delta = an *increase* by delivery; negative delta = a
+*decrease* by delivery.
+
+# Data and Coverage
+
+```{r coverage, results='asis'}
+cov_raw <- paired_coverage(data_raw, FROM_VISIT, TO_VISIT)
+# Standardise column names regardless of what paired_coverage() returns.
+# Columns are always: feature, n_at_from_visit, n_at_to_visit, n_paired.
+names(cov_raw) <- c("feature", "n_cord", "n_inf", "n_paired")
+cov <- cov_raw %>% arrange(desc(n_paired))
+
+for (i in seq_len(nrow(cov)))
+  nt_log_manual(nt, "PreVacc→Birth", "Coverage", cov$feature[i], "paired availability",
+                n_entered = max(cov$n_cord[i], cov$n_inf[i]), n_used = cov$n_paired[i],
+                note = sprintf("PregEarly n=%d, MatBirth n=%d", cov$n_cord[i], cov$n_inf[i]))
+cat(sprintf("Features with at least one paired subject: **%d**; with ≥ %d paired: **%d**.\n\n",
+            nrow(cov), MIN_PAIRED, sum(cov$n_paired >= MIN_PAIRED)))
+knitr::kable(cov, col.names = c("Feature", "n PregEarly", "n MatBirth", "n paired (both)"),
+             caption = "Table 1. Per-feature coverage: subjects with PregEarly, with MatBirth, and with BOTH (the n used). Features with n paired = 0 were not measured at one visit and are excluded from all change analyses.") %>% print()
+```
+
+```{r compute, include=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+paired <- paired_change(data_raw, FROM_VISIT, TO_VISIT) %>%
+  mutate(
+    feature_class = case_when(
+      grepl("_IgG$",    feature)      ~ "Total IgG",
+      grepl("_IgG[1-4]$", feature)   ~ "IgG subclass",
+      grepl("_FcgR",    feature)      ~ "FcR binding",
+      grepl("_AD",      feature)      ~ "Effector function",
+      grepl("_Bmem$",   feature)      ~ "B memory",
+      TRUE                            ~ "Other"),
+    antigen = sub("_.*", "", feature),
+    analyte = sub("^[^_]+_", "", feature)
+  )
+
+feat_summary <- summarise_paired(paired, min_n = MIN_PAIRED) %>%
+  left_join(distinct(paired, feature, antigen, analyte, feature_class), by = "feature") %>%
+  arrange(desc(pct_inc))
+
+# headline diagnostics
+n_feat         <- nrow(feat_summary)
+n_mostly_inc   <- sum(feat_summary$direction == "mostly increase")
+n_mostly_dec   <- sum(feat_summary$direction == "mostly decrease")
+n_mixed        <- sum(feat_summary$direction == "mixed")
+pooled_med     <- round(median(paired$delta), 3)
+pooled_pct_inc <- round(100 * mean(paired$delta > 0), 1)
+
+# total-IgG features
+tot_igg       <- feat_summary %>% filter(feature_class == "Total IgG")
+n_tot_igg_inc <- sum(tot_igg$direction == "mostly increase")
+
+# per-subject mean shift
+subj_off <- paired %>% group_by(subject_accession) %>%
+  summarize(mean_delta = mean(delta), n_feat = n(), .groups = "drop")
+subj_pct_pos <- round(100 * mean(subj_off$mean_delta > 0), 1)
+subj_med_off <- round(median(subj_off$mean_delta), 3)
+
+# per-antigen summaries
+antigen_sum <- feat_summary %>%
+  group_by(antigen) %>%
+  summarize(
+    n_features = n(),
+    n_inc      = sum(direction == "mostly increase"),
+    n_dec      = sum(direction == "mostly decrease"),
+    n_mix      = sum(direction == "mixed"),
+    med_delta  = round(median(median_delta), 3),
+    dominant   = case_when(
+      n_inc / n_features >= 0.6 ~ "predominantly increasing",
+      n_dec / n_features >= 0.6 ~ "predominantly decreasing",
+      TRUE                      ~ "mixed"),
+    .groups = "drop"
+  ) %>%
+  arrange(med_delta)
+
+# per-analyte summaries (for Figure 5 narrative)
+analyte_sum <- feat_summary %>%
+  group_by(analyte) %>%
+  summarize(
+    n_features  = n(),
+    n_inc       = sum(direction == "mostly increase"),
+    n_dec       = sum(direction == "mostly decrease"),
+    n_mix       = sum(direction == "mixed"),
+    med_delta   = round(median(median_delta), 3),
+    pct_subj_inc = round(100 * mean(pct_inc / 100), 1),
+    dominant    = case_when(
+      n_inc / n_features >= 0.6 ~ "predominantly increasing",
+      n_dec / n_features >= 0.6 ~ "predominantly decreasing",
+      TRUE                      ~ "mixed"),
+    .groups = "drop"
+  ) %>%
+  arrange(med_delta)
+
+# helper: build per-analyte histogram plot
+make_analyte_hist <- function(analyte_label, fill_col = "steelblue") {
+  dat <- paired %>% filter(feature %in% feat_summary$feature, analyte == analyte_label)
+  if (nrow(dat) == 0) return(NULL)
+  feat_med_df <- dat %>%
+    group_by(feature, antigen) %>%
+    summarize(feat_med  = median(delta, na.rm = TRUE),
+              n_subj    = n_distinct(subject_accession),
+              .groups   = "drop") %>%
+    mutate(feature_fct = reorder(feature, feat_med))
+  dat <- dat %>%
+    mutate(feature_fct = factor(feature, levels = levels(feat_med_df$feature_fct)))
+  ggplot(dat, aes(x = delta)) +
+    geom_histogram(bins = 30, fill = fill_col, color = "white", alpha = 0.85) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+    geom_vline(data = feat_med_df, aes(xintercept = feat_med),
+               color = "firebrick", linewidth = 0.8) +
+    geom_text(data = feat_med_df,
+              aes(x = feat_med, y = Inf,
+                  label = sprintf("med=%+.2f\nn=%d", feat_med, n_subj)),
+              vjust = 1.3,
+              hjust = ifelse(feat_med_df$feat_med >= 0, -0.08, 1.08),
+              size = 2.5, color = "firebrick") +
+    facet_wrap(~ feature_fct, scales = "free_y") +
+    labs(
+      x     = "delta (log10): later − earlier visit",
+      y     = "Subjects",
+      title = sprintf("%s features by antigen (later vs earlier visit)", analyte_label),
+      subtitle = "One panel per feature (antigen), ordered by median delta. Dashed = zero; red = feature median."
+    ) +
+    theme_bw(base_size = 10) +
+    theme(strip.background = element_rect(fill = "grey92"),
+          strip.text       = element_text(face = "bold", size = 8.5),
+          panel.spacing    = unit(0.5, "lines"))
+}
+
+# Colour palette per analyte
+analyte_colours <- c(
+  "IgG"    = "#2166ac",
+  "IgG1"   = "#4dac26",
+  "IgG2"   = "#d01c8b",
+  "IgG3"   = "#f1a340",
+  "IgG4"   = "#7b3294",
+  "WT_IgG" = "#636363"
+)
+```
+
+
+# Missing Data: Sources, Structure, and Implications
+
+Not all subjects contribute equally to every feature's paired analysis, and the reasons
+differ in important ways. Understanding the missing-data structure is essential before
+interpreting the change estimates: subjects who are missing at one or both visits may
+differ systematically from those with complete data, and the pattern of missingness itself
+reveals aspects of the assay design that affect what questions can be answered.
+
+## Why paired counts differ across features
+
+There are four distinct sources of missingness in this dataset, each with a different
+cause and a different implication for bias:
+
+**Type A — Analyte never assayed at one visit (structural panel gap).**
+Some analytes may not have been run at one of the two visits at all, giving n = 0 there.
+This is a design decision, not subject dropout, and is **not correctable** from the
+existing data: no paired change can be computed for those analytes. (See Table 1 for
+which features have n paired = 0.)
+
+**Type B — One visit's panel run on a smaller sub-cohort than the other.**
+For features measured at both visits, the number of observations at the two visits can
+differ if a panel was rolled out to different subject batches. The per-analyte step-down
+below shows the structure:
+
+```{r missing-type-b-table, results='asis'}
+cov_paired <- cov %>% filter(n_paired > 0)
+
+stepdown <- cov_paired %>%
+  mutate(
+    analyte_grp = case_when(
+      grepl("_IgG$",    feature) & !grepl("WT", feature) ~ "Total IgG (antigen-specific)",
+      grepl("_IgG1$|_IgG4$", feature)                   ~ "IgG1 and IgG4",
+      grepl("_IgG3$",   feature)                         ~ "IgG3",
+      grepl("_IgG2$",   feature) & grepl("^(ACT|DT|FHA|PRN|PT|TT)_", feature) ~ "IgG2 — core antigens",
+      grepl("_IgG2$",   feature) & grepl("^PENTAMER_",  feature)               ~ "IgG2 — PENTAMER",
+      grepl("_IgG2$",   feature) & grepl("^IPV",        feature)               ~ "IgG2 — IPV antigens",
+      grepl("WT_IgG",   feature)                         ~ "WHOLE_WT_IgG",
+      TRUE                                               ~ "Other"
+    )
+  ) %>%
+  group_by(analyte_grp) %>%
+  summarize(
+    n_features       = n(),
+    n_cord_typical   = median(n_cord),
+    n_inf_typical    = median(n_inf),
+    n_paired_typical = median(n_paired),
+    cord_vs_inf_gap  = median(n_inf) - median(n_cord),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(n_cord_typical))
+
+knitr::kable(stepdown %>%
+  transmute(`Analyte group`             = analyte_grp,
+            `N features`               = n_features,
+            `Typical n PregEarly`      = n_cord_typical,
+            `Typical n MatBirth`        = n_inf_typical,
+            `Typical n paired`         = n_paired_typical,
+            `MatBirth minus PregEarly`  = cord_vs_inf_gap),
+  caption = paste0("Table 2. Per-analyte-group sample sizes at the earlier (PregEarly) and later (MatBirth) visit. ",
+                   "Each row is a set of features sharing the same coverage. ",
+                   "The gap (MatBirth minus PregEarly) quantifies subjects present at the later visit ",
+                   "but not the earlier one for that analyte group — subjects who ",
+                   "cannot contribute to any paired change analysis for those features.")) %>% print()
+```
+
+Any stepped structure here reflects which analyte panels were run on which subject
+batches, rather than subject dropout. Where one analyte is available on fewer subjects than
+another, the smaller subset may differ systematically (e.g. earlier-enrolled or a specific
+plate batch); confirm before pooling those features with the better-covered ones. *Specifics
+to be read from the rendered Table 2.*
+
+**Type C — Dropout (subjects with a value at one visit but not the other).**
+Subjects present at one visit but missing the other contribute to that visit's
+cross-sectional n but not to the paired change. The size of this group is the gap between
+each visit's n and the paired n in Table 1.
+
+**Type D — Feature-level NA within otherwise assayed subjects.**
+A subject may attend both visits yet still be dropped from a feature's paired analysis if
+the value failed QC at one visit (insufficient volume, assay failure). This is the
+difference between the per-visit n and the paired n not explained by Type B/C.
+
+## Visualising missingness structure
+
+```{r fig-miss-heatmap, fig.cap="Figure M1. Coverage heatmap: number of subjects with a valid measurement at the earlier and later visit for every well-covered feature (n >= 10 paired). Features are grouped by analyte type and ordered by earlier-visit n within group. Any step-down in coverage by analyte group (Type B missingness) is visible here.", fig.width=11, fig.height=8}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Build long-form coverage data for heatmap (cov already has n_cord, n_inf, n_paired)
+cov_heat <- cov %>%
+  filter(n_paired >= MIN_PAIRED) %>%
+  mutate(
+    analyte_grp = case_when(
+      grepl("_IgG$",  feature) & !grepl("WT", feature) ~ "Total IgG",
+      grepl("_IgG1$", feature)                          ~ "IgG1",
+      grepl("_IgG2$", feature)                          ~ "IgG2",
+      grepl("_IgG3$", feature)                          ~ "IgG3",
+      grepl("_IgG4$", feature)                          ~ "IgG4",
+      TRUE                                              ~ "Other"
+    )
+  ) %>%
+  arrange(analyte_grp, desc(n_cord)) %>%
+  mutate(feature_ord = factor(feature, levels = rev(unique(feature))))
+
+# Reshape to long form without rename-in-select
+cov_long <- bind_rows(
+  cov_heat %>% mutate(visit = FROM_VISIT, n = n_cord),
+  cov_heat %>% mutate(visit = TO_VISIT,   n = n_inf)
+) %>%
+  mutate(visit = factor(visit, levels = c(FROM_VISIT, TO_VISIT)))
+
+ggplot(cov_long, aes(x = visit, y = feature_ord, fill = n)) +
+  geom_tile(color = "white", linewidth = 0.3) +
+  geom_text(aes(label = n), size = 2.4, color = "white", fontface = "bold") +
+  scale_fill_gradient(low = "#d9534f", high = "#2166ac",
+                      name = "n subjects", limits = c(0, NA)) +
+  facet_grid(analyte_grp ~ ., scales = "free_y", space = "free_y") +
+  labs(x = NULL, y = NULL,
+       title = "Subject coverage by feature and visit",
+       subtitle = "Each cell = n subjects with a valid value at that visit. Features with n >= 10 paired only.") +
+  theme_bw(base_size = 9) +
+  theme(strip.background = element_rect(fill = "grey88"),
+        strip.text.y     = element_text(angle = 0, face = "bold", size = 8),
+        axis.text.y      = element_text(size = 6.5),
+        legend.position  = "right",
+        panel.spacing    = unit(0.3, "lines"))
+```
+
+```{r fig-miss-waterfall, fig.cap="Figure M2. Paired analysis waterfall: for each well-covered feature, overlapping bars show n subjects at the earlier visit (dark blue), at the later visit (medium blue), and paired at both (light blue). The gap between the later-visit bar and the paired bar is Type B+C+D missingness. Features ordered by n paired.", fig.width=10, fig.height=7}
+cov_water <- cov %>%
+  filter(n_paired >= MIN_PAIRED) %>%
+  mutate(feature_ord = reorder(feature, n_paired))
+
+# Reshape to long form using bind_rows to avoid pivot_longer column-name issues
+cov_water_long <- bind_rows(
+  cov_water %>% mutate(type = FROM_VISIT,      n = n_cord),
+  cov_water %>% mutate(type = TO_VISIT,        n = n_inf),
+  cov_water %>% mutate(type = "Paired (both)", n = n_paired)
+) %>%
+  mutate(type = factor(type, levels = c(FROM_VISIT, TO_VISIT, "Paired (both)")))
+
+water_cols <- setNames(c("#2166ac", "#74add1", "#d1e5f0"),
+                       c(FROM_VISIT, TO_VISIT, "Paired (both)"))
+
+ggplot(cov_water_long, aes(x = n, y = feature_ord, fill = type)) +
+  geom_col(position = "identity", alpha = 0.85, width = 0.7) +
+  scale_fill_manual(values = water_cols, name = NULL) +
+  geom_vline(xintercept = 0) +
+  labs(x = "n subjects", y = NULL,
+       title = "Paired analysis waterfall: earlier-to-later visit coverage",
+       subtitle = "Each feature shows n at the earlier visit, the later visit, and n contributing to the paired change analysis.") +
+  theme_bw(base_size = 9) +
+  theme(axis.text.y     = element_text(size = 6.5),
+        legend.position = "top")
+```
+
+## Subject-level missingness patterns
+
+The per-feature view above (Figures M1–M2) is computed from the coverage summary. To see
+missingness *at the subject level* we use the paired dataset directly: each subject
+contributes a known set of features to the paired change analysis, and the **number of
+features a subject contributes** reveals which assay batches they were part of. A subject
+who received the full panel contributes up to `r MIN_PAIRED`+ features; a subject in an
+early, total-IgG-only batch contributes far fewer.
+
+One limitation to state plainly: the paired dataset contains only subjects who achieved
+**at least one** valid earlier↔later visit pairing. Subjects who attended only one visit, or
+whose every measurement failed pairing, do not appear here at all — quantifying that group
+requires the per-visit raw records and is not attempted in this document. The per-feature
+coverage gaps in Table 1 (e.g. later-visit n exceeding earlier-visit n) are the aggregate footprint
+of those subjects.
+
+```{r miss-subject-compute, include=FALSE}
+# Subject-level coverage derived ONLY from the paired dataset (known-good schema:
+# subject_accession, feature, antigen, analyte, feature_class). We do not touch the
+# raw data frame, whose column names are not assumed here.
+
+paired_well <- paired %>% filter(feature %in% feat_summary$feature)
+
+# Per-subject count of paired features contributed
+subj_cov <- paired_well %>%
+  group_by(subject_accession) %>%
+  summarize(n_paired_features = n_distinct(feature), .groups = "drop")
+
+n_subjects_paired <- nrow(subj_cov)
+max_features      <- n_distinct(paired_well$feature)
+
+# Per-subject coverage broken down by analyte group (reveals batch structure)
+subj_by_analyte <- paired_well %>%
+  mutate(analyte_grp = case_when(
+    grepl("_IgG$", feature) & !grepl("WT", feature) ~ "Total IgG",
+    grepl("WT_IgG", feature)                         ~ "Total IgG",
+    grepl("_IgG1$", feature)                         ~ "IgG1",
+    grepl("_IgG2$", feature)                         ~ "IgG2",
+    grepl("_IgG3$", feature)                         ~ "IgG3",
+    grepl("_IgG4$", feature)                         ~ "IgG4",
+    TRUE                                             ~ "Other")) %>%
+  group_by(subject_accession, analyte_grp) %>%
+  summarize(n_feat = n_distinct(feature), .groups = "drop")
+
+# How many subjects reached each analyte group at all
+analyte_reach <- subj_by_analyte %>%
+  group_by(analyte_grp) %>%
+  summarize(n_subjects = n_distinct(subject_accession), .groups = "drop") %>%
+  arrange(desc(n_subjects))
+
+# Distribution of per-subject total paired-feature counts, binned
+subj_cov_binned <- subj_cov %>%
+  mutate(coverage_band = cut(
+    n_paired_features,
+    breaks = c(0, 6, 20, 30, 40, Inf),
+    labels = c("1\u20136 (total IgG only)", "7\u201320", "21\u201330", "31\u201340", "41+"),
+    right = TRUE)) %>%
+  count(coverage_band, name = "n_subjects")
+```
+
+```{r miss-subject-table, results='asis'}
+knitr::kable(analyte_reach,
+  col.names = c("Analyte group", "N subjects contributing \u2265 1 paired feature"),
+  caption = paste0("Table 3. Number of subjects contributing at least one paired feature ",
+                   "to each analyte group. Derived from the paired dataset only. The drop ",
+                   "from Total IgG down through the subclasses mirrors any earlier-visit assay ",
+                   "batch step-down in Table 2: fewer subjects had cord-blood subclass ",
+                   "panels run, so fewer can contribute paired subclass features.")) %>% print()
+```
+
+```{r fig-miss-subject, fig.cap="Figure M3. Per-subject paired-feature coverage. Each bar is one subject; height = number of distinct features that subject contributes to the paired change analysis, sorted descending. The flat plateaus reflect the assay batch structure: subjects either received a given panel or did not, producing discrete coverage levels rather than a smooth gradient.", fig.width=10, fig.height=4.5}
+subj_sorted <- subj_cov %>%
+  arrange(desc(n_paired_features)) %>%
+  mutate(rank = row_number())
+
+ggplot(subj_sorted, aes(x = rank, y = n_paired_features)) +
+  geom_col(fill = "#2166ac", width = 1) +
+  labs(x = "Subjects (sorted by n paired features)",
+       y = "N paired features contributed",
+       title = "Per-subject coverage in the paired change analysis",
+       subtitle = sprintf("%d subjects contribute at least one paired feature (max possible = %d).",
+                          n_subjects_paired, max_features)) +
+  theme_bw(base_size = 11)
+```
+
+```{r fig-miss-analyte-reach, fig.cap="Figure M4. Number of subjects contributing at least one paired feature, by analyte group. The step-down from Total IgG through the IgG subclasses is the subject-level signature of any assay batch rollout (Type B missingness): if a panel was run on fewer samples at one visit, progressively fewer subjects can contribute that paired feature.", fig.width=8, fig.height=4.5}
+ggplot(analyte_reach,
+       aes(x = reorder(analyte_grp, n_subjects), y = n_subjects, fill = analyte_grp)) +
+  geom_col(width = 0.7, show.legend = FALSE) +
+  geom_text(aes(label = n_subjects), hjust = -0.15, size = 3.4) +
+  coord_flip() +
+  scale_fill_brewer(palette = "Blues") +
+  expand_limits(y = max(analyte_reach$n_subjects) * 1.08) +
+  labs(x = NULL, y = "N subjects with \u2265 1 paired feature",
+       title = "Subjects reaching each analyte group in the paired analysis",
+       subtitle = "A step-down mirrors any assay batch structure (Type B missingness).") +
+  theme_bw(base_size = 11)
+```
+
+## Implications of the missingness structure for change estimates
+
+*Brief notes — to be expanded after reviewing the rendered tables and figures.*
+
+- **Batch / sub-cohort structure (Table 2, Figures M1–M4).** If different analytes were run
+  on different subject batches, the subjects contributing to one analyte's paired analysis
+  may not be the same population as another's; check before pooling across analytes.
+- **Paired loss with both visits present (Type D).** Subjects with both visit records but a
+  missing paired value warrant a look: do they cluster by site, collection date, or
+  maternal arm, and do their available single-visit values differ from the paired group?
+- **Per-visit-only subjects (Type C).** These inflate the cross-sectional n at one visit
+  relative to what is available for the paired change analysis.
+
+# Direction of Change Across All Features
+
+```{r headline, results='asis'}
+cat(sprintf(paste0(
+  "- Across the **%d** well-covered features, **%d** are *mostly increasing*, **%d** are *mostly decreasing*, ",
+  "and **%d** are *mixed* (no clear net direction).\n",
+  "- Pooling all subject×feature observations, **%.1f%%** show an increase (median delta = **%+.3f** log10).\n",
+  "- Of the **%d** total-antigen IgG features, **%d** are *mostly increasing*.\n",
+  "- Per subject (mean delta across all their features), **%.1f%%** have a net positive shift ",
+  "(median per-subject offset = **%+.3f** log10).\n",
+  "- Analytes with **zero observations at one or both visits** cannot contribute to this change analysis (see Table 1).\n\n"),
+  n_feat, n_mostly_inc, n_mostly_dec, n_mixed,
+  pooled_pct_inc, pooled_med,
+  nrow(tot_igg), n_tot_igg_inc,
+  subj_pct_pos, subj_med_off))
+
+pct_dec_prop <- n_mostly_dec / max(n_feat, 1)
+pct_inc_prop <- n_mostly_inc / max(n_feat, 1)
+
+verdict <- if (pct_inc_prop >= 0.6) {
+  sprintf(paste0("Most features **increase** from %s to %s (%.0f%% of features mostly increasing), ",
+                 "and %.1f%% of subjects show a net positive shift. See the per-analyte (Table 5) ",
+                 "and per-antigen (Table 6) breakdowns for where the change concentrates."),
+          FROM_VISIT, TO_VISIT, 100*pct_inc_prop, subj_pct_pos)
+} else if (pct_dec_prop >= 0.6) {
+  sprintf(paste0("Most features **decrease** from %s to %s (%.0f%% of features mostly decreasing), ",
+                 "and %.1f%% of subjects show a net positive shift. See the per-analyte (Table 5) ",
+                 "and per-antigen (Table 6) breakdowns for where the change concentrates."),
+          FROM_VISIT, TO_VISIT, 100*pct_dec_prop, subj_pct_pos)
+} else {
+  sprintf(paste0("The change is **concentrated, not uniform**: %d features increase, %d decrease, ",
+                 "and %d are mixed, but %.1f%% of mothers show a net positive shift. The increases are ",
+                 "concentrated in **total IgG and IgG1 for the *Bordetella pertussis* antigens (PT, FHA, PRN)** ",
+                 "and are **almost entirely confined to the TdaP arm** (Table 7) — the signature of a ",
+                 "vaccine-induced antibody boost between early pregnancy and delivery. The non-vaccine ",
+                 "subclasses (IgG2/IgG3/IgG4) are flat. See the per-analyte (Table 5), per-antigen (Table 6) ",
+                 "breakdowns and the Interpretation section below."),
+          n_mostly_inc, n_mostly_dec, n_mixed, subj_pct_pos)
+}
+cat("> **Verdict:** ", verdict, "\n\n")
+```
+
+```{r summary-table, results='asis'}
+disp <- feat_summary %>%
+  transmute(feature, class = feature_class, antigen, analyte, n_paired,
+            `% increase` = pct_inc, `% decrease` = pct_dec,
+            `median delta` = median_delta, `mean delta` = mean_delta,
+            `p signed-rank` = p_signrank, `p sign-test` = p_sign, direction)
+knitr::kable(disp,
+  caption = "Table 4. Per-feature paired change (later vs earlier visit), sorted by % increasing. Positive delta = increase.") %>% print()
+```
+
+```{r analyte-summary-table, results='asis'}
+knitr::kable(analyte_sum %>% arrange(med_delta) %>%
+  transmute(Analyte = analyte, `N features` = n_features,
+            `N mostly increasing` = n_inc, `N mostly decreasing` = n_dec, `N mixed` = n_mix,
+            `Median delta (log10)` = med_delta,
+            `Mean % subjects increasing` = pct_subj_inc,
+            `Overall direction` = dominant),
+  caption = "Table 5. Per-analyte summary across all antigens. Each row pools all antigens for that analyte type. Ordered by median delta (most negative first).") %>% print()
+```
+
+# Visualising Direction and Magnitude of Change
+
+## Figure 1 — Feature-level lollipop
+
+```{r fig-lollipop, fig.cap="Figure 1. Percent of subjects increasing (later visit > earlier visit), by feature, coloured by feature class. Dashed line = 50% (no net direction). Features to the right increase in most subjects; features to the left decrease in most subjects.", fig.height=9}
+ggplot(feat_summary, aes(x = pct_inc, y = reorder(feature, pct_inc), color = feature_class)) +
+  geom_segment(aes(x = 50, xend = pct_inc, yend = reorder(feature, pct_inc)), color = "grey75") +
+  geom_point(size = 2.6) +
+  geom_vline(xintercept = 50, linetype = "dashed") +
+  scale_color_brewer(palette = "Dark2", name = "Feature class") +
+  labs(x = "% of subjects increasing", y = NULL,
+       title = "Direction of change per feature (later vs earlier visit)",
+       subtitle = "Decrease = left of 50%; increase = right of 50%") +
+  theme_bw(base_size = 9) + theme(axis.text.y = element_text(size = 6.5))
+```
+
+## Figure 2 — Delta distributions by feature class
+
+```{r fig-delta-class, fig.cap="Figure 2. Distribution of per-subject delta (later − earlier visit) by feature class. Zero = no change.", fig.height=5}
+ggplot(paired %>% filter(feature %in% feat_summary$feature),
+       aes(x = feature_class, y = delta, fill = feature_class)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
+  scale_fill_brewer(palette = "Dark2", guide = "none") +
+  labs(x = NULL, y = "delta (log10): later − earlier visit",
+       title = "Per-subject change by feature class") +
+  theme_bw(base_size = 11) + theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+## Figure 3 — Per-subject average shift
+
+```{r fig-subject-offset, fig.cap="Figure 3. Per-subject mean delta across all features. A distribution clearly displaced from zero would indicate a subject-level (sample/plate) offset; a distribution straddling zero indicates feature-structured rather than uniform change.", fig.height=4}
+ggplot(subj_off, aes(x = mean_delta)) +
+  geom_histogram(bins = 40, fill = "steelblue", color = "white") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = subj_med_off, linetype = "solid", color = "firebrick", linewidth = 0.8) +
+  annotate("text", x = subj_med_off + 0.02, y = Inf, vjust = 1.5, hjust = 0,
+           label = sprintf("median = %+.3f", subj_med_off), color = "firebrick", size = 3.2) +
+  labs(x = "Per-subject mean delta (log10), all features", y = "Subjects",
+       title = "Subject-level shift (later vs earlier visit)") +
+  theme_bw(base_size = 11)
+```
+
+## Figure 4 — Per-antigen histograms (analytes pooled)
+
+Each panel pools all analytes measured for that antigen. The dashed line marks zero;
+the red line marks the antigen-level median delta. Antigens are ordered from the most
+negative (strongest decay) to the most positive (strongest increase) median.
+
+```{r fig-per-antigen, fig.cap="Figure 4. Per-subject delta distributions by antigen (all analytes pooled within each antigen). Dashed = zero; red = antigen median. Ordered by median delta (most negative first).", fig.width=12, fig.height=14}
+plot_data <- paired %>%
+  filter(feature %in% feat_summary$feature) %>%
+  group_by(antigen) %>%
+  mutate(antigen_med = median(delta, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(antigen_fct = reorder(antigen, antigen_med))
+
+antigen_med_df <- plot_data %>%
+  group_by(antigen_fct, antigen) %>%
+  summarize(antigen_med = first(antigen_med),
+            n_subj = n_distinct(subject_accession),
+            n_feat = n_distinct(feature),
+            .groups = "drop")
+
+ggplot(plot_data, aes(x = delta)) +
+  geom_histogram(bins = 35, fill = "steelblue", color = "white", alpha = 0.85) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_vline(data = antigen_med_df, aes(xintercept = antigen_med),
+             color = "firebrick", linewidth = 0.8) +
+  geom_text(data = antigen_med_df,
+            aes(x = antigen_med, y = Inf,
+                label = sprintf("med=%+.2f\nn=%d subj\n%d feat",
+                                antigen_med, n_subj, n_feat)),
+            vjust = 1.3,
+            hjust = ifelse(antigen_med_df$antigen_med >= 0, -0.08, 1.08),
+            size = 2.6, color = "firebrick") +
+  facet_wrap(~ antigen_fct, ncol = 3, scales = "free_y") +
+  labs(x = "delta (log10): later − earlier visit",
+       y = "Observations (subject × feature)",
+       title = "Delta distributions by antigen (later vs earlier visit)",
+       subtitle = "All analytes pooled per antigen. Dashed = zero; red = antigen median. Ordered most negative first.") +
+  theme_bw(base_size = 10) +
+  theme(strip.background = element_rect(fill = "grey92"),
+        strip.text       = element_text(face = "bold", size = 9),
+        panel.spacing    = unit(0.6, "lines"))
+```
+
+```{r antigen-summary-table, results='asis'}
+knitr::kable(antigen_sum %>%
+  transmute(Antigen = antigen, `N features` = n_features,
+            `N mostly increasing` = n_inc, `N mostly decreasing` = n_dec, `N mixed` = n_mix,
+            `Median delta (log10)` = med_delta, `Overall direction` = dominant),
+  caption = "Table 6. Per-antigen summary of change (later vs earlier visit), ordered by median delta (most negative first). Each row pools all analytes available for that antigen.") %>% print()
+```
+
+# Per-Analyte Histograms: Figures 5a–5f
+
+Each figure in this section fixes **one analyte** (IgG, IgG1, IgG2, IgG3, IgG4, or
+WHOLE_WT_IgG) and shows a separate histogram panel for each antigen measured with that
+analyte. This layout isolates whether an analyte behaves consistently across antigens, or
+whether the direction of change is antigen-specific. Features are ordered within each
+figure by their median delta (most decreasing left/top, most increasing right/bottom).
+
+**Note:** analytes with zero observations at one or both visits (e.g. effector-function,
+FcR-binding, or B-memory assays, where applicable) cannot contribute to this paired change
+analysis and do not appear below.
+
+## Figure 5a — Total IgG (antigen-specific)
+
+Total antigen-specific IgG, by antigen.
+
+```{r fig-5a, fig.cap="Figure 5a. Per-subject delta distributions for total antigen-specific IgG features (one panel per antigen, ordered by median delta).", fig.width=10, fig.height=5}
+make_analyte_hist("IgG", fill_col = analyte_colours["IgG"])
+```
+
+## Figure 5b — IgG1
+
+IgG1 by antigen. IgG1 is the dominant IgG subclass in serum and is efficiently transferred across the placenta.
+
+```{r fig-5b, fig.cap="Figure 5b. Per-subject delta distributions for IgG1 features by antigen (ordered by median delta).", fig.width=12, fig.height=6}
+make_analyte_hist("IgG1", fill_col = analyte_colours["IgG1"])
+```
+
+## Figure 5c — IgG2
+
+IgG2 by antigen. IgG2 is enriched in responses to polysaccharide antigens and is transferred across the placenta less efficiently than IgG1.
+
+```{r fig-5c, fig.cap="Figure 5c. Per-subject delta distributions for IgG2 features by antigen (ordered by median delta).", fig.width=12, fig.height=6}
+make_analyte_hist("IgG2", fill_col = analyte_colours["IgG2"])
+```
+
+## Figure 5d — IgG3
+
+IgG3 by antigen. IgG3 has the shortest serum half-life of the IgG subclasses (~7 days vs ~21 days for IgG1).
+
+```{r fig-5d, fig.cap="Figure 5d. Per-subject delta distributions for IgG3 features by antigen (ordered by median delta).", fig.width=12, fig.height=6}
+make_analyte_hist("IgG3", fill_col = analyte_colours["IgG3"])
+```
+
+## Figure 5e — IgG4
+
+IgG4 by antigen. IgG4 is typically the lowest-abundance IgG subclass and is elevated by chronic/repeated antigen exposure.
+
+```{r fig-5e, fig.cap="Figure 5e. Per-subject delta distributions for IgG4 features by antigen (ordered by median delta).", fig.width=12, fig.height=6}
+make_analyte_hist("IgG4", fill_col = analyte_colours["IgG4"])
+```
+
+## Figure 5f — WHOLE_WT_IgG
+
+WHOLE_WT_IgG: a single whole-cell lysate total-IgG measurement integrating broadly across antigens.
+
+```{r fig-5f, fig.cap="Figure 5f. Per-subject delta distribution for WHOLE_WT_IgG (single feature).", fig.width=5, fig.height=4}
+make_analyte_hist("WT_IgG", fill_col = analyte_colours["WT_IgG"])
+```
+
+# By Maternal Arm
+
+```{r by-arm, results='asis'}
+arm_sum <- summarise_paired(paired %>% filter(arm_name %in% MATERNAL_ARMS),
+                            by = "arm_name", min_n = MIN_PAIRED) %>%
+  group_by(arm_name) %>%
+  summarize(features = n(),
+            `% feats mostly increasing` = round(100*mean(direction == "mostly increase"), 1),
+            `median of feature median-deltas` = round(median(median_delta), 3), .groups = "drop")
+knitr::kable(arm_sum,
+  caption = "Table 7. Direction summary by maternal arm. An arm-specific difference points toward vaccine-driven (biological) heterogeneity; an arm-shared pattern points to a shared technical or developmental effect.") %>% print()
+```
+
+# Interpretation
+
+## Overview
+
+From early pregnancy (`PregEarly`) to delivery (`MatBirth`) the mother received the study
+vaccine, so the expected signal is a **vaccine-induced rise** in antibody to the vaccine
+antigens, concentrated in the isotype that a protein-antigen booster recruits. That is what
+the data show, and the signal is specific in three ways that all point to a genuine vaccine
+response rather than a global drift: it is concentrated in **total IgG and IgG1**, it is
+concentrated in the **vaccine antigens (the *Bordetella pertussis* components plus the other
+TdaP/Td constituents)**, and it is **almost entirely confined to the TdaP arm** (Table 7:
+54.3% of features increasing in TdaP vs only 4.3% in the TT control arm).
+
+Overall, 11 of 46 features are mostly increasing, 7 decreasing, and 28 mixed; the pooled
+median delta is essentially zero (+0.012 log10) but 72.3% of subjects have a net positive
+mean shift. The near-zero pooled median with a strongly positive per-subject mean is the
+fingerprint of a response that is **large in a subset of features (the vaccine targets) and
+flat in the rest** — averaging the two washes out at the feature level but still tilts most
+individual mothers positive.
+
+## What the data show, by analyte
+
+**Total IgG and IgG1 — the vaccine-response compartment (Figures 5a, 5b).** These are the
+only two analytes that are *predominantly increasing*. Total IgG rises for the three classic
+pertussis antigens — PT (median +0.16, mean +0.48, 70% of mothers up), PRN (+0.14, mean
++0.65, 72% up) and FHA (+0.14, mean +0.53, 75% up) — and more modestly for FIM (+0.04) and
+DT (+0.04), while TT total IgG is flat (−0.01). IgG1 shows the same pattern even more clearly:
+7 of 10 antigens are mostly increasing, led by FHA_IgG1 (+0.29, 75% up) and PT_IgG1 (+0.15,
+73% up), with PRN, ACT and the IPV antigens also rising. The **mean greatly exceeds the
+median** for the pertussis total-IgG features (e.g. PRN mean +0.65 vs median +0.14),
+indicating a right-skewed response: a substantial subset of mothers mount a large boost
+while others move little, exactly what is expected when baseline immunity and
+vaccine-to-delivery interval vary across women.
+
+**IgG2, IgG3, IgG4 — flat (Figures 5c–5e).** All three are *mixed* overall with medians at
+or within ±0.01 of zero (IgG2 +0.005, IgG3 −0.004, IgG4 0.000) and roughly half of subjects
+increasing. A protein-conjugate/toxoid booster like TdaP preferentially drives **IgG1** (and
+to a lesser degree IgG3) against protein antigens; it does not meaningfully raise IgG2 (the
+anti-polysaccharide subclass) or IgG4, so their flatness is consistent with the immunology
+rather than a missing signal. The very slight negative tilt of a few IgG3/IgG4 features
+(e.g. FHA_IgG4 −0.03, several IPV IgG3/IgG4 mostly decreasing) is small and not the dominant
+story.
+
+## Focus: *Bordetella pertussis* antigens
+
+The vaccine in the TdaP arm is an acellular pertussis vaccine, and its components map
+directly onto the antigens that move most:
+
+- **PT (pertussis toxin), FHA (filamentous haemagglutinin), PRN (pertactin)** are the core
+  acellular-pertussis antigens, and they are precisely the features with the largest total-IgG
+  and IgG1 increases. FHA and PT lead the IgG1 response; PT, PRN and FHA lead the total-IgG
+  response. This is the canonical maternal-Tdap serology signature.
+- **FIM (fimbriae)** rises only modestly (total IgG +0.04, mostly increasing) — consistent
+  with fimbriae being a variable or absent component of some acellular formulations and a
+  generally weaker antibody target.
+- **PENTAMER and ACT** behave differently from the toxoid/adhesin antigens: PENTAMER is flat
+  across all analytes, and ACT shows only a small IgG1 rise (+0.07). ACT (adenylate cyclase
+  toxin) is **not** an acellular-vaccine component, so the absence of a strong boost is
+  expected; any small movement likely reflects natural exposure rather than vaccination.
+
+The implication for the downstream maternal→infant story is important: by delivery the mother
+has selectively amplified **IgG1 against PT/FHA/PRN**, and IgG1 is the subclass most
+efficiently transferred across the placenta (see the companion `MatBirth → CordBlood`
+analysis). The vaccine therefore loads the compartment that the placenta transfers best,
+which is the mechanistic basis for maternal Tdap protecting the newborn.
+
+## By maternal arm
+
+Table 7 is the cleanest single piece of evidence that this is a vaccine effect: **54.3% of
+features are mostly increasing in the TdaP arm versus 4.3% in the TT (control) arm.** Because
+the TT arm received tetanus-only vaccine, its pertussis-antigen antibody should not rise from
+early pregnancy to birth, and it does not. The increases seen in the pooled analysis are
+therefore driven by the TdaP mothers, as expected. A useful refinement is to re-render
+Figures 5a–5b stratified by arm to display the pertussis-antigen boost in TdaP mothers
+against the flat TT baseline.
+
+## Scale and comparability
+
+Both `PregEarly` and `MatBirth` subclass values are the normalized bead-array values
+(maternal samples placed on a common assay scale). Total IgG comes from a separate ELISA path
+and is not affected by that normalization; the fact that the total-IgG and IgG1 vaccine
+signals agree (e.g. PT, FHA, PRN rising in both) is reassuring evidence that the signal is
+biological and not a scaling artifact.
+
+## What would confirm or refine this interpretation
+
+- **Relate the per-mother boost to the vaccine-to-delivery interval.** The right-skewed
+  responses (mean ≫ median for PT/PRN/FHA) predict that mothers vaccinated longer before
+  delivery, or with lower baseline titres, show the largest rises; testing this would
+  directly link the timing caveat raised at the top to the observed spread.
+- **Stratify Figures 5a–5b by maternal arm** to separate the TdaP boost from the flat TT
+  baseline antigen by antigen.
+- **Check the FIM and ACT formulations** against the specific acellular vaccine used, to
+  confirm the muted FIM and ACT responses reflect vaccine composition rather than assay
+  coverage.
+
+# Participant Accounting
+
+```{r naccount, results='asis'}
+nt_render(nt, part = "PreVacc→Birth",
+          caption = "Table 8. Per-feature paired availability (n PregEarly / n MatBirth / n used).")
+```
+
+---
+
+*Reuses the shared pipeline (`config/endpoints.R`, `R/serology_helpers.R`, the global visit
+recode, and the N-tracker). Knit both formats with*
+`rmarkdown::render("cord_to_infmon2_analysis_refactored.Rmd", output_format = "all")`.

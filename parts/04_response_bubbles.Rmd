@@ -1,0 +1,183 @@
+```{r bub-setup, include=FALSE}
+# CHILD document. Assumes the master created data_raw, nt, find_proj_file(),
+# and sourced config/endpoints.R + R/serology_helpers.R.
+source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8")
+include_feature    <- BUBBLE_INCLUDE_FEATURE     # globals used by standardized_set defaults
+include_feature_wo <- BUBBLE_INCLUDE_FEATURE_WO
+have_dt  <- requireNamespace("data.table", quietly = TRUE)
+res_ap   <- find_proj_file(BUBBLE_RESIDUAL_AP, optional = TRUE)
+res_wp   <- find_proj_file(BUBBLE_RESIDUAL_WP, optional = TRUE)
+have_std <- have_dt && !is.null(res_ap) && !is.null(res_wp)
+```
+
+# Maternal Vaccination Effect Across Antigens and Analytes {#bubbles}
+
+This part surveys the **effect of maternal vaccination (TdaP vs TT, referent TT)** on
+the full serology panel — antigens `r paste(BUBBLE_ANTIGENS, collapse=", ")` × analytes
+`r paste(BUBBLE_ANALYTES, collapse=", ")` — at the three infant visits
+(`r paste(BUBBLE_VISITS, collapse=", ")`). Each antigen × analyte cell is a Wilcoxon
+rank-sum test of TT vs TdaP; the bubble encodes effect size (median difference),
+direction, and significance. Two scales are shown: **untransformed** (log10 MFI) and
+**IgG-standardized** (residuals after removing the total-IgG signal).
+
+Within each visit, effects are shown **overall (all infants pooled)** and **stratified
+by infant priming (aP, wP — referent wP)**, so the maternal effect and its modification
+by infant arm are both visible. The bubble figures are retained from the original
+analysis; the per-grid **tables are new** (n, medians, effect, direction, raw and
+adjusted p), as is a cross-visit effect summary intended to seed the secondary analysis.
+
+```{r bub-mapnote-top, echo=FALSE, results='asis'}
+mapnote("This part feeds a forthcoming **secondary summary analysis** of the maternal ",
+        "vaccination effect. The output here is organized to answer:",
+        feeds = c(
+          "Q1 \u2014 Magnitude: which antigen\u00d7analyte effects are largest, overall and per visit? (bubble figures + per-grid tables)",
+          "Q2 \u2014 Antigen specificity: are effects concentrated in vaccine antigens (PT/FHA/PRN) vs DT/TT? (antigen axis of every grid)",
+          "Q3 \u2014 Function vs binding: do effects appear in functional analytes (ADCD/ADCP/ADNP, FcgR) as well as IgG/subclasses? (analyte axis)",
+          "Q4 \u2014 Temporal persistence: do InfMon2 effects persist or wane by InfMon5/InfMon9? (cross-visit summary tables)",
+          "Q5 \u2014 Infant-arm modification: do effects differ in aP vs wP infants? (overall vs aP vs wP panels)",
+          "Q6 \u2014 IgG independence: which effects survive IgG standardization? (untransformed vs standardized sections)"))
+if (!have_std)
+  cat("\n> **Note:** IgG-standardized residual files not found (or data.table missing); ",
+      "the standardized section is skipped. The untransformed section is unaffected.\n\n")
+```
+
+---
+
+## Data Preparation
+
+```{r bub-data, results='asis'}
+unstandardized_data <- data_raw %>%
+  dplyr::filter(feature %in% BUBBLE_INCLUDE_FEATURE,
+                arm_name %in% MATERNAL_ARMS,
+                visit_name %in% BUBBLE_VISITS) %>%
+  dplyr::select(subject_accession, visit_name, arm_name, infant_arm,
+                antigen, analyte, feature, value_reported, log_assay_value) %>%
+  distinct(subject_accession, visit_name, feature, .keep_all = TRUE) %>%
+  mutate(across(c(antigen, analyte, feature, arm_name, infant_arm), as.character))
+unstandardized_data$standstat <- "untransformed"
+
+if (have_std) {
+  std_wp <- standardized_set("IgG", unstandardized_data[unstandardized_data$infant_arm == "wP", ], res_wp)
+  std_ap <- standardized_set("IgG", unstandardized_data[unstandardized_data$infant_arm == "aP", ], res_ap)
+  std_not   <- dplyr::bind_rows(std_wp, std_ap)
+  total_igg <- unstandardized_data[unstandardized_data$feature %in% BUBBLE_IGGLIST, ]
+  standardized_data <- dplyr::bind_rows(std_not, total_igg)
+  standardized_data$standstat <- "standardized"
+  data_all <- dplyr::bind_rows(unstandardized_data, standardized_data)
+} else {
+  data_all <- unstandardized_data
+}
+
+# Recompute antigen/analyte from feature so both scales are consistent.
+data_all$antigen <- stringr::str_split_i(as.character(data_all$feature), "_", 1)
+data_all$analyte <- stringr::str_split_i(as.character(data_all$feature), "_", 2)
+data_all$arm_name <- factor(data_all$arm_name, levels = c("TT", "TdaP"))   # TT referent
+
+ft <- as.data.frame(table(data_all$standstat, data_all$visit_name))
+colnames(ft) <- c("Scale", "Visit", "n_obs")
+ft <- ft %>% dplyr::filter(n_obs > 0) %>% pivot_wider(names_from = Visit, values_from = n_obs, values_fill = 0)
+knitr::kable(ft, caption = "Table B1. Observation rows by scale and visit (after recode & filter).") %>% print()
+
+# Per visit x infant-arm subject counts by maternal arm
+sc <- data_all %>% dplyr::filter(standstat == "untransformed") %>%
+  distinct(subject_accession, visit_name, infant_arm, arm_name) %>%
+  count(visit_name, infant_arm, arm_name) %>%
+  pivot_wider(names_from = arm_name, values_from = n, values_fill = 0)
+knitr::kable(sc, caption = "Table B2. Unique subjects by visit, infant arm, and maternal arm.") %>% print()
+```
+
+```{r bub-run-setup, results='hide'}
+strata_defs <- list(`Overall (all infants)` = NULL, `aP infants` = "aP", `wP infants` = "wP")
+bubble_stats_acc <- list()   # accumulate every grid's stats for the cross-visit summary
+
+run_bubble_cell <- function(ss, visit, strat_name) {
+  iarm <- strata_defs[[strat_name]]
+  sub  <- data_all %>% dplyr::filter(standstat == ss, visit_name == visit)
+  if (!is.null(iarm)) sub <- sub %>% dplyr::filter(infant_arm == iarm)
+
+  # participant accounting (unique subjects per maternal arm)
+  subj <- sub %>% distinct(subject_accession, arm_name)
+  n_TT <- sum(subj$arm_name == "TT"); n_TdaP <- sum(subj$arm_name == "TdaP")
+  nt_log_manual(nt, "Bubbles", paste0(ss, " / ", visit), strat_name,
+                "TdaP vs TT effect grid", n_entered = n_TT + n_TdaP, n_used = n_TT + n_TdaP,
+                note = sprintf("TT = %d, TdaP = %d subjects; per-cell n in table", n_TT, n_TdaP))
+
+  cat("####", strat_name, sprintf("(TT n = %d, TdaP n = %d)\n\n", n_TT, n_TdaP))
+  if (n_TT < 2 || n_TdaP < 2) { cat("*Too few subjects in one arm; grid skipped.*\n\n"); return(invisible()) }
+
+  res <- bubble_arm_effect(sub, standstat = ss,
+                           title = sprintf("%s \u2014 %s \u2014 %s (TdaP vs TT)", ss, visit, strat_name))
+  print(res$plot); cat("\n\n")
+  print(bubble_stats_kable(res$stats,
+        caption = sprintf("Effect grid \u2014 %s, %s, %s.", ss, visit, strat_name)))
+  cat("\n")
+  bubble_stats_acc[[paste(ss, visit, strat_name, sep = " | ")]] <<-
+    res$stats %>% mutate(scale = ss, visit = visit, stratum = strat_name)
+}
+```
+
+---
+
+```{r bub-loops, results='asis', fig.width=8, fig.height=5}
+scales <- if (have_std) c("untransformed", "standardized") else "untransformed"
+for (ss in scales) {
+  cat("##", ss, "scale\n\n")
+  mapnote(ss, " effects across antigen\u00d7analyte, all visits and infant strata.",
+          feeds = if (ss == "standardized")
+            "Q6 (effects independent of total IgG) of the secondary summary" else
+            c("Q1\u2013Q3 (magnitude, antigen specificity, function) of the secondary summary"))
+  for (visit in BUBBLE_VISITS) {
+    cat("###", visit, "\n\n")
+    for (strat_name in names(strata_defs)) run_bubble_cell(ss, visit, strat_name)
+  }
+}
+```
+
+---
+
+## Cross-Visit Effect Summary (for the secondary analysis)
+
+```{r bub-cross-mapnote, echo=FALSE, results='asis'}
+mapnote("These tables line up each antigen\u00d7analyte effect across the three visits, ",
+        "so the secondary analysis can read temporal persistence and infant-arm ",
+        "modification directly.",
+        feeds = c("Q4 (temporal persistence) and Q5 (infant-arm modification) of the secondary summary"))
+```
+
+```{r bub-cross, results='asis'}
+all_bubble_stats <- dplyr::bind_rows(bubble_stats_acc)
+if (nrow(all_bubble_stats) > 0) {
+  for (ss in scales) for (strat_name in names(strata_defs)) {
+    sub <- all_bubble_stats %>%
+      dplyr::filter(scale == ss, stratum == strat_name) %>%
+      mutate(cell = sprintf("%+.2f %s", effect_size, pvalue_to_label(p_adj)))
+    # keep antigen x analyte that are significant in at least one visit
+    keep <- sub %>% group_by(antigen, analyte) %>%
+      dplyr::summarize(any_sig = any(significant, na.rm = TRUE), .groups = "drop") %>%
+      dplyr::filter(any_sig)
+    sub <- sub %>% semi_join(keep, by = c("antigen", "analyte"))
+    if (nrow(sub) == 0) {
+      cat(sprintf("\n**%s \u2014 %s:** no antigen\u00d7analyte reached adjusted significance at any visit.\n\n",
+                  ss, strat_name)); next
+    }
+    wide <- sub %>%
+      dplyr::select(antigen, analyte, visit, cell) %>%
+      pivot_wider(names_from = visit, values_from = cell) %>%
+      arrange(antigen, analyte)
+    cat(sprintf("\n### %s \u2014 %s\n\n", ss, strat_name))
+    print(knitr::kable(wide,
+      caption = sprintf("Signed effect (median TT\u2212TdaP) with significance, by visit \u2014 %s, %s. Significant in \u22651 visit only.", ss, strat_name),
+      align = c("l","l", rep("r", ncol(wide) - 2))))
+    cat("\n")
+  }
+} else cat("*No grids computed.*\n\n")
+```
+
+---
+
+## Participant Accounting (Bubbles) {#bubbles-naccounting}
+
+```{r bub-naccount, results='asis'}
+nt_render(nt, part = "Bubbles",
+          caption = "Table B3. Participant accounting per effect grid (per-cell n shown in each grid table).")
+```

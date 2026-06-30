@@ -1,0 +1,520 @@
+# Effector Function Associations with the Whole-Cell Outcome at INFMon2 {#effector-functions}
+
+*🧭 Maps to summary: §11 (ADCD), §12 (ADCP), §13 (ADNP), §14 (combined profile)*
+
+**Effector coverage note.** ADCD is measured for all six antigens (PT, PRN,
+FHA, DT, TT, FIM). ADCP and ADNP are measured only for PT, PRN, DT, and TT;
+FHA and FIM have ADCD only. Blocks 12 and 13 reflect this reduced antigen panel.
+
+---
+
+```{r p5-setup, include=FALSE}
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2)
+  library(purrr); library(tibble); library(forcats)
+})
+
+# ── Standalone bootstrap ─────────────────────────────────────────────────────
+if (!exists("cfg")) {
+  .find <- function(rel) {
+    cand <- character(0)
+    if (requireNamespace("here", quietly = TRUE))
+      cand <- c(here::here(rel), here::here("analysis", rel))
+    rmd_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                        error = function(e) NA_character_)
+    if (!is.na(rmd_dir))
+      cand <- c(cand, file.path(rmd_dir, rel), file.path(dirname(rmd_dir), rel))
+    cand <- unique(c(cand, file.path(getwd(), rel), rel))
+    hit  <- cand[file.exists(cand)]
+    if (length(hit)) return(normalizePath(hit[1], winslash="/", mustWork=FALSE))
+    stop("Cannot locate '", rel, "'. Run from the project root.", call.=FALSE)
+  }
+  source(.find("config/endpoints.R"),           local=FALSE, encoding="UTF-8")
+  tryCatch(
+    source(.find("config/endpoints_additions.R"), local=FALSE, encoding="UTF-8"),
+    error = function(e) NULL
+  )
+  source(.find("R/serology_helpers.R"),          local=FALSE, encoding="UTF-8")
+  cfg  <- get_endpoint_config("SBA")  # <- change to "WT_IgG"/"PTNA" to test
+  data <- load_serology_data(.find("data/c_set.RData"))
+  nt   <- new_ntracker()
+}
+if (!exists("nt_add")) nt_add <- function(...) invisible(NULL)
+if (!exists("nt"))     nt     <- list()
+if (!exists("make_wide")) {
+  make_wide <- function(data_long, visit_label, features = NULL,
+                        visit_col="visit_name", feature_col="feature",
+                        value_col="log_assay_value",
+                        id_cols=c("subject_accession","maternal_arm","infant_arm")) {
+    if (is.null(visit_label)||length(visit_label)==0L||!nzchar(visit_label))
+      stop("visit_label is NULL/empty.", call.=FALSE)
+    df <- dplyr::filter(data_long, .data[[visit_col]] == visit_label)
+    if (!is.null(features))
+      df <- dplyr::filter(df, .data[[feature_col]] %in% features)
+    tidyr::pivot_wider(df, id_cols=dplyr::all_of(id_cols),
+      names_from=dplyr::all_of(feature_col),
+      values_from=dplyr::all_of(value_col), values_fn=mean)
+  }
+}
+
+# ── Variable-name bridge ──────────────────────────────────────────────────────
+# The parent .Rmd loads data as 'data_raw'; child parts use 'data'.
+# When called via child= the bootstrap is skipped (cfg already exists), so
+# 'data' may not have been created. Alias data_raw → data when needed.
+if (!exists("data") || !is.data.frame(data)) {
+  if (exists("data_raw") && is.data.frame(data_raw)) {
+    data <- data_raw
+  }
+}
+
+# ── Feature groups ────────────────────────────────────────────────────────────
+if (!exists("ANTIGENS"))
+  ANTIGENS <- c("PT", "PRN", "FHA", "DT", "TT", "FIM")
+
+ANTIGENS_FULL_EFF  <- c("PT", "PRN", "DT", "TT")   # ADCD + ADCP + ADNP
+ANTIGENS_ADCD_ONLY <- c("FHA", "FIM")               # ADCD only
+
+ADCD_FEATS      <- paste0(ANTIGENS,           "_ADCD")
+ADCP_FEATS      <- paste0(ANTIGENS_FULL_EFF,  "_ADCP")
+ADNP_FEATS      <- paste0(ANTIGENS_FULL_EFF,  "_ADNP")
+ALL_EFF_FEATS   <- c(ADCD_FEATS, ADCP_FEATS, ADNP_FEATS)
+
+OUTCOME_COL    <- cfg$outcome_feature
+.derive_visit <- function(cfg_val, raw_code, field_name) {
+  # 1. Explicit config value wins
+  if (!is.null(cfg_val) && length(cfg_val) > 0L && nzchar(cfg_val)) return(cfg_val)
+
+  # 2. Inspect actual visit labels in the data.
+  #    Guard with is.data.frame() — base R also has a data() *function* so
+  #    exists("data") alone is not sufficient to detect the data frame.
+  visits_in_data <- if (exists("data") && is.data.frame(data) &&
+                        "visit_name" %in% names(data))
+                      as.character(unique(data$visit_name))
+                    else character(0)
+
+  # 3. Prefer raw code if it is directly in the data (no VISIT_RECODE needed)
+  if (raw_code %in% visits_in_data) {
+    message("[Part 5] cfg$", field_name, " not set — using raw code '",
+            raw_code, "' (found in data$visit_name).\n",
+            "  Add ", field_name, " = \"", raw_code,
+            "\" to config/endpoints.R to suppress this.")
+    return(raw_code)
+  }
+
+  # 4. Try VISIT_RECODE only when the raw code is NOT directly in the data
+  if (exists("VISIT_RECODE") && !is.na(VISIT_RECODE[raw_code])) {
+    recoded <- unname(VISIT_RECODE[raw_code])
+    if (length(visits_in_data) == 0L || recoded %in% visits_in_data) {
+      message("[Part 5] cfg$", field_name, " not set — using VISIT_RECODE label '",
+              recoded, "'.\n",
+              "  Add ", field_name, " = \"", recoded,
+              "\" to config/endpoints.R to suppress this.")
+      return(recoded)
+    }
+    warning("[Part 5] VISIT_RECODE[\"", raw_code, "\"] = \"", recoded,
+            "\" is not in data$visit_name either. Falling back to raw code.")
+  }
+
+  message("[Part 5] cfg$", field_name, " not set — using raw code '", raw_code,
+          "' as last-resort fallback.")
+  raw_code
+}
+INFMON2_VISIT  <- .derive_visit(cfg$infmon2_visit,       "P02", "infmon2_visit")
+MATERNAL_VISIT <- .derive_visit(cfg$maternal_pred_visit, "M09", "maternal_pred_visit")
+# ↑ ADCD/ADCP/ADNP are only measured at maternal visits; M09 is the default.
+#   Set cfg$maternal_pred_visit in config/endpoints.R to override.
+
+# ── Two wide frames ───────────────────────────────────────────────────────────
+# P02 wide — needed only for the outcome column
+if (!exists("data_infmon2") || !is.data.frame(data_infmon2) ||
+    !("subject_accession" %in% names(data_infmon2))) {
+  data_infmon2 <- make_wide(data, visit_label = INFMON2_VISIT)
+}
+
+# Maternal wide — effectors are here (not at P02)
+if (!exists("data_maternal") || !is.data.frame(data_maternal) ||
+    !("subject_accession" %in% names(data_maternal))) {
+  data_maternal <- make_wide(data, visit_label = MATERNAL_VISIT)
+}
+
+# Joined frame: maternal effectors + P02 outcome
+if (!exists("data_mat_p02") || !is.data.frame(data_mat_p02) ||
+    nrow(data_mat_p02) == 0L) {
+  if (isTRUE(OUTCOME_COL %in% names(data_infmon2))) {
+    .p02_out <- dplyr::select(data_infmon2, subject_accession,
+                               dplyr::all_of(OUTCOME_COL))
+    data_mat_p02 <- dplyr::inner_join(data_maternal, .p02_out,
+                                      by = "subject_accession")
+  } else {
+    warning("[Part 5] Outcome '", OUTCOME_COL, "' not found at ", INFMON2_VISIT)
+    data_mat_p02 <- data.frame()
+  }
+}
+
+# ── Availability guards ───────────────────────────────────────────────────────
+# Effectors come from the maternal frame
+avail_adcd <- intersect(ADCD_FEATS,    names(data_maternal))
+avail_adcp <- intersect(ADCP_FEATS,    names(data_maternal))
+avail_adnp <- intersect(ADNP_FEATS,    names(data_maternal))
+avail_eff  <- c(avail_adcd, avail_adcp, avail_adnp)
+
+.warn_miss <- function(req, avail, lbl)
+  if (length(m <- setdiff(req, avail)))
+    message("[Part 5 | ", lbl, "] Missing: ",
+            paste(m[seq_len(min(6L, length(m)))], collapse = ", "),
+            if (length(m) > 6L) " ...")
+
+.warn_miss(ADCD_FEATS,  avail_adcd, "ADCD")
+.warn_miss(ADCP_FEATS,  avail_adcp, "ADCP")
+.warn_miss(ADNP_FEATS,  avail_adnp, "ADNP")
+```
+
+## Effector Feature Inventory {#p5-inventory}
+
+```{r p5-inventory-tbl, results='asis'}
+tibble::tibble(
+  Effector  = c("ADCD", "ADCP", "ADNP"),
+  `Antigens requested` = c(
+    paste(ANTIGENS,          collapse = ", "),
+    paste(ANTIGENS_FULL_EFF, collapse = ", "),
+    paste(ANTIGENS_FULL_EFF, collapse = ", ")
+  ),
+  `Features found` = c(length(avail_adcd), length(avail_adcp), length(avail_adnp)),
+  Note = c(
+    "Antibody-Dependent Complement Deposition — all 6 antigens",
+    "Antibody-Dependent Cellular Phagocytosis — PT/PRN/DT/TT only",
+    "Antibody-Dependent Neutrophil Phagocytosis — PT/PRN/DT/TT only"
+  )
+) |>
+  knitr::kable(caption = paste("Part 5 effector feature availability for",
+                               cfg$outcome_label, "at INFMon2."))
+```
+
+---
+
+## Block 11: ADCD Associations {#block11}
+
+*🧭 Maps to summary §11 — complement deposition (all 6 antigens)*
+
+```{r block11-adcd, fig.width=9, fig.height=4.5, fig.cap="Block 11 — ADCD Spearman ρ vs. outcome by antigen and maternal arm."}
+if (length(avail_adcd) == 0L) {
+  message("Block 11 skipped: no ADCD features found.")
+} else {
+
+  cor11 <- data_mat_p02 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(avail_adcd),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      n = n(), .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(dplyr::all_of(avail_adcd), names_to = "feature", values_to = "rho") |>
+    dplyr::mutate(antigen = factor(sub("_ADCD$", "", feature), levels = ANTIGENS))
+
+  ggplot(cor11,
+         aes(x = fct_reorder(antigen, abs(rho)), y = rho, fill = maternal_arm)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
+    scale_fill_manual(values = c("TdaP" = "#e08214", "TT" = "#542788"),
+                      name = "Maternal arm") +
+    coord_flip() +
+    labs(title    = paste("Block 11 — ADCD vs.", cfg$outcome_label, "at INFMon2"),
+         subtitle = "Spearman ρ (log_assay_value); by maternal arm — exploratory",
+         x = "Antigen", y = expression(rho[s])) +
+    theme_minimal(base_size = 11)
+}
+```
+
+---
+
+## Block 12: ADCP Associations {#block12}
+
+*🧭 Maps to summary §12 — cellular phagocytosis (PT / PRN / DT / TT)*
+
+```{r block12-adcp, fig.width=8, fig.height=4, fig.cap="Block 12 — ADCP Spearman ρ. Note: FHA and FIM not measured for ADCP."}
+if (length(avail_adcp) == 0L) {
+  message("Block 12 skipped: no ADCP features found.")
+} else {
+
+  cor12 <- data_mat_p02 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(avail_adcp),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(dplyr::all_of(avail_adcp), names_to = "feature", values_to = "rho") |>
+    dplyr::mutate(antigen = factor(sub("_ADCP$", "", feature), levels = ANTIGENS_FULL_EFF))
+
+  ggplot(cor12,
+         aes(x = fct_reorder(antigen, abs(rho)), y = rho, fill = maternal_arm)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
+    scale_fill_manual(values = c("TdaP" = "#e08214", "TT" = "#542788"),
+                      name = "Maternal arm") +
+    coord_flip() +
+    labs(title    = paste("Block 12 — ADCP vs.", cfg$outcome_label, "at INFMon2"),
+         subtitle = "Spearman ρ; PT/PRN/DT/TT only (FHA and FIM not measured)",
+         x = "Antigen", y = expression(rho[s])) +
+    theme_minimal(base_size = 11)
+}
+```
+
+---
+
+## Block 13: ADNP Associations {#block13}
+
+*🧭 Maps to summary §13 — neutrophil phagocytosis (PT / PRN / DT / TT)*
+
+```{r block13-adnp, fig.width=8, fig.height=4, fig.cap="Block 13 — ADNP Spearman ρ. Note: FHA and FIM not measured for ADNP."}
+if (length(avail_adnp) == 0L) {
+  message("Block 13 skipped: no ADNP features found.")
+} else {
+
+  cor13 <- data_mat_p02 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(avail_adnp),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(dplyr::all_of(avail_adnp), names_to = "feature", values_to = "rho") |>
+    dplyr::mutate(antigen = factor(sub("_ADNP$", "", feature), levels = ANTIGENS_FULL_EFF))
+
+  ggplot(cor13,
+         aes(x = fct_reorder(antigen, abs(rho)), y = rho, fill = maternal_arm)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
+    scale_fill_manual(values = c("TdaP" = "#e08214", "TT" = "#542788"),
+                      name = "Maternal arm") +
+    coord_flip() +
+    labs(title    = paste("Block 13 — ADNP vs.", cfg$outcome_label, "at INFMon2"),
+         subtitle = "Spearman ρ; PT/PRN/DT/TT only (FHA and FIM not measured)",
+         x = "Antigen", y = expression(rho[s])) +
+    theme_minimal(base_size = 11)
+}
+```
+
+---
+
+## Block 14: Combined Effector Profile {#block14}
+
+### Block 14a: Effector × antigen heatmap {#block14a}
+
+*🧭 Maps to summary §14 — effector hierarchy and whole-cell alignment*
+
+Placing all available effector–antigen combinations in one view reveals whether the
+outcome aligns with an **effector mechanism** (row pattern) or an **antigen target**
+(column pattern). Grey tiles indicate feature not measured for that antigen.
+
+```{r block14a-heatmap, fig.width=9, fig.height=5, fig.cap="Block 14a — All effector functions vs. outcome. Grey = not measured."}
+if (length(avail_eff) == 0L) {
+  message("Block 14 skipped: no effector features available.")
+} else {
+
+  # Build a complete antigen × effector grid; fill missing with NA
+  all_combos <- expand.grid(
+    antigen  = ANTIGENS,
+    effector = c("ADCD", "ADCP", "ADNP"),
+    stringsAsFactors = FALSE
+  ) |>
+    dplyr::mutate(feature = paste(antigen, effector, sep = "_"))
+
+  # Correlations for available features only
+  cor14_present <- data_mat_p02 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(avail_eff),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(-maternal_arm, names_to = "feature", values_to = "rho")
+
+  # Join onto complete grid so FHA/FIM ADCP/ADNP show as NA
+  cor14 <- all_combos |>
+    dplyr::left_join(cor14_present, by = "feature") |>
+    dplyr::mutate(
+      antigen  = factor(antigen,  levels = ANTIGENS),
+      effector = factor(effector, levels = c("ADCD", "ADCP", "ADNP"))
+    )
+
+  ggplot(cor14, aes(x = antigen, y = fct_rev(effector), fill = rho)) +
+    geom_tile(colour = "white", linewidth = 0.7) +
+    geom_text(aes(label = ifelse(is.na(rho), "—", sprintf("%.2f", rho))),
+              size = 3.2) +
+    scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#d6604d",
+                         midpoint = 0, limits = c(-1, 1), na.value = "grey88",
+                         name = expression(rho[s])) +
+    facet_wrap(~ maternal_arm, labeller = label_both) +
+    labs(
+      title    = paste("Block 14a — Effector functions vs.", cfg$outcome_label,
+                       "at INFMon2"),
+      subtitle = "Spearman ρ; grey tiles = not measured in this dataset",
+      x = "Antigen", y = "Effector function"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(panel.grid = element_blank())
+}
+```
+
+### Block 14b: Elastic-net importance across all effector features {#block14b}
+
+```{r block14b-elasticnet, fig.width=9, fig.height=5, fig.cap="Block 14b — Elastic-net coefficients; colour = effector type."}
+if (length(avail_eff) >= 3L && requireNamespace("glmnet", quietly = TRUE)) {
+  library(glmnet)
+
+  df14 <- data_mat_p02 |>
+    dplyr::select(dplyr::all_of(c(OUTCOME_COL, avail_eff))) |>
+    tidyr::drop_na()
+
+  nt_add(nt, "Block 14b — effector importance complete cases", nrow(df14))
+
+  set.seed(20240202)
+  cv14   <- glmnet::cv.glmnet(as.matrix(df14[, avail_eff]),
+                               df14[[OUTCOME_COL]],
+                               alpha = 0.5, nfolds = 5)
+  coef14 <- as.matrix(coef(cv14, s = "lambda.1se")) |>
+    as.data.frame() |>
+    tibble::rownames_to_column("feature") |>
+    setNames(c("feature", "coef")) |>
+    dplyr::filter(feature != "(Intercept)", coef != 0) |>
+    dplyr::arrange(desc(abs(coef))) |>
+    dplyr::mutate(effector = factor(sub(".*_(ADCD|ADCP|ADNP)$", "\\1", feature),
+                             levels = c("ADCD", "ADCP", "ADNP")))
+
+  if (nrow(coef14) == 0L) {
+    message("Block 14b: all effector features shrunk to zero at lambda.1se.")
+  } else {
+    ggplot(coef14,
+           aes(x = fct_reorder(feature, abs(coef)), y = coef,
+               fill = effector, alpha = coef > 0)) +
+      geom_col() +
+      coord_flip() +
+      scale_fill_manual(
+        values = c("ADCD" = "#4dac26", "ADCP" = "#d01c8b", "ADNP" = "#f1a340"),
+        name = "Effector") +
+      scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 0.6), guide = "none") +
+      labs(
+        title    = paste("Block 14b — Effector elastic-net vs.", cfg$outcome_label),
+        subtitle = paste0("λ.1se; ", nrow(coef14), " non-zero features",
+                          "; N = ", nrow(df14)),
+        x = NULL, y = "Coefficient"
+      ) +
+      theme_minimal(base_size = 11)
+  }
+} else if (length(avail_eff) < 3L) {
+  message("Block 14b: fewer than 3 effector features available — skipped.")
+} else {
+  message("Install package 'glmnet' for Block 14b.")
+}
+```
+
+### Block 14c: Full BH-corrected ρ table {#block14c}
+
+*All antigen × effector Spearman ρ values, pooled across arms, with
+Benjamini–Hochberg FDR correction.*
+
+```{r block14c-fdr, results='asis'}
+if (length(avail_eff) > 0L) {
+
+  df_all <- data_mat_p02 |> dplyr::filter(!is.na(.data[[OUTCOME_COL]]))
+
+  fdr_tbl <- map_dfr(avail_eff, function(feat) {
+    ct <- cor.test(df_all[[feat]], df_all[[OUTCOME_COL]],
+                   method = "spearman", exact = FALSE)
+    tibble(feature = feat, rho = ct$estimate, p_value = ct$p.value,
+           n = sum(!is.na(df_all[[feat]]) & !is.na(df_all[[OUTCOME_COL]])))
+  }) |>
+    dplyr::mutate(
+      antigen  = factor(sub("_(ADCD|ADCP|ADNP)$", "", feature), levels = ANTIGENS),
+      effector = factor(sub(".*_(ADCD|ADCP|ADNP)$", "\\1", feature),
+                        levels = c("ADCD", "ADCP", "ADNP")),
+      q_BH     = p.adjust(p_value, method = "BH")
+    ) |>
+    dplyr::arrange(q_BH) |>
+    dplyr::select(Antigen = antigen, Effector = effector,
+           `ρ` = rho, `p` = p_value, `q (BH)` = q_BH, `n` = n)
+
+  knitr::kable(fdr_tbl, digits = 3,
+    caption = paste("Block 14c — Effector × antigen Spearman ρ vs.",
+                    cfg$outcome_label,
+                    "at INFMon2 (pooled arms; BH-corrected)."))
+}
+```
+
+---
+
+## ADCD pathway & ADCD↔whole-cell relationship — SCAFFOLD (inert) {#adcd-scaffold}
+
+*🧭 Requirement #7. This section is intentionally **inert**: the ADCD transition
+data are not yet in hand, so every chunk below is `eval=FALSE`. The structure
+mirrors the three within-subject transitions used for the antigen-specific pool
+(production / transfer / decay) and adds the concurrent ADCD↔whole-cell-assay
+relationship at InfMon2. When the data arrive, flip `ADCD_READY` to `TRUE`
+(or remove `eval=FALSE`) and confirm ADCD is measured at the transition visits.*
+
+```{r adcd-scaffold-setup, eval=FALSE}
+# Readiness gate — keep FALSE until ADCD is confirmed at the transition visits.
+# ADCD is present in c_set.RData for all six antigens, but the longitudinal
+# transition readout (ADCD at PregEarly/MatBirth/CordBlood as well as InfMon2)
+# must be verified before these run; until then the section is design-only.
+ADCD_READY <- FALSE
+
+# ADCD feature vocabulary (antigen_analyte). ADCD is assayed for all six
+# antigens; ADCP/ADNP for PT/PRN/DT/TT only (see the coverage note above).
+ADCD_FEATS <- paste0(ANTIGEN_ORDER, "_ADCD")
+
+# Same three transitions as the antibody pathway (results_B_to_F / Figure 3).
+ADCD_TRANSITIONS <- list(
+  c(from = "PregEarly", to = "MatBirth",  label = "ADCD production (PregEarly\u2192MatBirth)"),
+  c(from = "MatBirth",  to = "CordBlood", label = "ADCD transfer (MatBirth\u2192CordBlood)"),
+  c(from = "CordBlood", to = "InfMon2",   label = "ADCD decay (CordBlood\u2192InfMon2)"))
+```
+
+```{r adcd-transition-pathway, eval=FALSE}
+# Per-antigen ADCD change across each transition, reusing the shared paired_change /
+# summarise_paired engine. Mirrors build_all_tr() in results_B_to_F.Rmd so the ADCD
+# pathway can be plotted with the same plot_pathway() renderer once ADCD_READY.
+adcd_all_tr <- dplyr::bind_rows(lapply(ADCD_TRANSITIONS, function(tr) {
+  paired <- paired_change(data, tr["from"], tr["to"])           # 'data' = recoded long frame
+  paired <- paired[paired$feature %in% ADCD_FEATS, , drop = FALSE]
+  summarise_paired(paired, min_n = 10L) %>%
+    dplyr::left_join(dplyr::distinct(paired, feature, antigen, analyte), by = "feature") %>%
+    dplyr::mutate(transition = tr["label"], from = tr["from"], to = tr["to"])
+}))
+knitr::kable(adcd_all_tr, caption = "ADCD within-subject change per antigen across the three transitions (SCAFFOLD).")
+```
+
+```{r adcd-wholecell-infmon2, eval=FALSE}
+# Concurrent ADCD <-> whole-cell-assay relationship at InfMon2: does per-antigen
+# ADCD track the whole-bacterium functional outcome (PTNA / SBA / WT_IgG) on the
+# same InfMon2 draw? Spearman per antigen, by maternal arm. cfg$outcome_feature
+# selects the active whole-cell outcome (e.g. WHOLE_SBA).
+infmon2 <- cfg$infmon2_visit %||% "InfMon2"
+wide_adcd <- make_wide(data, visit_label = infmon2,
+                       features = c(ADCD_FEATS, cfg$outcome_feature))
+adcd_vs_whole <- tidyr::expand_grid(antigen = ANTIGEN_ORDER) %>%
+  dplyr::mutate(feat = paste0(antigen, "_ADCD")) %>%
+  dplyr::filter(feat %in% names(wide_adcd)) %>%
+  dplyr::rowwise() %>%
+  dplyr::mutate(
+    rho = suppressWarnings(stats::cor(wide_adcd[[feat]],
+                                      wide_adcd[[cfg$outcome_feature]],
+                                      method = "spearman",
+                                      use = "pairwise.complete.obs"))) %>%
+  dplyr::ungroup()
+knitr::kable(adcd_vs_whole, caption = paste0("Concurrent InfMon2 ADCD vs ",
+             cfg$outcome_label, " (Spearman; SCAFFOLD)."))
+```

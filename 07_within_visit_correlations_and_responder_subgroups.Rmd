@@ -1,0 +1,1114 @@
+---
+title: "Within-Visit Assay Correlations and Maternal Vaccine-Responder Subgroups"
+subtitle: "Within-subject correlation of 6 assay responses at three serum timepoints; detection of low/high universal maternal responders across TdaP vs TT"
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+    code_folding: show
+  word_document:
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 6
+params:
+  # The six assay responses to correlate at each timepoint.
+  assays: !r c("WHOLE_PTNA", "WHOLE_SBA", "WHOLE_WT_IgG", "PRN_IgG", "FIM_IgG", "PT_IgG")
+  # Responder definition uses these binding features (exist at every visit).
+  responder_features: !r c("PT_IgG", "FHA_IgG", "PRN_IgG")
+  responder_whole:    !r c("WHOLE_SBA", "WHOLE_WT_IgG")   # infant visits only
+  # Two timepoint SETS for staged responder subgrouping:
+  maternal_visits:    !r c("PregEarly", "MatBirth")            # Stage A: maternal response
+  infant_visits:      !r c("InfMon2", "InfMon5", "InfMon9")    # Stage B: infant baseline -> responses
+  infant_baseline:    "InfMon2"                                # the transplacental baseline draw
+  cor_method: "spearman"   # robust to skew / heavy tails common in titres
+  breadth_thresh: 0.6      # fraction-of-features rule for the "universal" qualifier
+  # Single-assay responder subgroupings (Stage B2): each detected on its own.
+  single_feature_subgroups: !r c("PT_IgG", "PRN_IgG", "WHOLE_SBA", "WHOLE_PTNA", "WHOLE_WT_IgG")
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE,
+                      fig.width = 9, fig.height = 6)
+options(stringsAsFactors = FALSE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+
+## ---- self-locating resolver (identical contract to the other analyses) ----
+## Kept inline because it is needed BEFORE we can locate the sourced helpers.
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+## Attach the tidyverse trio first so the pipe / NSE resolve when the sourced
+## helpers are *called* later. Sourcing only defines functions.
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2)
+})
+
+source(find_proj_file("config/endpoints.R"),          local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/within_visit_helpers.R"),     local = FALSE, encoding = "UTF-8")
+
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))   # applies VISIT_RECODE
+clin     <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")),
+                     error = function(e) NULL)
+nt <- new_ntracker()
+
+## ---- optional packages: degrade gracefully ----
+has_ggcorr   <- requireNamespace("ggcorrplot", quietly = TRUE)
+has_cluster  <- requireNamespace("cluster",    quietly = TRUE)
+has_pheatmap <- requireNamespace("pheatmap",   quietly = TRUE)
+
+## ---- thin, project-bound wrappers around the generic helpers ----
+visit_levels <- as.character(unique(data_raw$visit_name))
+avail_feats  <- as.character(unique(data_raw$feature))
+
+## Which visits each WHOLE_* assay is measured at, taken straight from the
+## sourced ENDPOINTS config (concurrent_visits) when available.
+WHOLE_MAP <- whole_assay_visit_map(if (exists("ENDPOINTS")) ENDPOINTS else NULL)
+
+rf <- function(w)     resolve_feat(w, avail_feats)
+mw <- function(visit) make_wide(data_raw, visit, ASSAYS)
+
+## Resolve the INFANT priming arm (wP vs aP) -- a different variable from the
+## maternal arm_name (TdaP/TT). Used for the Q4/Q5 stratification & scatter
+## colouring and for the low/low subject profiling. NULL -> those steps skip.
+infant_arm_tbl <- resolve_infant_arm(data_raw, clin)
+infant_arm_src <- if (is.null(infant_arm_tbl)) NA_character_ else
+  sprintf("%s$%s", attr(infant_arm_tbl, "source_tbl"),
+          attr(infant_arm_tbl, "source_col"))
+```
+
+# Purpose
+
+This module answers two families of questions, both anchored to the same
+maternal/cord/infant serology dataset used by the PTNA, SBA and WT_IgG endpoint
+analyses and by the `06_prediction_models` module:
+
+**A. Within-subject correlation (Q1-Q5)** of the six assay responses
+(`r paste(params$assays, collapse=", ")`) at each of the five serum draws --
+**PregEarly** and **MatBirth** (maternal), then **InfMon2**, **InfMon5** and
+**InfMon9** (infant). The maternal draws carry only the three antigen-specific
+totals; the full six-assay structure appears at the three infant visits.
+
+**B. Staged responder subgrouping (Q6)** using *two* timepoint sets, defined
+independently and then linked, so the maternal signal and the infant signal are
+never conflated:
+
+1. **Stage A - maternal response (up to MatBirth).** Low vs high *maternal*
+   responders to vaccination in pregnancy, from the maternal binding panel at
+   `r paste(params$maternal_visits, collapse=" + ")`.
+2. **Stage B - infant chain (baseline -> responses).** Low vs high *infant*
+   responders across `r paste(params$infant_visits, collapse=" -> ")`, where
+   **`r params$infant_baseline`** is the transplacental baseline (pre-primary)
+   and InfMon5/InfMon9 are the post-priming responses. This set adds the
+   whole-bacterial functional assays, which exist only at infant visits.
+3. **Stage C - linkage.** Does maternal responder status carry forward -- first
+   into the infant baseline, then into the infant's own post-vaccination
+   responses? We correlate the two scores, cross-tabulate the two subgroupings,
+   and trace the infant trajectory (InfMon2 -> InfMon5 -> InfMon9) stratified by
+   maternal subgroup. Arm concordance (TdaP vs TT) is tested at each stage.
+
+> **Scale caveat (carried from `cord_to_infmon2_analysis`).** Maternal and cord
+> samples were assayed on different plates/runs from the infant samples, so
+> *cross-timepoint* comparisons require the cross-plate-normalised scale. Every
+> correlation here (Q1-Q5) is computed **within a single timepoint**, so the
+> per-plate offset is a constant that cancels and does **not** bias a within-visit
+> correlation. The staged subgrouping (Q6) likewise standardises every feature to a
+> **within-timepoint rank / z-score** before any cross-visit combination, so the
+> maternal panel, the infant panel and the InfMon2 -> InfMon5 -> InfMon9 trajectory
+> are each on their own per-timepoint scale and the offset never enters.
+
+> **Assay availability (from `config/endpoints.R`).** The whole-bacterial
+> endpoints are **not assayed on maternal serum**. `WHOLE_PTNA` and `WHOLE_SBA`
+> exist only at **InfMon2, InfMon5 and InfMon9**; `WHOLE_WT_IgG` exists at those
+> three plus **CordBlood**. None of the three is measured at **PregEarly** or
+> **MatBirth**. The three antigen-specific totals (`PT_IgG`, `PRN_IgG`, `FIM_IgG`)
+> do exist at every visit. Consequently the early-pregnancy and at-birth matrices
+> (Q1, Q2) contain only those three antigen totals, and the full six-assay matrix
+> is populated **only at InfMon2** (Q3). These are by-design absences, surfaced in
+> Table 1, not coding errors.
+
+```{r resolve-timepoints, include=FALSE}
+## Recoded visit labels are the canonical VISIT_RECODE values from
+## config/endpoints.R (P02->PregEarly, P09->MatBirth, M00->CordBlood,
+## M02->InfMon2, M05->InfMon5, M09->InfMon9). Exact strings, validated present.
+V_EARLY <- require_visit("PregEarly", visit_levels)   # maternal, early pregnancy
+V_BIRTH <- require_visit("MatBirth",  visit_levels)   # maternal, at delivery
+V_INF2  <- require_visit("InfMon2",   visit_levels)   # infant, 2 months (baseline)
+V_INF5  <- require_visit("InfMon5",   visit_levels)   # infant, 5 months
+V_INF9  <- require_visit("InfMon9",   visit_levels)   # infant, 9 months
+
+## Correlations (Q1-Q5) run at all five serum draws.
+TIMEPOINTS <- c("Early pregnancy (maternal)" = V_EARLY,
+                "At birth (maternal)"        = V_BIRTH,
+                "InfMon2 (infant baseline)"  = V_INF2,
+                "InfMon5 (infant)"           = V_INF5,
+                "InfMon9 (infant)"           = V_INF9)
+TIMEPOINTS <- TIMEPOINTS[!is.na(TIMEPOINTS)]
+
+## Resolve the six assays against the panel (case-insensitive, drop absent).
+ASSAYS <- resolve_feats(params$assays, avail_feats)
+
+## Q4/Q5 only: stratify the two infant post-baseline visits by infant arm.
+STRATIFY_TPS <- intersect(names(TIMEPOINTS),
+                          c("InfMon5 (infant)", "InfMon9 (infant)"))
+```
+
+```{r build-wide-by-visit, include=FALSE}
+wide_by_visit <- lapply(TIMEPOINTS, mw)
+names(wide_by_visit) <- names(TIMEPOINTS)
+```
+
+# Coverage of the six assays at each timepoint
+
+The whole-bacterial functional/binding assays (`WHOLE_PTNA`, `WHOLE_SBA`,
+`WHOLE_WT_IgG`) are run on infant serum only -- PTNA and SBA at InfMon2/5/9, and
+WT_IgG at those plus CordBlood -- so they are absent at the early-pregnancy and
+at-birth maternal draws by design. The three antigen-specific totals are present
+throughout. We audit this first so any empty correlation cell is attributable to
+the assay schedule, not to a coding error.
+
+```{r coverage, results='asis'}
+## status() distinguishes three reasons a cell can be empty:
+##   - absent (not in panel)           : feature string not in the data at all
+##   - not measured here (by design)   : a WHOLE_* assay at a visit where it is
+##                                       not run (maternal draws) -- per config
+##   - present                         : reports the n with a finite value
+cov_tbl <- lapply(names(wide_by_visit), function(tp) {
+  visit <- TIMEPOINTS[[tp]]
+  w <- wide_by_visit[[tp]]
+  data.frame(
+    timepoint = tp,
+    assay     = params$assays,
+    resolved  = vapply(params$assays, function(a) {
+      r <- rf(a); if (is.na(r)) "absent (not in panel)" else r }, character(1)),
+    status = vapply(params$assays, function(a) {
+      r <- rf(a)
+      if (is.na(r))                                   "absent (not in panel)"
+      else if (!feature_measured_at(r, visit, WHOLE_MAP)) "not measured here (by design)"
+      else                                            "present"
+    }, character(1)),
+    n_nonmissing = vapply(params$assays, function(a) {
+      r <- rf(a)
+      if (is.na(r) || !(r %in% names(w))) 0L else sum(is.finite(w[[r]]))
+    }, integer(1)),
+    row.names = NULL)
+}) %>% dplyr::bind_rows()
+
+for (i in seq_len(nrow(cov_tbl)))
+  nt_log_manual(nt, "WithinVisitCor", cov_tbl$timepoint[i], cov_tbl$assay[i],
+                "assay coverage", n_entered = NA, n_used = cov_tbl$n_nonmissing[i],
+                note = cov_tbl$status[i])
+
+knitr::kable(cov_tbl,
+  caption = "Table 1. Coverage of the six assays at each serum timepoint. WHOLE_PTNA / WHOLE_SBA are measured only at InfMon2/5/9 and WHOLE_WT_IgG additionally at CordBlood, so all three read 'not measured here (by design)' at the maternal draws.")
+```
+
+# Q1-Q5 - Within-subject correlations at each timepoint
+
+The correlation engine, its long-format flattener, and the heatmap renderer all
+live in `R/within_visit_helpers.R` (`within_visit_cor()`, `cor_long()`,
+`plot_cor()`). They use pairwise-complete observations, report the n behind every
+cell, and BH-adjust p-values across the unique assay pairs.
+
+```{r run-cors, results='asis', fig.keep='all', fig.height=8}
+cor_results        <- list()
+cor_strata_results <- list()
+
+if (!is.na(infant_arm_src))
+  cat(sprintf("*Infant arm (wP vs aP) resolved from `%s`; used to stratify InfMon5/InfMon9 below.*\n\n",
+              infant_arm_src))
+
+for (tp in names(wide_by_visit)) {
+  w_tp <- wide_by_visit[[tp]]
+  cc   <- within_visit_cor(w_tp, ASSAYS, method = params$cor_method)
+  cor_results[[tp]] <- cc
+
+  cat("\n\n## ", tp, "\n\n")
+  cat(sprintf("Method: **%s**; pairwise-complete observations; p-values BH-adjusted across the %d unique assay pairs.\n\n",
+              cc$method, choose(length(cc$cols), 2)))
+
+  cat("**Correlation coefficients (r) -- all infants:**\n\n")
+  print(knitr::kable(round(cc$r, 2), caption = sprintf("r matrix - %s (all infants)", tp)))
+  cat("\n\n**Pairwise n behind each cell:**\n\n")
+  print(knitr::kable(cc$n, caption = sprintf("n matrix - %s", tp)))
+  cat("\n\n")
+
+  plot_cor(cc, sprintf("Within-subject correlation - %s (all infants)", tp), has_ggcorr)
+  cat("\n\n")
+
+  ## ---- Q4/Q5: stratify InfMon5 & InfMon9 by infant arm (wP vs aP) ----------
+  ## The combined ("all infants") matrix above is always kept; the two arm
+  ## matrices and a colour-coded scatter panel are added alongside it.
+  if (tp %in% STRATIFY_TPS) {
+    w_arm <- attach_infant_arm(w_tp, infant_arm_tbl)
+    if (!is.null(infant_arm_tbl) && any(!is.na(w_arm$infant_arm))) {
+      sc <- within_visit_cor_strata(w_arm, ASSAYS, "infant_arm",
+                                    method = params$cor_method)
+      cor_strata_results[[tp]] <- sc
+
+      for (g in names(sc$by)) {
+        ng <- sum(!is.na(w_arm$infant_arm) & w_arm$infant_arm == g)
+        cat(sprintf("\n\n**Correlation coefficients (r) -- %s infants (n = %d):**\n\n", g, ng))
+        print(knitr::kable(round(sc$by[[g]]$r, 2),
+              caption = sprintf("r matrix - %s (%s infants)", tp, g)))
+        cat("\n\n")
+        plot_cor(sc$by[[g]],
+                 sprintf("Within-subject correlation - %s (%s)", tp, g), has_ggcorr)
+        cat("\n\n")
+      }
+
+      cat(sprintf("\n\n**Scatter panel -- %s.** Points are subjects coloured by infant arm; coloured lines are per-arm OLS fits, the dashed black line is the overall (combined) fit. Each facet is annotated with the overall and per-arm Spearman r, matching the matrices above.\n\n", tp))
+      cor_scatter_panel(w_arm, ASSAYS, color_col = "infant_arm",
+                        method = params$cor_method,
+                        title = sprintf("Assay-pair scatter by infant arm - %s", tp))
+      cat("\n\n")
+    } else {
+      cat("\n\n*Infant-arm (wP/aP) stratification skipped: no priming variable was resolved.*\n\n")
+    }
+  }
+}
+
+## tidy long table across all timepoints (for the summary engine / Word reader)
+cor_all <- dplyr::bind_rows(lapply(names(cor_results),
+                                   function(tp) cor_long(cor_results[[tp]], tp)))
+```
+
+```{r cor-summary-table, results='asis'}
+disp <- cor_all %>%
+  mutate(r = round(r, 3), p = signif(p, 3), p_BH = signif(p_BH, 3),
+         sig = cut(p_BH, c(-Inf, .001, .01, .05, .1, Inf),
+                   labels = c("***", "**", "*", ".", ""))) %>%
+  arrange(timepoint, desc(abs(r)))
+knitr::kable(disp,
+  caption = "Table 2. All within-subject assay-pair correlations at each timepoint (sorted by |r| within timepoint).")
+```
+
+```{r cor-strata-table, results='asis'}
+## Table 2b: InfMon5/InfMon9 correlations, overall vs stratified by infant arm.
+if (length(cor_strata_results)) {
+  strata_all <- dplyr::bind_rows(lapply(names(cor_strata_results),
+    function(tp) cor_strata_long(cor_strata_results[[tp]], tp)))
+  disp_s <- strata_all %>%
+    mutate(r = round(r, 3), p = signif(p, 3), p_BH = signif(p_BH, 3),
+           sig = cut(p_BH, c(-Inf, .001, .01, .05, .1, Inf),
+                     labels = c("***", "**", "*", ".", ""))) %>%
+    arrange(timepoint, assay_x, assay_y,
+            factor(stratum, levels = c("all", "wP", "aP")))
+  print(knitr::kable(disp_s,
+    caption = paste0("Table 2b. InfMon5 / InfMon9 within-subject correlations, ",
+                     "overall ('all') and stratified by infant arm (wP / aP). ",
+                     "BH adjustment is within each (timepoint x stratum) pair set.")))
+} else {
+  cat("*No infant-arm-stratified correlations were produced ",
+      "(no priming variable resolved).*\n\n")
+}
+```
+
+## How Q1-Q5 should be read
+
+- **Stability of the correlation structure across timepoints** tells you whether the
+  six assays measure a single shared "magnitude" axis (all strongly positively
+  correlated) or several semi-independent axes. A pertussis cluster
+  (`WHOLE_PTNA`, `PT_IgG`, and possibly `WHOLE_WT_IgG`) that is tighter than its
+  correlation with `FIM_IgG`/`SBA` would indicate antigen-specific structure rather
+  than a single global responder magnitude.
+- **Why a within-subject correlation is the right object here.** Each row is one
+  subject measured on one draw; correlating the columns asks "do subjects who are
+  high on assay A tend to be high on assay B *on the same sample*?" This is exactly
+  the input the staged responder-subgrouping step (Q6) needs.
+- The **maternal** matrices (Q1, Q2) necessarily contain only the three
+  antigen-specific totals (`PT_IgG`, `PRN_IgG`, `FIM_IgG`); the whole-bacterial
+  assays are not measured on maternal serum (Table 1). The full six-assay
+  structure is observable at **InfMon2, InfMon5 and InfMon9** (Q3-Q5), letting you
+  watch the structure evolve from the pre-primary baseline through the infant's
+  own vaccine responses.
+
+# Q6 - Staged responder subgroups: maternal -> infant baseline -> infant responses
+
+## Strategy
+
+We separate the **maternal** response from the **infant** response by building two
+independent panels, then linking them, so the two signals are never conflated:
+
+- **Stage A (maternal response, up to MatBirth).** Binding panel
+  (`r paste(params$responder_features, collapse=", ")`) at
+  `r paste(params$maternal_visits, collapse=" + ")`. No whole-bacterial assays
+  exist on maternal serum, so the maternal responder is defined on antigen-specific
+  binding alone. MatBirth is the post-vaccination state; PregEarly the
+  pre-vaccination baseline.
+- **Stage B (infant chain).** The same binding panel **plus** the whole-bacterial
+  functional assays (`r paste(params$responder_whole, collapse=", ")`) across
+  `r paste(params$infant_visits, collapse=" -> ")`. `r params$infant_baseline` is
+  the transplacental baseline (what the mother supplied); InfMon5/InfMon9 are the
+  infant's own post-priming responses.
+- **Stage C (linkage).** Correlate the maternal and infant scores, cross-tabulate
+  the two subgroupings, and trace the infant score across the three infant visits
+  **stratified by maternal subgroup** -- reading left to right is exactly
+  "maternal response -> infant baseline -> infant responses".
+
+Each feature is converted to a within-timepoint **Blom z-score** (so the cross-plate
+offset cancels), the **responder score** is the subject mean z over its panel, and a
+**breadth** metric separates uniformly high/low (universal) from spiky subjects.
+Subgroups come from PAM clustering with silhouette-chosen k, with a transparent
+tertile rule as the fallback/sensitivity check. The reusable engine lives in
+`build_responder_panel()`, `summarise_responder_subjects()`, `add_tertile_bands()`,
+`build_resp_wide()`, `detect_subgroups()` and `responder_score_by_visit()`.
+
+```{r q6-setup, include=FALSE}
+RESP_FEATS <- resolve_feats(params$responder_features, avail_feats)
+RESP_WHOLE <- resolve_feats(params$responder_whole,    avail_feats)
+MAT_VIS <- as.character(vapply(params$maternal_visits, require_visit,
+                               character(1), visit_levels = visit_levels))
+INF_VIS <- as.character(vapply(params$infant_visits,  require_visit,
+                               character(1), visit_levels = visit_levels))
+
+## Stage A panel: binding only (whole-bacterial not assayed on maternal serum;
+## the availability map drops them automatically even if requested).
+mat_long    <- build_responder_panel(data_raw, MAT_VIS, RESP_FEATS, character(0),
+                                     avail_feats, WHOLE_MAP)
+mat_subject <- add_tertile_bands(summarise_responder_subjects(mat_long),
+                                 params$breadth_thresh)
+mat_wide    <- build_resp_wide(mat_long)
+
+## Stage B panel: binding + whole-bacterial (gated to infant visits by the map).
+inf_long     <- build_responder_panel(data_raw, INF_VIS, RESP_FEATS, RESP_WHOLE,
+                                      avail_feats, WHOLE_MAP)
+inf_subject  <- add_tertile_bands(summarise_responder_subjects(inf_long),
+                                  params$breadth_thresh)
+inf_wide     <- build_resp_wide(inf_long)
+inf_by_visit <- responder_score_by_visit(inf_long)
+
+## ---- per-stage reporter: score distribution, PAM subgroups, tertile counts,
+## arm concordance. Prints; returns the PAM subgroup table (or NULL). ----------
+stage_report <- function(subject_df, wide_df, stage_label, prefix,
+                         arm_label = "Maternal arm") {
+  print(ggplot(subject_df, aes(universal_z, fill = arm_name)) +
+    geom_density(alpha = 0.45) +
+    geom_vline(xintercept = quantile(subject_df$universal_z, c(1/3, 2/3), na.rm = TRUE),
+               linetype = "dashed", color = "grey40") +
+    labs(x = "Responder score (mean within-timepoint z)", y = "Density",
+         fill = arm_label, title = paste(stage_label, "- responder score by arm")) +
+    theme_bw(base_size = 11))
+
+  arm_test <- tryCatch(stats::wilcox.test(universal_z ~ arm_name, data = subject_df),
+                       error = function(e) NULL)
+  arm_meds <- subject_df %>% dplyr::group_by(arm_name) %>%
+    dplyr::summarize(median_z = round(median(universal_z, na.rm = TRUE), 3),
+                     .groups = "drop")
+  cat(sprintf("\n\nMedian score by arm: %s.",
+              paste(sprintf("%s = %.3f", arm_meds$arm_name, arm_meds$median_z),
+                    collapse = "; ")))
+  if (!is.null(arm_test))
+    cat(sprintf(" Wilcoxon by arm: **W = %.0f, p = %.3g**.",
+                unname(arm_test$statistic), arm_test$p.value))
+  cat(sprintf("\n\n- High responders (top tertile & breadth >= %.0f%%): **%d**; ",
+              100 * params$breadth_thresh, sum(subject_df$universal_high, na.rm = TRUE)))
+  cat(sprintf("low responders: **%d**.\n\n", sum(subject_df$universal_low, na.rm = TRUE)))
+
+  sg <- detect_subgroups(wide_df, subject_df, has_cluster = has_cluster)
+  if (sg$ok) {
+    cat(sprintf("PAM silhouette-selected **k = %d** (avg widths: %s).\n\n",
+                sg$best_k, paste(round(sg$sil, 3), collapse = ", ")))
+    print(knitr::kable(
+      sg$subgroup_tbl %>% dplyr::group_by(subgroup) %>%
+        dplyr::summarize(n = dplyr::n(),
+                         median_z = round(median(universal_z, na.rm = TRUE), 3),
+                         .groups = "drop"),
+      caption = sprintf("Table %s2. %s PAM subgroups (labelled by score rank).",
+                        prefix, stage_label)))
+  } else {
+    cat(sprintf("*PAM skipped (%s); the tertile bands below are used instead.*\n\n",
+                sg$reason))
+  }
+
+  tab <- table(subject_df$arm_name, subject_df$score_band)
+  ft  <- tryCatch(stats::fisher.test(tab, simulate.p.value = TRUE, B = 1e4),
+                  error = function(e) NULL)
+  print(knitr::kable(as.data.frame.matrix(tab),
+        caption = sprintf("Table %s3. %s score band x arm (counts).", prefix, stage_label)))
+  if (!is.null(ft)) cat(sprintf("\nFisher (simulated p): **p = %.3g**.\n\n", ft$p.value))
+
+  sg$subgroup_tbl
+}
+
+## Resolve a single group label per subject: PAM subgroup if available, else the
+## transparent tertile band. Used by the Stage-C linkage.
+group_of <- function(subject_df, subgroup_tbl) {
+  if (!is.null(subgroup_tbl)) {
+    subject_df %>%
+      dplyr::left_join(
+        subgroup_tbl %>% dplyr::select(subject_accession, group = subgroup),
+        by = "subject_accession") %>%
+      dplyr::mutate(group = dplyr::coalesce(as.character(group), score_band))
+  } else {
+    subject_df %>% dplyr::mutate(group = score_band)
+  }
+}
+```
+
+## Stage A - Maternal responder subgroups (up to MatBirth)
+
+```{r q6-stageA, results='asis', fig.height=4.5}
+cat(sprintf("Maternal panel: features **%s** at **%s** (binding only -- no whole-bacterial on maternal serum).\n\n",
+            paste(RESP_FEATS, collapse = ", "), paste(MAT_VIS, collapse = ", ")))
+print(knitr::kable(
+  mat_long %>% dplyr::count(visit, feature, name = "n_subjects") %>%
+    tidyr::pivot_wider(names_from = visit, values_from = n_subjects),
+  caption = "Table A1. Maternal responder-feature coverage (subjects) by feature and visit."))
+
+mat_sg <- stage_report(mat_subject, mat_wide, "Maternal (Stage A)", "A")
+```
+
+## Stage B - Infant responder subgroups (InfMon2 baseline -> InfMon5/9 responses)
+
+```{r q6-stageB, results='asis', fig.height=4.5}
+cat(sprintf("Infant panel: binding **%s** + whole-bacterial **%s** at **%s** (%s is the transplacental baseline).\n\n",
+            paste(RESP_FEATS, collapse = ", "),
+            if (length(RESP_WHOLE)) paste(RESP_WHOLE, collapse = ", ") else "none",
+            paste(INF_VIS, collapse = ", "), params$infant_baseline))
+print(knitr::kable(
+  inf_long %>% dplyr::count(visit, feature, name = "n_subjects") %>%
+    tidyr::pivot_wider(names_from = visit, values_from = n_subjects),
+  caption = "Table B1. Infant responder-feature coverage (subjects) by feature and visit."))
+
+inf_sg <- stage_report(inf_subject, inf_wide, "Infant (Stage B)", "B")
+```
+
+## Stage B2 - Single-assay responder subgroups
+
+Beyond the multi-assay panel above, we additionally detect responder subgroups
+**on each assay alone** -- `r paste(params$single_feature_subgroups, collapse=", ")`
+-- across the infant visits (`r paste(params$infant_visits, collapse=" -> ")`).
+Each single-assay panel is standardised within-timepoint (Blom z), scored as the
+subject mean z over that assay's available visits, and clustered with the same
+PAM/silhouette engine (with `min_feat = 1` so a 1-3 column single-assay matrix is
+actually clustered rather than forced to the tertile fallback). This shows which
+individual assays carry a clean high/low responder split and how the maternal arm
+maps onto each. Note the panel spans InfMon2 (transplacental baseline) through the
+infant's own responses, so a single-assay "responder" mixes supplied and
+self-made antibody exactly as the Stage-B panel does.
+
+```{r q6-stageB2, results='asis', fig.height=4}
+single_feature_report <- function(sf) {
+  if (!isTRUE(sf$ok)) {
+    cat(sprintf("\n\n### %s\n\n*Skipped: %s.*\n\n", sf$feature, sf$reason))
+    return(invisible(NULL))
+  }
+  cat(sprintf("\n\n### %s\n\n", sf$feature))
+  subj <- sf$subject
+
+  arm_test <- tryCatch(stats::wilcox.test(universal_z ~ arm_name, data = subj),
+                       error = function(e) NULL)
+  meds <- subj %>% dplyr::group_by(arm_name) %>%
+    dplyr::summarize(median_z = round(median(universal_z, na.rm = TRUE), 3),
+                     .groups = "drop")
+  cat(sprintf("Single-assay score by maternal arm: %s.",
+              paste(sprintf("%s = %.3f", meds$arm_name, meds$median_z),
+                    collapse = "; ")))
+  if (!is.null(arm_test))
+    cat(sprintf(" Wilcoxon by arm: **W = %.0f, p = %.3g**.",
+                unname(arm_test$statistic), arm_test$p.value))
+  cat(sprintf("\n\nUniversal high: **%d**; universal low: **%d**.\n\n",
+              sum(subj$universal_high, na.rm = TRUE),
+              sum(subj$universal_low,  na.rm = TRUE)))
+
+  sg <- sf$subgroups
+  if (isTRUE(sg$ok)) {
+    cat(sprintf("PAM silhouette-selected **k = %d** (avg widths: %s).\n\n",
+                sg$best_k, paste(round(sg$sil, 3), collapse = ", ")))
+    print(knitr::kable(
+      sg$subgroup_tbl %>% dplyr::group_by(subgroup) %>%
+        dplyr::summarize(n = dplyr::n(),
+                         median_z = round(median(universal_z, na.rm = TRUE), 3),
+                         .groups = "drop"),
+      caption = sprintf("Single-assay PAM subgroups - %s (labelled by score rank).",
+                        sf$feature)))
+  } else {
+    cat(sprintf("*PAM skipped (%s); tertile bands used.*\n\n", sg$reason))
+    print(knitr::kable(subj %>% dplyr::count(score_band, name = "n"),
+      caption = sprintf("Single-assay tertile bands - %s.", sf$feature)))
+  }
+  single_feature_dist_plot(sf)
+  invisible(sf)
+}
+
+single_feature_results <- list()
+for (f in params$single_feature_subgroups) {
+  sf <- single_feature_subgroup(data_raw, INF_VIS, f, avail_feats, WHOLE_MAP,
+                                breadth_thresh = params$breadth_thresh,
+                                has_cluster = has_cluster)
+  single_feature_results[[f]] <- sf
+  single_feature_report(sf)
+}
+```
+
+## Stage B3 - Cross-assay concordance of the single-assay subgroups
+
+The single-assay subgroups above each split the cohort into Low/High independently.
+This section asks **how much those classifications agree across assays** -- i.e.
+whether a subject called High on one antigen tends to be High on the others, or
+whether the Low/High axis is antigen-specific. We use each subject's Low/High label
+from the five single-assay PAM subgroups (collapsed to High/Low), then report
+pairwise agreement (Cohen's kappa and raw % agreement, on the subjects each pair
+classifies in common), the full agreement matrix, and how many assays each subject
+is classified High on. kappa near 1 = the assays sort subjects the same way; near 0
+= independent; negative = systematic disagreement.
+
+```{r q6-stageB3, results='asis', fig.height=4.5}
+sf_lab    <- single_feature_label_table(single_feature_results)
+SF_ASSAYS <- intersect(params$single_feature_subgroups, names(sf_lab$wide))
+
+if (length(SF_ASSAYS) >= 2 && nrow(sf_lab$long)) {
+  ## (1) pairwise concordance ------------------------------------------------
+  pc <- pairwise_concordance(sf_lab$wide, SF_ASSAYS)
+  print(knitr::kable(
+    pc %>% dplyr::mutate(pct_agree = round(100 * pct_agree, 1),
+                         kappa     = round(kappa, 3)) %>%
+      dplyr::arrange(dplyr::desc(kappa)),
+    caption = paste0("Table B3-1. Pairwise concordance of the single-assay ",
+                     "High/Low classifications (Cohen's kappa, % agreement, ",
+                     "and n subjects classified by both assays).")))
+
+  ## kappa heatmap
+  km  <- kappa_matrix(pc, SF_ASSAYS)
+  kdf <- expand.grid(x = SF_ASSAYS, y = SF_ASSAYS,
+                     KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
+  kdf$kappa <- mapply(function(a, b) km[a, b], kdf$x, kdf$y)
+  kdf$x <- factor(kdf$x, levels = SF_ASSAYS)
+  kdf$y <- factor(kdf$y, levels = rev(SF_ASSAYS))
+  print(ggplot(kdf, aes(x, y, fill = kappa)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = ifelse(is.na(kappa), "", sprintf("%.2f", kappa))),
+              size = 3) +
+    scale_fill_gradient2(low = "#d01c8b", mid = "white", high = "#2166ac",
+                         midpoint = 0, limits = c(-1, 1), na.value = "grey90",
+                         name = "kappa") +
+    labs(title = "Cross-assay concordance (Cohen's kappa) of single-assay subgroups",
+         x = NULL, y = NULL) +
+    theme_bw(base_size = 10) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)))
+  cat("\n\n")
+
+  ## (2) per-subject 'High count' across assays ------------------------------
+  hi <- sf_lab$long %>%
+    dplyr::group_by(subject_accession) %>%
+    dplyr::summarize(n_assays = dplyr::n(),
+                     n_high = sum(level == "High"),
+                     n_low  = sum(level == "Low"), .groups = "drop")
+
+  full <- hi %>% dplyr::filter(n_assays == length(SF_ASSAYS))
+  cat(sprintf(paste0("\n\nAmong the **%d** subjects classified on all %d single-assay ",
+                     "panels: **%d** are High on every assay, **%d** are Low on every ",
+                     "assay, and **%d** are mixed -- the size of the mixed group is the ",
+                     "direct measure of antigen-specific (discordant) responder status.\n\n"),
+              nrow(full), length(SF_ASSAYS),
+              sum(full$n_high == length(SF_ASSAYS)),
+              sum(full$n_low  == length(SF_ASSAYS)),
+              sum(full$n_high > 0 & full$n_high < length(SF_ASSAYS))))
+
+  if (nrow(full)) {
+    print(ggplot(full, aes(factor(n_high))) +
+      geom_bar(fill = "#2166ac") +
+      labs(title = sprintf("High-assay count among subjects classified on all %d single-assay panels",
+                           length(SF_ASSAYS)),
+           x = "Number of assays on which the subject is classified High",
+           y = "Subjects") +
+      theme_bw(base_size = 10))
+    print(knitr::kable(
+      full %>% dplyr::count(n_high, name = "n_subjects") %>% dplyr::arrange(n_high),
+      caption = "Table B3-2. Distribution of the High-assay count (subjects classified on all single-assay panels)."))
+  }
+} else {
+  cat("*Fewer than two single-assay subgroupings available - no concordance analysis.*\n\n")
+  sf_lab <- list(long = dplyr::tibble(), wide = dplyr::tibble())
+  hi <- dplyr::tibble(subject_accession = character(),
+                      n_assays = integer(), n_high = integer(), n_low = integer())
+}
+```
+
+## Stage C - Linkage: does the maternal response carry forward?
+
+```{r q6-linkage, results='asis', fig.height=4.5}
+mat_g <- group_of(mat_subject, mat_sg) %>%
+  dplyr::select(subject_accession, maternal_group = group, maternal_z = universal_z)
+inf_g <- group_of(inf_subject, inf_sg) %>%
+  dplyr::select(subject_accession, infant_group = group, infant_z = universal_z)
+link <- dplyr::inner_join(mat_g, inf_g, by = "subject_accession")
+
+## Collapse the detailed subgroup labels to {High, Low, Mid} and form the
+## maternal_infant linkage class used by the Stage-D low/low profiling.
+link$maternal_level <- collapse_resp_level(link$maternal_group)
+link$infant_level   <- collapse_resp_level(link$infant_group)
+link$link_class     <- paste(link$maternal_level, link$infant_level, sep = "_")
+
+## (1) maternal score vs infant (pooled) score
+cor_mi <- tryCatch(
+  stats::cor.test(link$maternal_z, link$infant_z, method = params$cor_method,
+                  exact = FALSE), error = function(e) NULL)
+cat("### Maternal score vs infant score\n\n")
+if (!is.null(cor_mi))
+  cat(sprintf("Across **%d** linked mother-infant pairs, the maternal responder score and the pooled infant score correlate at **%.2f** (%s, p = %.3g).\n\n",
+              nrow(link), unname(cor_mi$estimate), params$cor_method, cor_mi$p.value))
+
+## (2) maternal subgroup x infant subgroup
+cat("### Maternal subgroup x infant subgroup\n\n")
+tab_mi <- table(link$maternal_group, link$infant_group)
+ft_mi  <- tryCatch(stats::fisher.test(tab_mi, simulate.p.value = TRUE, B = 1e4),
+                   error = function(e) NULL)
+print(knitr::kable(as.data.frame.matrix(tab_mi),
+      caption = "Table C1. Maternal subgroup (rows) x infant subgroup (cols), linked pairs."))
+if (!is.null(ft_mi)) cat(sprintf("\nFisher (simulated p): **p = %.3g**.\n\n", ft_mi$p.value))
+
+## (3) infant trajectory across visits, stratified by MATERNAL subgroup:
+##     baseline (InfMon2) -> responses (InfMon5, InfMon9)
+cat("### Infant trajectory by maternal subgroup (baseline -> responses)\n\n")
+traj <- inf_by_visit %>%
+  dplyr::left_join(dplyr::select(mat_g, subject_accession, maternal_group),
+                   by = "subject_accession") %>%
+  dplyr::filter(!is.na(maternal_group), visit %in% INF_VIS) %>%
+  dplyr::mutate(visit = factor(visit, levels = INF_VIS)) %>%
+  dplyr::group_by(maternal_group, visit) %>%
+  dplyr::summarize(mean_z = mean(score_visit, na.rm = TRUE),
+                   se = stats::sd(score_visit, na.rm = TRUE) /
+                        sqrt(sum(is.finite(score_visit))),
+                   n = dplyr::n(), .groups = "drop")
+
+if (nrow(traj)) {
+  print(ggplot(traj, aes(visit, mean_z, color = maternal_group, group = maternal_group)) +
+    geom_line(linewidth = 0.8) + geom_point(size = 2) +
+    geom_errorbar(aes(ymin = mean_z - se, ymax = mean_z + se), width = 0.12) +
+    labs(x = NULL, y = "Infant responder score (mean z +/- SE)",
+         color = "Maternal subgroup",
+         title = "Infant trajectory by maternal subgroup",
+         subtitle = sprintf("%s (baseline) -> %s",
+                            params$infant_baseline,
+                            paste(setdiff(INF_VIS, params$infant_baseline), collapse = " -> "))) +
+    theme_bw(base_size = 11))
+  print(knitr::kable(
+    traj %>% dplyr::mutate(mean_z = round(mean_z, 3), se = round(se, 3)),
+    caption = "Table C2. Infant score by maternal subgroup and infant visit (mean z, SE, n)."))
+}
+```
+
+## Stage D - Profiling the low/low subjects
+
+The Stage-C verdict flags the **low-into-low** pairs -- subjects who are *low*
+maternal responders **and** *low* infant responders -- as the consistent
+non-responders. Here we identify those individuals, profile their serology across
+the full standardised panel (maternal binding at PregEarly/MatBirth plus the
+infant binding/functional assays at InfMon2/5/9), and contrast that profile with
+the other linkage classes to ask **what is different about them**.
+
+```{r q6-stageD, results='asis', fig.height=4.5}
+## Combined standardised profile panel (maternal + infant feature@visit z).
+prof_long <- dplyr::bind_rows(
+  dplyr::mutate(mat_long, panel = "maternal"),
+  dplyr::mutate(inf_long, panel = "infant"))
+
+## Per-subject class + arms.
+cls <- link %>%
+  dplyr::select(subject_accession, link_class, maternal_level, infant_level)
+cls$maternal_arm <- mat_subject$arm_name[
+  match(cls$subject_accession, mat_subject$subject_accession)]
+cls <- attach_infant_arm(cls, infant_arm_tbl)
+
+## (D1) collapsed class grid + low/low count -------------------------------
+cat("### Collapsed maternal x infant linkage classes\n\n")
+tab_lvl <- table(link$maternal_level, link$infant_level)
+print(knitr::kable(as.data.frame.matrix(tab_lvl),
+      caption = "Table D1. Collapsed maternal (rows) x infant (cols) responder levels."))
+n_ll <- sum(link$link_class == "Low_Low", na.rm = TRUE)
+cat(sprintf("\n\n**Low/low subjects (maternal Low AND infant Low): n = %d.**\n\n", n_ll))
+
+## (D2) the low/low roster -------------------------------------------------
+roster <- cls %>%
+  dplyr::filter(link_class == "Low_Low") %>%
+  dplyr::left_join(dplyr::select(link, subject_accession, maternal_z, infant_z),
+                   by = "subject_accession") %>%
+  dplyr::transmute(subject_accession, maternal_arm, infant_arm,
+                   maternal_z = round(maternal_z, 2),
+                   infant_z   = round(infant_z, 2)) %>%
+  dplyr::arrange(infant_z)
+if (nrow(roster))
+  print(knitr::kable(roster,
+        caption = "Table D2. The low/low subjects: arms and responder scores."))
+
+## (D3) serological profile by class (assay-level, averaged over visits) ----
+prof_long$assay <- sub("@.*$", "", prof_long$key)
+cls_min   <- dplyr::distinct(dplyr::select(cls, subject_accession, link_class))
+prof_assay <- prof_long %>%
+  dplyr::left_join(cls_min, by = "subject_accession") %>%
+  dplyr::filter(!is.na(link_class)) %>%
+  dplyr::group_by(link_class, assay) %>%
+  dplyr::summarize(mean_z = mean(z, na.rm = TRUE),
+                   n = sum(is.finite(z)), .groups = "drop")
+
+if (nrow(prof_assay)) {
+  print(ggplot(prof_assay, aes(assay, link_class, fill = mean_z)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = sprintf("%.2f", mean_z)), size = 2.6) +
+    scale_fill_gradient2(low = "#d01c8b", mid = "white", high = "#2166ac",
+                         midpoint = 0, name = "mean z") +
+    labs(title = "Serological profile by linkage class",
+         subtitle = "mean within-timepoint z, averaged over visits",
+         x = NULL, y = NULL) +
+    theme_bw(base_size = 10) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)))
+  print(knitr::kable(
+    prof_assay %>% dplyr::select(link_class, assay, mean_z) %>%
+      dplyr::mutate(mean_z = round(mean_z, 3)) %>%
+      tidyr::pivot_wider(names_from = assay, values_from = mean_z,
+                         id_cols = link_class),
+    caption = "Table D3. Mean within-timepoint z by linkage class and assay (averaged over visits)."))
+}
+
+## (D4) which feature@visit keys most distinguish the low/low subjects ------
+dx <- distinguishing_features(prof_long, link, focal = "Low_Low")
+if (nrow(dx)) {
+  print(knitr::kable(
+    utils::head(dx, 12) %>%
+      dplyr::transmute(key, n_focal, n_other,
+                       mean_focal = round(mean_focal, 2),
+                       mean_other = round(mean_other, 2),
+                       diff = round(diff, 2),
+                       p = signif(p, 3), p_BH = signif(p_BH, 3)),
+    caption = paste0("Table D4. feature@visit keys where low/low subjects ",
+                     "deviate most from the rest (most negative diff first); ",
+                     "Wilcoxon low/low vs rest, BH-adjusted.")))
+  top_neg <- utils::head(dx$key[order(dx$diff)], 5)
+  cat(sprintf("\n\nThe low/low subjects sit furthest below the rest of the cohort on: **%s**.\n\n",
+              paste(top_neg, collapse = ", ")))
+}
+
+## (D5) arm composition of the low/low subjects ----------------------------
+cls$is_ll <- ifelse(cls$link_class == "Low_Low", "Low/low", "Other")
+cat("### Arm composition of the low/low subjects\n\n")
+print(knitr::kable(as.data.frame.matrix(table(cls$is_ll, cls$maternal_arm)),
+      caption = "Table D5. Maternal arm (TdaP / TT) by low/low vs other."))
+ft_arm <- tryCatch(stats::fisher.test(table(cls$is_ll, cls$maternal_arm)),
+                   error = function(e) NULL)
+if (!is.null(ft_arm))
+  cat(sprintf("\nFisher (maternal arm x low/low): **p = %.3g**.\n\n", ft_arm$p.value))
+if (!is.null(infant_arm_tbl) && any(!is.na(cls$infant_arm))) {
+  print(knitr::kable(as.data.frame.matrix(table(cls$is_ll, cls$infant_arm)),
+        caption = "Table D6. Infant arm (wP / aP) by low/low vs other."))
+  ft_inf <- tryCatch(stats::fisher.test(table(cls$is_ll, cls$infant_arm)),
+                     error = function(e) NULL)
+  if (!is.null(ft_inf))
+    cat(sprintf("\nFisher (infant arm x low/low): **p = %.3g**.\n\n", ft_inf$p.value))
+}
+```
+
+### Low/low decomposed across the single-assay subgroups
+
+The combined maternal and infant scores compress many assays into one number,
+which makes a "low/low" label hard to read mechanistically. Here we map each
+low/low subject onto the Stage-B3 single-assay classifications, so the combined
+label is decomposed into **which individual assay signals are Low or High** for
+these subjects -- showing the relative contribution of each antigen/analyte.
+
+```{r q6-stageD7, results='asis', fig.height=4.5}
+ll_ids <- link$subject_accession[which(link$link_class == "Low_Low")]
+cat(sprintf("Low/low subjects: **n = %d**.\n\n", length(ll_ids)))
+
+if (length(ll_ids) && nrow(sf_lab$long)) {
+  ll_lab <- sf_lab$long %>% dplyr::filter(subject_accession %in% ll_ids)
+
+  if (nrow(ll_lab)) {
+    ll_lab$assay <- factor(ll_lab$assay, levels = SF_ASSAYS)
+    ll_lab$level <- factor(ll_lab$level, levels = c("Low", "High"))
+
+    ## (1) per-subject x assay map of Low/High for the low/low subjects
+    print(ggplot(ll_lab,
+                 aes(assay, factor(subject_accession), fill = level)) +
+      geom_tile(color = "white") +
+      scale_fill_manual(values = c(Low = "#d01c8b", High = "#2166ac"),
+                        drop = FALSE, name = "Single-assay class") +
+      labs(title = "Low/low subjects: single-assay High/Low classification",
+           x = NULL, y = "Subject (accession)") +
+      theme_bw(base_size = 9) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1)))
+    cat("\n\n")
+
+    ## (2) per-assay: % of low/low classified Low vs the cohort baseline
+    base_rate <- sf_lab$long %>% dplyr::group_by(assay) %>%
+      dplyr::summarize(cohort_pct_low = 100 * mean(level == "Low"),
+                       .groups = "drop")
+    ll_rate <- ll_lab %>% dplyr::group_by(assay) %>%
+      dplyr::summarize(n_ll = dplyr::n(),
+                       ll_pct_low = 100 * mean(level == "Low"), .groups = "drop")
+    cmp <- ll_rate %>%
+      dplyr::left_join(base_rate, by = "assay") %>%
+      dplyr::mutate(ll_pct_low     = round(ll_pct_low, 1),
+                    cohort_pct_low = round(cohort_pct_low, 1),
+                    enrichment     = round(ll_pct_low - cohort_pct_low, 1)) %>%
+      dplyr::arrange(dplyr::desc(ll_pct_low))
+    print(knitr::kable(cmp,
+      caption = paste0("Table D7. For each single-assay subgroup: the % of low/low ",
+                       "subjects (n_ll classified on that assay) called Low, the ",
+                       "cohort baseline % Low, and the enrichment (difference). ",
+                       "Higher % Low = that assay signal contributes more to the ",
+                       "low/low phenotype.")))
+
+    ## (3) how concordant is the low/low low-ness across assays?
+    ll_hi <- hi %>% dplyr::filter(subject_accession %in% ll_ids)
+    if (nrow(ll_hi)) {
+      cat(sprintf(paste0("\n\nAcross the single-assay panels, low/low subjects are ",
+                         "classified **Low** on a median of **%g** of the assays they ",
+                         "were scored on (range %d-%d); **%d of %d** are Low on *every* ",
+                         "assay they were classified on, versus High on at least one for ",
+                         "the remaining %d.\n\n"),
+                  stats::median(ll_hi$n_low, na.rm = TRUE),
+                  min(ll_hi$n_low), max(ll_hi$n_low),
+                  sum(ll_hi$n_low == ll_hi$n_assays), nrow(ll_hi),
+                  sum(ll_hi$n_low <  ll_hi$n_assays)))
+      cat(sprintf(paste0("The assay signals contributing most consistently to the ",
+                         "low/low phenotype (highest %% Low) are, in order: **%s**. ",
+                         "Assays where low/low subjects are *not* uniformly Low identify ",
+                         "where the combined label is driven by other antigens rather ",
+                         "than a global deficit.\n\n"),
+                  paste(as.character(cmp$assay), collapse = ", ")))
+    }
+  } else {
+    cat("*No low/low subjects were classified by any single-assay subgroup.*\n\n")
+  }
+} else {
+  cat("*No low/low subjects or no single-assay labels available to map.*\n\n")
+}
+```
+
+# Q6 (extended) - Pan-assay responder classes and the low/low contrast
+
+## Stage E - Always-high / always-low / mixed classes from the concordance
+
+The Stage-B3 high-assay count partitions the subjects who were classified on **all**
+single-assay panels into three pan-assay classes: **always-high** (High on every
+assay), **always-low** (Low on every assay), and the **mixed middle** (High on some,
+Low on others). Here we give each class a serological profile across the full
+standardised panel and trace the infant trajectory, then (next subsection) contrast
+the concordance-defined always-low group with the linkage-defined low/low group, since
+the two are different constructions of "low".
+
+```{r q6-stageE, results='asis', fig.height=4.5}
+n_sf <- length(SF_ASSAYS)
+conc <- hi %>%
+  dplyr::filter(n_assays == n_sf) %>%
+  dplyr::mutate(conc_class = dplyr::case_when(
+    n_high == n_sf ~ "Always-high",
+    n_low  == n_sf ~ "Always-low",
+    TRUE           ~ "Mixed-middle"))
+CC_LEVELS <- c("Always-low", "Mixed-middle", "Always-high")
+conc$conc_class <- factor(conc$conc_class, levels = CC_LEVELS)
+
+cat(sprintf(paste0("Defined on the **%d** subjects classified on all %d single-assay ",
+                   "panels: **%d** always-high, **%d** mixed-middle, **%d** always-low.\n\n"),
+            nrow(conc), n_sf,
+            sum(conc$conc_class == "Always-high"),
+            sum(conc$conc_class == "Mixed-middle"),
+            sum(conc$conc_class == "Always-low")))
+print(knitr::kable(conc %>% dplyr::count(conc_class, name = "n_subjects"),
+      caption = "Table E1. Pan-assay concordance classes (subjects classified on all single-assay panels)."))
+
+## (E2) serological profile across the full panel (assay-level, over visits)
+prof_conc <- assay_profile_table(prof_long, conc, "conc_class")
+print(profile_heatmap(prof_conc,
+      "Serological profile by pan-assay concordance class (mean z, averaged over visits)",
+      grp_levels = CC_LEVELS))
+print(knitr::kable(
+  prof_conc %>% dplyr::mutate(mean_z = round(mean_z, 3)) %>%
+    dplyr::select(grp, assay, mean_z) %>%
+    tidyr::pivot_wider(names_from = assay, values_from = mean_z, id_cols = grp),
+  caption = "Table E2. Mean within-timepoint z by concordance class and assay (averaged over visits)."))
+
+## (E3) infant responder trajectory by class
+traj_cc <- inf_by_visit %>%
+  dplyr::left_join(dplyr::select(conc, subject_accession, conc_class),
+                   by = "subject_accession") %>%
+  dplyr::filter(!is.na(conc_class), visit %in% INF_VIS) %>%
+  dplyr::mutate(visit = factor(visit, levels = INF_VIS)) %>%
+  dplyr::group_by(conc_class, visit) %>%
+  dplyr::summarize(mean_z = mean(score_visit, na.rm = TRUE),
+                   se = stats::sd(score_visit, na.rm = TRUE) /
+                        sqrt(sum(is.finite(score_visit))),
+                   n = dplyr::n(), .groups = "drop")
+if (nrow(traj_cc))
+  print(ggplot(traj_cc, aes(visit, mean_z, color = conc_class, group = conc_class)) +
+    geom_line(linewidth = 0.8) + geom_point(size = 2) +
+    geom_errorbar(aes(ymin = mean_z - se, ymax = mean_z + se), width = 0.12) +
+    scale_color_manual(values = c("Always-low" = "#d01c8b",
+                                  "Mixed-middle" = "grey50",
+                                  "Always-high" = "#2166ac"), name = "Class") +
+    labs(x = NULL, y = "Infant responder score (mean z +/- SE)",
+         title = "Infant trajectory by pan-assay concordance class") +
+    theme_bw(base_size = 11))
+
+## (E4) arm composition
+conc2 <- conc %>% dplyr::left_join(
+  dplyr::select(cls, subject_accession, maternal_arm, infant_arm),
+  by = "subject_accession")
+print(knitr::kable(as.data.frame.matrix(table(conc2$conc_class, conc2$maternal_arm)),
+      caption = "Table E3. Maternal arm (TT / TdaP) by concordance class."))
+if (!is.null(infant_arm_tbl) && any(!is.na(conc2$infant_arm)))
+  print(knitr::kable(as.data.frame.matrix(table(conc2$conc_class, conc2$infant_arm)),
+        caption = "Table E4. Infant arm (wP / aP) by concordance class."))
+```
+
+## Stage E2 - Low/low vs always-low: two different "low" definitions
+
+`low_low` (Stage D) means low on the **combined maternal** score **and** the combined
+infant score; `always-low` (Stage E) means Low on **every single-assay infant** panel.
+They answer different questions, so we examine their overlap and what separates them.
+
+```{r q6-stageE2, results='asis', fig.height=4.5}
+ll_ids <- as.character(link$subject_accession[which(link$link_class == "Low_Low")])
+al_ids <- as.character(conc$subject_accession[conc$conc_class == "Always-low"])
+
+cat(sprintf("### Low/low (n = %d) vs always-low (n = %d)\n\n",
+            length(ll_ids), length(al_ids)))
+
+## (E5) overlap / membership
+both <- intersect(ll_ids, al_ids)
+cat(sprintf(paste0("Overlap: **%d** subjects are in both. Of the %d low/low, **%d** are ",
+                   "also always-low; of the %d always-low, **%d** are also low/low ",
+                   "(so %d always-low subjects are *not* low/low).\n\n"),
+            length(both), length(ll_ids), length(both),
+            length(al_ids), length(both), length(al_ids) - length(both)))
+uni  <- union(ll_ids, al_ids)
+memb <- data.frame(
+  low_low    = ifelse(uni %in% ll_ids, "low_low", "not"),
+  always_low = ifelse(uni %in% al_ids, "always_low", "not"),
+  stringsAsFactors = FALSE)
+print(knitr::kable(as.data.frame.matrix(table(memb$low_low, memb$always_low)),
+      caption = "Table E5. Membership overlap: low/low (rows) x always-low (cols), over the union of the two groups."))
+
+## (E6) side-by-side serological profile, by feature@visit (key level)
+m_ll <- prof_long %>% dplyr::filter(subject_accession %in% ll_ids) %>%
+  dplyr::group_by(key) %>% dplyr::summarize(low_low = mean(z, na.rm = TRUE), .groups = "drop")
+m_al <- prof_long %>% dplyr::filter(subject_accession %in% al_ids) %>%
+  dplyr::group_by(key) %>% dplyr::summarize(always_low = mean(z, na.rm = TRUE), .groups = "drop")
+diff_key <- dplyr::full_join(m_ll, m_al, by = "key") %>%
+  dplyr::mutate(diff = always_low - low_low)
+diff_key$visit <- sub("^.*@", "", diff_key$key)
+diff_key$assay <- sub("@.*$", "", diff_key$key)
+
+## heatmap (two rows) ordered by visit then assay
+vord <- c("PregEarly", "MatBirth", "InfMon2", "InfMon5", "InfMon9")
+ko   <- diff_key[order(match(diff_key$visit, vord), diff_key$assay), ]
+two_hm <- dplyr::bind_rows(
+  data.frame(grp = sprintf("Low_low (n=%d)", length(ll_ids)),
+             assay = ko$key, mean_z = ko$low_low, stringsAsFactors = FALSE),
+  data.frame(grp = sprintf("Always-low (n=%d)", length(al_ids)),
+             assay = ko$key, mean_z = ko$always_low, stringsAsFactors = FALSE))
+two_hm$assay <- factor(two_hm$assay, levels = ko$key)
+grp_lv <- c(sprintf("Low_low (n=%d)", length(ll_ids)),
+            sprintf("Always-low (n=%d)", length(al_ids)))
+print(profile_heatmap(two_hm,
+      "Low/low vs always-low: serological profile by feature@visit (mean z)",
+      grp_levels = grp_lv))
+
+diff_disp <- diff_key %>%
+  dplyr::mutate(low_low = round(low_low, 2), always_low = round(always_low, 2),
+                diff = round(diff, 2)) %>%
+  dplyr::arrange(dplyr::desc(abs(diff))) %>%
+  dplyr::select(key, low_low, always_low, diff)
+print(knitr::kable(utils::head(diff_disp, 14),
+      caption = paste0("Table E6. Mean z per feature@visit for low/low vs always-low, ",
+                       "and the difference (always-low minus low/low), sorted by ",
+                       "|difference|. Positive = always-low sits higher.")))
+
+## (E7) arm mix + combined scores
+mat_arm_of <- function(ids) mat_subject$arm_name[match(ids, mat_subject$subject_accession)]
+grp_row <- function(ids, label) {
+  d <- link %>% dplyr::filter(subject_accession %in% ids)
+  data.frame(group = label, n = length(ids),
+             pct_TT_mothers = round(100 * mean(mat_arm_of(ids) == "TT", na.rm = TRUE), 0),
+             mean_maternal_z = round(mean(d$maternal_z, na.rm = TRUE), 2),
+             mean_infant_z   = round(mean(d$infant_z,   na.rm = TRUE), 2),
+             stringsAsFactors = FALSE)
+}
+cmp_tab <- dplyr::bind_rows(grp_row(ll_ids, "Low_low"),
+                            grp_row(al_ids, "Always-low"))
+print(knitr::kable(cmp_tab,
+      caption = "Table E7. Low/low vs always-low: % TT mothers, and mean combined maternal / infant scores."))
+
+cat(sprintf(paste0(
+  "\n\n**Interpretation.** Always-low is defined purely on the infant's own responses ",
+  "(Low on all %d single-assay panels); low/low additionally requires a *low maternal* ",
+  "responder. They overlap in %d subjects but are not the same: always-low also contains ",
+  "infants of strong-responder mothers (the blunted high-maternal -> low-infant case), so ",
+  "the always-low group should carry a **higher maternal-visit signal** (look for positive ",
+  "differences on the PregEarly / MatBirth PT_IgG and PRN_IgG keys in Table E6) and a larger ",
+  "TdaP share (Table E7) than low/low. Low/low subjects lack the maternal head-start: they ",
+  "are low on both the maternal-visit antigens *and* the infant responses -- a global deficit ",
+  "rather than a blunting of transferred antibody. In short, the two groups agree on the ",
+  "infant being low, but differ on **why**: always-low mixes 'never made it' with 'had it and ",
+  "lost it', while low/low isolates 'never had it'.\n\n"),
+  n_sf, length(both)))
+```
+
+
+```{r q6-verdict, results='asis'}
+n_hi_mat <- sum(mat_subject$universal_high, na.rm = TRUE)
+n_lo_mat <- sum(mat_subject$universal_low,  na.rm = TRUE)
+n_hi_inf <- sum(inf_subject$universal_high, na.rm = TRUE)
+n_lo_inf <- sum(inf_subject$universal_low,  na.rm = TRUE)
+
+cat("## Verdict on Q6\n\n")
+cat(sprintf(paste0(
+  "- **Stage A (maternal):** %d high and %d low universal maternal responders up to MatBirth.\n",
+  "- **Stage B (infant):** %d high and %d low universal infant responders across %s.\n",
+  "- **Stage C (linkage):** read Table C1 with the maternal-vs-infant score correlation and the trajectory plot. ",
+  "A positive correlation with high-maternal subgroups starting high at the **%s** baseline is the transplacental signal; ",
+  "whether the curves stay separated or converge at InfMon5/InfMon9 shows how much the maternal advantage persists once the infant's own priming takes over. ",
+  "Low infant responders whose mothers were high responders are the loss-of-transfer cases to flag; low-into-low pairs are the consistent non-responders.\n\n"),
+  n_hi_mat, n_lo_mat, n_hi_inf, n_lo_inf,
+  paste(INF_VIS, collapse = " -> "), params$infant_baseline))
+
+cat(sprintf(paste0(
+  "- **Stage B2 (single-assay):** responder subgroups detected separately on %s.\n",
+  "- **Stage B3 (concordance):** Table B3-1 / the kappa heatmap show how far those ",
+  "single-assay Low/High calls agree across antigens; the mixed-count is the antigen-specific share.\n",
+  "- **Stage D (low/low profile):** %d subjects are low on both axes; Tables D3-D6 ",
+  "show how their serological profile and arm composition differ, and Table D7 decomposes ",
+  "the combined low/low label into the per-assay signals that drive it.\n",
+  "- **Stage E (pan-assay classes):** always-high / always-low / mixed classes are profiled, ",
+  "and the concordance-defined always-low group is contrasted with the linkage-defined low/low ",
+  "group (Tables E5-E7) -- the two 'low' constructions overlap but differ in maternal contribution.\n\n"),
+  paste(params$single_feature_subgroups, collapse = ", "),
+  sum(link$link_class == "Low_Low", na.rm = TRUE)))
+```
+
+# Global Participant Accounting
+
+```{r global-naccount, results='asis'}
+nt_render(nt, caption = "Participant accounting across this analysis.")
+```
+
+```{r sessioninfo}
+sessionInfo()
+```

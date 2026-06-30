@@ -1,0 +1,526 @@
+---
+title: "Phase 08 — Predictors of Maternal Low vs High Responder Status"
+subtitle: |
+  Do clinical covariates or a maternal serological signature predict which
+  mothers are LOW vs HIGH responders? Stratified on the maternal arm (TdaP vs TT)
+  only — no infant-arm analysis.
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 6
+params:
+  responder_features: !r c("PT_IgG", "FHA_IgG", "PRN_IgG")
+  maternal_visits:    !r c("PregEarly", "MatBirth")
+  baseline_visit:     "PregEarly"     # pre/early-pregnancy draw = the clean predictive signal
+  breadth_thresh:     0.6
+  alpha:              0.05            # univariate screening threshold
+  en_alpha:           0.5            # elastic-net mixing (0=ridge, 1=lasso)
+  en_folds:           10
+  min_coverage:       0.6            # keep serology features measured in >= 60% of mothers
+  seed:               1
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here); library(dplyr); library(tidyr); library(ggplot2)
+
+# ---- self-locating resolver (same contract as the rest of the pipeline) ----
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+# ---- shared config + helper libraries ----
+# NOTE: the Phase 07 engine (within_visit_helpers.R) and the shared serology
+# helpers are sourced READ-ONLY and are NOT modified by this branch. The Phase 08
+# logic lives entirely in the NEW file R/maternal_responder_helpers.R.
+source(find_proj_file("config/endpoints.R"),               local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),             local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/within_visit_helpers.R"),         local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/maternal_responder_helpers.R"),   local = FALSE, encoding = "UTF-8")  # <- Phase 08 engine
+
+# ---- antibody data (recoded visits) + clinical assessments ----
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))   # applies VISIT_RECODE
+clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")),
+                 error = function(e) NULL)
+if (is.null(clin)) {                                   # fallback to the raw object name
+  .e <- new.env(); load(find_proj_file("data/clin_assess.RData"), envir = .e)
+  clin <- get("clin_assess", envir = .e)
+}
+
+has_cluster <- requireNamespace("cluster", quietly = TRUE)
+has_glmnet  <- requireNamespace("glmnet",  quietly = TRUE)
+
+# ---- participant tracker (shared, optional) ----
+nt <- if (exists("new_ntracker", mode = "function")) new_ntracker() else NULL
+```
+
+---
+
+# Analytical Framework
+
+Phase 07 Stage A split mothers into **Low** and **High** responders from their
+binding antibody across the two maternal draws
+(`r paste(params$maternal_visits, collapse = " + ")`;
+features `r paste(params$responder_features, collapse = ", ")`). This branch asks
+a single question about that split:
+
+> **Is there a consistent clinical covariate or maternal serological signature
+> that predicts which mothers are Low vs High responders?**
+
+Two facts shape the whole analysis:
+
+1. **The responder class is almost the vaccine arm.** In Phase 07 the maternal
+   Low/High split tracked the arm closely (TdaP mostly High, TT mostly Low). So
+   the genuinely informative question is not "does anything predict the class"
+   (the arm does) but **"does anything predict it beyond the arm, and within an
+   arm"** — e.g. among vaccinated (TdaP) mothers, who still responds poorly?
+2. **Infant priming (aP/wP) is not relevant here.** This is a question about
+   mothers; there is **no infant-arm stratification anywhere** in this document.
+   The only stratifier is the **maternal arm (TdaP vs TT)**.
+
+The analysis runs in three parts:
+
+- **Part A — the arm baseline.** How much of the Low/High split is just the arm?
+  This sets the bar every other predictor must clear.
+- **Part B — clinical covariates.** The ten `clin_assess` covariates, screened
+  univariately (continuous + tertile forms) against the responder **score**
+  (linear) and the Low/High **class** (logistic), overall and within each arm,
+  then a maternal-arm-adjusted multivariable model.
+- **Part C — serological signature.** A maternal-serology feature matrix
+  (all antigen × analyte features at the maternal visits, **excluding the `r length(params$responder_features)`
+  features that define the score**), screened by univariate AUC and modelled with
+  an arm-adjusted elastic net (cross-validated AUC), with a clean pre-vaccination
+  (`r params$baseline_visit`) baseline model.
+
+```{r build-class}
+RESP_FEATS <- params$responder_features
+MAT_VIS    <- params$maternal_visits
+
+# Rebuild the Phase 07 Stage A Low/High class via the NEW helper (which reuses
+# the within_visit_helpers engine under the hood for an identical construct).
+mat_cls <- build_maternal_responder_class(
+  data_raw, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
+
+arm_tbl <- subject_maternal_arm(data_raw)
+mat <- merge(mat_cls, arm_tbl, by = "subject_accession")
+mat <- mat[mat$arm_name %in% c("TdaP", "TT"), , drop = FALSE]
+mat$arm_name <- factor(mat$arm_name, levels = c("TT", "TdaP"))   # TT = reference
+
+# Optional participant log (best-effort; this branch does not depend on the
+# tracker API, so any signature mismatch is caught and ignored).
+if (!is.null(nt) && exists("nt_log_manual", mode = "function")) {
+  nt <- tryCatch(
+    nt_log_manual(nt, "Mothers with Low/High class + arm", nrow(mat), stratum = "all"),
+    error = function(e1) tryCatch(
+      nt_log_manual(nt, "Mothers with Low/High class + arm", nrow(mat)),
+      error = function(e2) nt))
+}
+```
+
+---
+
+# Clinical Covariates
+
+The ten covariates from `clin_assess` (identical to the clinical-predictor
+analyses). `infant_sex` is retained as a dyad covariate of the pregnancy, not as
+an infant-arm axis.
+
+```{r covariate-list, echo=FALSE}
+covariates_named_list <- list(
+  "Birth Weight"                             = "birth_weight",
+  "Infant Sex"                               = "infant_sex",
+  "Delivery Mode"                            = "delivery_mode",
+  "Parity"                                   = "parity",
+  "Gestational Age at Vaccine"               = "gestational_age_vaccination",
+  "Interval: Vaccination to Delivery (days)" = "vaccine_birth_interval_days",
+  "Gestational Age at Delivery"              = "gestational_age_birth",
+  "Maternal Age at Vaccination"              = "maternal_age",
+  "Maternal BMI at Vaccination"              = "maternal_bmi",
+  "Maternal Haemoglobin"                     = "maternal_Hb")
+cat_vars  <- c("infant_sex", "delivery_mode", "parity")
+cont_vars <- setdiff(unname(unlist(covariates_named_list)), cat_vars)
+knitr::kable(data.frame(
+  Label = names(covariates_named_list),
+  Variable = unname(unlist(covariates_named_list)),
+  Type = ifelse(unlist(covariates_named_list) %in% cat_vars,
+                "categorical (2 level)", "continuous (cont + tertile)")),
+  caption = "Clinical covariates screened.")
+```
+
+```{r merge-clin}
+data <- merge(mat, clin, by = "subject_accession", all.x = TRUE)
+
+# ---- prepare covariates (mirrors the clinical-predictor pipeline) ----
+if ("infant_sex" %in% names(data)) data$infant_sex <- factor(data$infant_sex)
+if ("delivery_mode" %in% names(data) && requireNamespace("forcats", quietly = TRUE)) {
+  dm <- factor(data$delivery_mode)
+  data$delivery_mode <- forcats::fct_collapse(dm,
+    vaginal  = grep("(?i)vag|normal|spontan|SVD", levels(dm), value = TRUE, perl = TRUE),
+    cesarean = grep("(?i)ces|csec|section|C/S",   levels(dm), value = TRUE, perl = TRUE))
+  data$delivery_mode <- tryCatch(stats::relevel(forcats::fct_drop(data$delivery_mode),
+                                                ref = "vaginal"),
+                                 error = function(e) data$delivery_mode)
+}
+if ("parity" %in% names(data))
+  data$parity <- factor(ifelse(data$parity == 0, "nulliparous", "parous"),
+                        levels = c("nulliparous", "parous"))
+for (v in cont_vars) if (v %in% names(data)) data[[paste0(v, "_T")]] <- make_tertile(data[[v]])
+
+cat(sprintf("Merged analysis frame: **%d mothers × %d columns**; Low = %d, High = %d.\n\n",
+            nrow(data), ncol(data), sum(data$responder == "Low"),
+            sum(data$responder == "High")))
+
+ids_resp <- mat$subject_accession
+ids_clin <- clin$subject_accession
+cat("responder mothers:", length(ids_resp),
+    "| in clin_assess:", sum(ids_resp %in% ids_clin),
+    "| missing:", sum(!ids_resp %in% ids_clin), "\n")
+# are the unmatched a format issue? peek at both ID styles:
+head(setdiff(ids_resp, ids_clin)); str(ids_resp); str(ids_clin)
+# is missingness related to responder status (not just arm)?
+data$has_clin <- !is.na(data$maternal_age)
+print(table(data$responder, data$has_clin))
+```
+
+---
+
+# Part A — The Arm Baseline
+
+🧭 *Maps to summary: "how much of the responder split is the vaccine itself?"*
+
+```{r part-a, results='asis'}
+tab <- table(arm = data$arm_name, responder = data$responder)
+print(knitr::kable(as.data.frame.matrix(tab),
+      caption = "Table A1. Maternal arm × responder class."))
+
+w <- tryCatch(stats::wilcox.test(score ~ arm_name, data = data), error = function(e) NULL)
+arm_auc <- auc_binary(as.numeric(data$arm_name == "TdaP"), data$responder)
+ft <- tryCatch(stats::fisher.test(tab), error = function(e) NULL)
+cat(sprintf(paste0("\nResponder **score** by arm: Wilcoxon %s. ",
+                   "Arm alone separates the **class** at AUC = **%.3f** (Fisher p = %s). ",
+                   "This is the bar Parts B and C must beat.\n\n"),
+            if (!is.null(w)) sprintf("W = %.0f, p = %.3g", w$statistic, w$p.value) else "n/a",
+            arm_auc, if (!is.null(ft)) signif(ft$p.value, 3) else "n/a"))
+```
+
+```{r part-a-plot, fig.height=3.4, fig.cap="Figure A1. Maternal responder score by arm (the score that defines Low/High)."}
+ggplot(data, aes(arm_name, score, fill = arm_name)) +
+  geom_violin(alpha = .5, color = NA) +
+  geom_boxplot(width = .18, outlier.size = .6) +
+  scale_fill_manual(values = c(TT = "#c0297a", TdaP = "#1b5aa0"), guide = "none") +
+  labs(x = "maternal arm", y = "maternal responder score (z)") +
+  theme_bw(base_size = 11)
+```
+
+---
+
+# Part B — Clinical Covariates
+
+Each covariate is screened against the responder **score** (linear model, mirrors
+the clinical-predictor pipeline) and the Low/High **class** (logistic), in three
+strata: **Overall**, **TdaP mothers**, **TT mothers**.
+
+```{r run-screens, results='hide'}
+strata <- list(
+  Overall = data,
+  TdaP    = dplyr::filter(data, arm_name == "TdaP"),
+  TT      = dplyr::filter(data, arm_name == "TT"))
+
+screen_score <- lapply(strata, function(d)
+  run_clinical_screen(d, "score", covariates_named_list, cat_vars,
+                      mode = "lm", alpha = params$alpha))
+screen_class <- lapply(strata, function(d)
+  run_clinical_screen(d, "responder", covariates_named_list, cat_vars,
+                      mode = "logit", alpha = params$alpha))
+```
+
+```{r show-screen-helper, echo=FALSE}
+show_univ <- function(s, title) {
+  cat(sprintf("\n\n#### %s\n\n", title))
+  tb <- s$univ_table
+  tb$R2  <- ifelse(is.na(tb$R2), "\u2014", sprintf("%.3f", tb$R2))
+  tb$auc <- ifelse(is.na(tb$auc), "\u2014", sprintf("%.3f", tb$auc))
+  tb$p_model <- ifelse(is.na(tb$p_model), "\u2014", sprintf("%.3g", tb$p_model))
+  print(knitr::kable(tb[, c("Label","Form","n","R2","auc","p_model","sig")],
+        col.names = c("Covariate","Form","n","R2 / pseudo-R2","AUC","p (model)",""),
+        caption = paste("Univariate screen —", title)))
+  if (length(s$selected) == 0) {
+    cat("\n*No covariate reached p <", params$alpha, "in this stratum.*\n\n")
+  } else {
+    cat(sprintf("\n**Selected (p < %g):** %s\n\n", params$alpha,
+                paste(names(s$selected), collapse = "; ")))
+    if (!is.null(s$multi_result))
+      print(knitr::kable(s$multi_result$tidy,
+            caption = sprintf("Multivariable model (%s) — %s", s$mode, title)))
+  }
+}
+```
+
+## Predicting the responder SCORE (linear)
+
+```{r show-score, results='asis'}
+for (st in names(screen_score)) show_univ(screen_score[[st]], paste0(st, " — score"))
+```
+
+## Predicting the Low/High CLASS (logistic)
+
+```{r show-class, results='asis'}
+for (st in names(screen_class)) show_univ(screen_class[[st]], paste0(st, " — class"))
+```
+
+## Maternal-arm-adjusted model (overall)
+
+🧭 *Maps to summary: "does any clinical covariate predict the class beyond the arm?"*
+
+```{r arm-adjusted, results='asis'}
+# Enter arm + any covariate selected in ANY stratum (score or class), jointly.
+sel_any <- unique(unlist(c(
+  lapply(screen_score, function(s) unname(unlist(s$selected))),
+  lapply(screen_class, function(s) unname(unlist(s$selected))))))
+sel_any <- sel_any[!is.na(sel_any)]
+
+if (length(sel_any)) {
+  fla <- stats::reformulate(c("arm_name", sel_any), response = "responder")
+  m_adj <- tryCatch(stats::glm(fla, data = data, family = stats::binomial(),
+                               na.action = stats::na.omit), error = function(e) NULL)
+  if (!is.null(m_adj)) {
+    print(knitr::kable(.tidy_fit(m_adj, logit = TRUE),
+          caption = "Table B-adj. Arm-adjusted logistic model for High responder (OR per term)."))
+    au <- auc_binary(stats::predict(m_adj, type = "response"),
+                     stats::model.frame(m_adj)[["responder"]])
+    cat(sprintf("\nIn-sample AUC = **%.3f** (vs arm-only AUC = %.3f). ", au, arm_auc))
+    cat("Only terms that stay significant *after* arm adjustment add information beyond the vaccine.\n\n")
+  }
+} else {
+  cat("*No clinical covariate was selected in any stratum, so no arm-adjusted model is fitted — ",
+      "clinical covariates do not predict responder status beyond the arm.*\n\n")
+}
+```
+
+## Cross-stratum summary & figures
+
+```{r cross-stratum, results='asis'}
+all_rows <- dplyr::bind_rows(lapply(names(screen_class), function(sn)
+  dplyr::mutate(screen_class[[sn]]$univ_table, Stratum = sn)))
+disp <- all_rows %>%
+  dplyr::mutate(cell = ifelse(is.na(auc), "\u2014",
+                              sprintf("%.2f%s", auc, ifelse(sig %in% c("*","**","***"), sig, "")))) %>%
+  dplyr::select(Label, Form, Stratum, cell) %>%
+  tidyr::pivot_wider(names_from = Stratum, values_from = cell)
+print(knitr::kable(disp,
+      caption = "Table B-x. Univariate class AUC (with significance stars) across strata."))
+```
+
+```{r forest, fig.height=6.5, fig.cap="Figure B1. Univariate predictive AUC of each clinical covariate for the Low/High class, by stratum. Filled = p < alpha."}
+pdat <- all_rows %>%
+  dplyr::filter(!is.na(auc)) %>%
+  dplyr::mutate(sig_fill = !is.na(p_model) & p_model < params$alpha,
+                cov_form = paste0(Label, " (", Form, ")"))
+ggplot(pdat, aes(auc, reorder(cov_form, auc), color = Stratum, shape = sig_fill)) +
+  geom_vline(xintercept = 0.5, linetype = "dashed", color = "grey60") +
+  geom_point(size = 3, position = position_dodge(.5)) +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1),
+                     labels = c(`TRUE` = paste0("p < ", params$alpha),
+                                `FALSE` = paste0("p \u2265 ", params$alpha))) +
+  scale_color_manual(values = c(Overall = "#444444", TdaP = "#1b5aa0", TT = "#c0297a")) +
+  labs(x = "univariate AUC (class = High)", y = NULL, color = "stratum", shape = NULL,
+       title = "Clinical covariate predictive value by stratum") +
+  theme_bw(base_size = 10)
+```
+
+---
+
+# Part C — Maternal Serological Signature
+
+🧭 *Maps to summary: "is there an antibody-side signature of the responder class
+that the `r length(params$responder_features)` defining features don't already encode?"*
+
+We assemble a maternal-serology matrix from **all** antigen × analyte features at
+the maternal visits, **excluding the `r length(params$responder_features)` responder-defining features**
+(`r paste(RESP_FEATS, collapse = ", ")`) so the signature is not circular with the
+score. Features are Blom-standardised within each feature@visit.
+
+```{r build-serology}
+W_all  <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = RESP_FEATS,
+                                         min_coverage = params$min_coverage)
+W_base <- build_maternal_serology_matrix(data_raw, params$baseline_visit,
+                                         exclude_feats = RESP_FEATS,
+                                         min_coverage = params$min_coverage)
+cat(sprintf("Serology predictor matrices: all maternal visits = **%d features**; ",
+            ncol(W_all) - 1))
+cat(sprintf("pre-vaccination (%s) baseline = **%d features**.\n\n",
+            params$baseline_visit, ncol(W_base) - 1))
+```
+
+## Univariate AUC of each serology feature
+
+```{r serology-univ, results='asis'}
+su <- serology_univariate_auc(W_all, mat_cls)
+su$base_feature <- sub("@.*$", "", su$feature)
+cls_map <- classify_feature(unique(su$base_feature))
+su_disp <- su %>%
+  dplyr::left_join(cls_map, by = c("base_feature" = "feature")) %>%
+  dplyr::mutate(auc = round(auc, 3), p = signif(p, 3), p_BH = signif(p_BH, 3)) %>%
+  dplyr::select(feature, antigen, analyte_class, n, auc, p, p_BH)
+print(knitr::kable(utils::head(su_disp, 20),
+      caption = "Table C1. Top maternal serology features by univariate AUC for the Low/High class."))
+```
+
+```{r serology-univ-plot, fig.height=5, fig.cap="Figure C1. Top-15 maternal serology features by univariate AUC for the responder class."}
+top <- utils::head(su, 15)
+top$feature <- factor(top$feature, levels = rev(top$feature))
+ggplot(top, aes(auc, feature, fill = auc >= 0.5)) +
+  geom_vline(xintercept = 0.5, linetype = "dashed", color = "grey60") +
+  geom_col() +
+  scale_fill_manual(values = c(`TRUE` = "#1b5aa0", `FALSE` = "#c0297a"),
+                    labels = c(`TRUE` = "higher \u2192 High", `FALSE` = "higher \u2192 Low"),
+                    name = NULL) +
+  labs(x = "univariate AUC (class = High)", y = NULL,
+       title = "Maternal serology features ranked by responder-class AUC") +
+  theme_bw(base_size = 10)
+```
+
+## Arm-adjusted elastic-net signature (cross-validated)
+
+The elastic net forces the **maternal arm in unpenalised** and lets the serology
+features compete for the remaining signal; CV-AUC is the honest metric (in-sample
+AUC is optimistic). We compare the pre-vaccination baseline matrix with the full
+maternal matrix.
+
+```{r elastic-net, results='asis'}
+if (!has_glmnet) {
+  cat("> **glmnet is not installed**, so the penalised model is skipped. ",
+      "Install `glmnet` to run the cross-validated signature; the univariate AUC ",
+      "ranking above still indicates which features carry signal.\n\n")
+} else {
+  en_base <- elastic_net_signature(W_base, mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds,
+                                   seed = params$seed)
+  en_all  <- elastic_net_signature(W_all,  mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds,
+                                   seed = params$seed)
+  cmp <- data.frame(
+    model = c("arm only (reference)",
+              sprintf("arm + baseline serology (%s)", params$baseline_visit),
+              "arm + all maternal serology"),
+    cv_auc = c(round(arm_auc, 3),
+               if (isTRUE(en_base$ok)) round(en_base$cv_auc, 3) else NA,
+               if (isTRUE(en_all$ok))  round(en_all$cv_auc, 3)  else NA),
+    n_features_selected = c(0L,
+               if (isTRUE(en_base$ok)) nrow(en_base$coefs) - 1L else NA_integer_,
+               if (isTRUE(en_all$ok))  nrow(en_all$coefs)  - 1L else NA_integer_),
+    stringsAsFactors = FALSE)
+  print(knitr::kable(cmp,
+        caption = "Table C2. Cross-validated AUC: does serology add to the arm? (arm-only is the Part-A rank statistic; serology rows are CV-AUC.)"))
+
+  if (isTRUE(en_all$ok) && nrow(en_all$coefs) > 1) {
+    co <- en_all$coefs[en_all$coefs$term != "(Intercept)", , drop = FALSE]
+    co <- co[order(-abs(co$coef)), , drop = FALSE]
+    co$coef <- round(co$coef, 3)
+    print(knitr::kable(co, row.names = FALSE,
+          caption = "Table C3. Non-zero elastic-net coefficients (arm forced in; standardised features)."))
+  }
+}
+```
+
+```{r en-roc, fig.height=4, fig.cap="Figure C2. In-sample ROC for the arm + all-maternal-serology elastic net (optimistic; compare CV-AUC in Table C2).", eval=has_glmnet}
+if (has_glmnet && exists("en_all") && isTRUE(en_all$ok)) {
+  pr <- as.numeric(predict(en_all$cv, newx = en_all$X, s = "lambda.min", type = "response"))
+  rp <- roc_points(pr, en_all$y)
+  ggplot(rp, aes(fpr, tpr)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey70") +
+    geom_path(color = "#1b5aa0", linewidth = 1) +
+    labs(x = "false-positive rate", y = "true-positive rate",
+         title = "Arm + maternal serology — in-sample ROC") +
+    coord_equal() + theme_bw(base_size = 10)
+}
+```
+
+---
+
+# Synthesis Questions to Address {#synthesis}
+
+1. **Is the responder split mostly the vaccine?** Compare the arm-only AUC
+   (Part A) to everything else. If clinical/serology AUCs barely exceed it, the
+   Low/High class is essentially a vaccine-exposure label.
+2. **Any clinical covariate beyond the arm?** In the arm-adjusted logistic
+   (Table B-adj) and the within-arm screens, does any covariate
+   (gestational age at vaccine, vaccine→birth interval, BMI, parity, Hb, age)
+   stay significant? Within **TdaP** mothers especially — what predicts a
+   vaccinated mother nonetheless responding poorly?
+3. **Consistent across arms or arm-specific?** Does a predictor that matters in
+   TdaP also matter in TT (a general "good responder" trait), or is it
+   arm-specific (interacts with the vaccine)?
+4. **Continuous vs threshold.** For any significant continuous covariate, did the
+   continuous or tertile form win, and by how much (linear vs threshold effect)?
+5. **Serological signature beyond the `r length(params$responder_features)` defining features.** Does the
+   elastic-net CV-AUC (Table C2) exceed arm-only? Which features
+   (Table C1/C3) — other pertussis antigens (FHA/FIM), carrier antigens
+   (DT/TT), IgG subclasses, Fc-receptor binding, or effector functions — carry
+   it, and is the signal **baseline (pre-vaccination)** or only concurrent at
+   birth?
+6. **Baseline predictivity (the clean test).** Does the pre-vaccination
+   (`r params$baseline_visit`) baseline model predict who becomes a High
+   responder? A positive baseline signal would mean responder status is partly a
+   pre-existing maternal trait, not only a vaccine response.
+7. **Mechanistic reading.** Pull Parts A–C together: is "Low responder" best
+   described as (a) a TT/exposure label, (b) a clinical phenotype, (c) a
+   pre-existing serological trait, or (d) largely unpredictable from the measured
+   covariates?
+
+---
+
+# Global Participant Accounting {#global-naccounting}
+
+```{r global-naccount, results='asis'}
+manual_acct <- function()
+  cat(sprintf("Mothers analysed: **%d** (Low = %d, High = %d); TdaP = %d, TT = %d.\n\n",
+              nrow(data), sum(data$responder == "Low"), sum(data$responder == "High"),
+              sum(data$arm_name == "TdaP"), sum(data$arm_name == "TT")))
+
+if (!is.null(nt) && exists("nt_render", mode = "function")) {
+  ok <- tryCatch({ nt_render(nt, caption = "Participant accounting for Phase 08."); TRUE },
+                 error = function(e) FALSE)
+  if (!ok) manual_acct()
+} else {
+  manual_acct()
+}
+```
+
+---
+
+*Phase 08 branch. The maternal Low/High class is the Phase 07 Stage A construct,
+rebuilt via the new `R/maternal_responder_helpers.R` (which calls the unmodified
+`R/within_visit_helpers.R` engine). Outcome modelled as both the continuous
+responder score (linear) and the binary class (logistic). Stratifier: maternal arm
+only — no infant-arm analysis. Knit both formats with*
+`rmarkdown::render("08_maternal_responder_predictors.Rmd", output_format = "all")`.

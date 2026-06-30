@@ -1,0 +1,249 @@
+```{r clin-setup, include=FALSE}
+# CHILD document. Assumes the master has created cfg, data_raw, nt, and the
+# find_proj_file() resolver. Reuses the shared clinical helpers.
+clin_alpha <- 0.05   # univariate screening threshold (adjust if desired)
+```
+
+# Clinical Covariates {#clinical}
+
+This part asks whether **clinical characteristics of the mother or infant** predict
+the infant's **`r cfg$outcome_label` at `r cfg$chain_outcome_visit`**, independent of
+the antibody chain. Ten covariates are screened. Within each stratum the steps are:
+(1) univariate screen of every covariate (categoricals as a factor; continuous in both
+continuous and tertile form); (2) form selection (the significant form with higher
+adj-R² is kept); (3) a joint multivariate model if ≥ 2 covariates pass; (4) a
+cross-stratum summary.
+
+**Stratification matches the antibody chain: maternal arm primary** (TdaP / TT), each
+shown pooled across infant arms and split by infant level (aP, wP).
+
+```{r clin-covtable, echo=FALSE}
+cov_meta <- data.frame(
+  Label = names(COVARIATES_NAMED),
+  Variable = unname(unlist(COVARIATES_NAMED)),
+  Type = ifelse(unname(unlist(COVARIATES_NAMED)) %in% COVARIATES_CATEGORICAL,
+                "Categorical (2 levels)", "Continuous"),
+  `Forms tested` = ifelse(unname(unlist(COVARIATES_NAMED)) %in% COVARIATES_CATEGORICAL,
+                          "factor", "continuous + tertile"),
+  check.names = FALSE, stringsAsFactors = FALSE)
+knitr::kable(cov_meta, caption = "Table CC1. Clinical covariates and testing approach.")
+```
+
+```{r clin-mapnote, echo=FALSE, results='asis'}
+mapnote("This part corresponds to the **clinical-covariate interpretation summary** for ",
+        cfg$outcome_label, ".",
+        feeds = c(
+          "Which covariates are significant in which strata \u2192 summary \u00a72/\u00a73 and Q1",
+          "Continuous vs tertile form choice \u2192 \u00a73 and Q2",
+          "Multivariate models \u2192 \u00a74 and Q3",
+          "Clinical-vs-antibody scale of variance \u2192 \u00a77 and Q4",
+          "Confounder-adjustment implications \u2192 \u00a78 and Q5",
+          "Reduced-model inputs \u2192 \"Proposed Reduced Clinical Model\" section"))
+```
+
+---
+
+## Data Preparation
+
+```{r clin-data, results='asis'}
+# Outcome (one value per subject) pulled from the recoded antibody data.
+data_outcome <- data_raw %>%
+  dplyr::filter(feature == cfg$outcome_feature,
+                visit_name == cfg$chain_outcome_visit,
+                arm_name %in% cfg$maternal_arms) %>%
+  dplyr::select(subject_accession, arm_name, infant_arm, log_assay_value) %>%
+  distinct(subject_accession, .keep_all = TRUE) %>%
+  rename(!!cfg$outcome_col := log_assay_value)
+
+clin_raw  <- load_clinical_data(find_proj_file("data/clin_assess.RData"))
+clin_data <- prepare_clinical(data_outcome, clin_raw)
+cont_vars <- setdiff(unname(unlist(COVARIATES_NAMED)), COVARIATES_CATEGORICAL)
+
+cat(sprintf("Merged clinical dataset: **%d subjects \u00d7 %d columns**  \n",
+            nrow(clin_data), ncol(clin_data)))
+cat(sprintf("Outcome `%s` non-missing: **%d**\n\n",
+            cfg$outcome_col, sum(!is.na(clin_data[[cfg$outcome_col]]))))
+```
+
+```{r clin-strata, results='asis'}
+strata_c <- build_maternal_strata(clin_data)
+nt_outcome_counts(clin_data, strata_c, cfg$outcome_col,
+                  caption = "Table CC2. Subjects per stratum and number with a non-missing outcome.")
+```
+
+```{r clin-run, results='hide'}
+# Screen every stratum (outcome-complete rows only). All models logged to nt.
+screens_c <- lapply(names(strata_c), function(k) {
+  d <- strata_c[[k]]$data %>% dplyr::filter(!is.na(.data[[cfg$outcome_col]]))
+  run_clinical_screen(d, cfg$outcome_col, alpha = clin_alpha,
+                      tracker = nt, part = "Clinical", stratum = strata_c[[k]]$label)
+})
+names(screens_c) <- names(strata_c)
+
+clin_order <- intersect(c("TdaP","TdaP_aP","TdaP_wP","TT","TT_aP","TT_wP"), names(screens_c))
+
+# Per-stratum display: univariate table, form selection, sig models, multivariate.
+display_clinical <- function(key) {
+  s  <- screens_c[[key]]
+  nO <- sum(!is.na(strata_c[[key]]$data[[cfg$outcome_col]]))
+  cat("####", strata_c[[key]]$label, sprintf("(n with outcome = %d)\n\n", nO))
+
+  tbl <- s$univ_table %>%
+    mutate(R2 = ifelse(is.na(R2), "\u2014", sprintf("%.3f", R2)),
+           adj_R2 = ifelse(is.na(adj_R2), "\u2014", sprintf("%.3f", adj_R2)),
+           p_model = ifelse(is.na(p_model), "\u2014", sprintf("%.3g", p_model))) %>%
+    dplyr::select(Label, Form, n, R2, adj_R2, p_model, sig)
+  print(knitr::kable(tbl, col.names = c("Covariate","Form","n","R\u00b2","adj-R\u00b2","p (model)",""),
+                     caption = "Univariate screen", align = c("l","l","r","r","r","r","c")))
+  cat("\n")
+
+  if (length(s$selected) == 0) {
+    cat(sprintf("**No covariate reached p < %g in this stratum.**\n\n", clin_alpha)); return(invisible())
+  }
+  cat(sprintf("**%d covariate(s) significant at p < %g.** Form selection:\n\n",
+              length(s$selected), clin_alpha))
+  print(knitr::kable(data.frame(Covariate = names(s$selected),
+                                `Selected column` = unname(unlist(s$selected)),
+                                Rationale = unname(unlist(s$form_notes)), check.names = FALSE),
+                     caption = "Form selection"))
+  cat("\n")
+
+  for (lbl in names(s$selected)) {
+    v <- COVARIATES_NAMED[[lbl]]; sel <- s$selected[[lbl]]
+    key2 <- if (v %in% COVARIATES_CATEGORICAL) paste0(v, "_cat")
+            else if (endsWith(sel, "_T")) paste0(v, "_tert") else paste0(v, "_cont")
+    if (!is.null(s$univ_res[[key2]])) show_lm_clin(s$univ_res[[key2]])
+  }
+  if (length(s$selected) > 1 && !is.null(s$multi_result)) {
+    cat("**Multivariate model** (all selected predictors jointly):\n\n")
+    show_lm_clin(s$multi_result)
+  } else if (length(s$selected) == 1) {
+    cat("*Only one predictor significant; no multivariate model fitted.*\n\n")
+  }
+}
+```
+
+---
+
+## Results by Stratum
+
+```{r clin-results, results='asis'}
+for (m in cfg$maternal_arms) {
+  cat("###", m, "mothers\n\n")
+  for (key in intersect(c(m, paste0(m, "_", cfg$infant_arms)), names(screens_c)))
+    display_clinical(key)
+}
+```
+
+---
+
+## Cross-Stratum Summary
+
+```{r clin-cross-mapnote, echo=FALSE, results='asis'}
+mapnote("The cross-stratum matrix and the multivariate summary below feed the ",
+        "summary's pattern sections directly.",
+        feeds = c(
+          "Significant-predictor matrix \u2192 \u00a72/\u00a75 and Q1 of the clinical summary",
+          "Multivariate fit per stratum \u2192 \u00a74 and Q3",
+          "Best clinical R\u00b2 (benchmark vs antibody chain) \u2192 \u00a77 and Q4"))
+```
+
+```{r clin-cross, results='asis'}
+all_rows <- bind_rows(lapply(names(screens_c),
+                             function(k) screens_c[[k]]$univ_table %>%
+                               mutate(Stratum = strata_c[[k]]$label)), .id = NULL) %>%
+  mutate(sig_chr = ifelse(is.na(p_model), "\u2014", pvalue_to_label(p_model)))
+
+# R2 (sig) matrix: rows = covariate x form, columns = stratum
+disp <- all_rows %>%
+  mutate(cell = ifelse(is.na(R2), "\u2014", sprintf("%.3f (%s)", R2, sig_chr))) %>%
+  dplyr::select(Stratum, Label, Form, cell) %>%
+  pivot_wider(id_cols = c(Label, Form), names_from = Stratum, values_from = cell)
+cat("### R\u00b2 (significance) Across All Strata\n\n")
+print(knitr::kable(disp,
+      caption = "Table CC3. Univariate R\u00b2 (significance) by covariate, form, and stratum. * p<0.05  ** p<0.01  *** p<0.001.",
+      align = c("l","l", rep("r", ncol(disp) - 2))))
+cat("\n")
+
+# Selected predictors per stratum
+cat("### Selected Predictors per Stratum\n\n")
+sel_df <- bind_rows(lapply(names(screens_c), function(k) {
+  sc <- screens_c[[k]]
+  if (length(sc$selected) == 0)
+    data.frame(Stratum = strata_c[[k]]$label, Covariate = "none",
+               Selected = "\u2014", Rationale = "\u2014", stringsAsFactors = FALSE)
+  else
+    data.frame(Stratum = strata_c[[k]]$label, Covariate = names(sc$selected),
+               Selected = unname(unlist(sc$selected)),
+               Rationale = unname(unlist(sc$form_notes)), stringsAsFactors = FALSE)
+}))
+print(knitr::kable(sel_df, caption = "Table CC4. Predictors selected for multivariate models per stratum.",
+                   align = c("l","l","l","l")))
+cat("\n")
+
+# Multivariate summary
+cat("### Multivariate Model Summary\n\n")
+multi_df <- bind_rows(lapply(names(screens_c), function(k) {
+  sc <- screens_c[[k]]; mr <- sc$multi_result; n_s <- length(sc$selected)
+  data.frame(Stratum = strata_c[[k]]$label, N_sig = n_s,
+             Multi_R2     = if (!is.null(mr)) sprintf("%.3f", mr$R2) else ifelse(n_s > 1, "failed", "\u2014"),
+             Multi_adjR2  = if (!is.null(mr)) sprintf("%.3f", mr$adj_R2) else "\u2014",
+             Multi_p      = if (!is.null(mr)) sprintf("%.3g", mr$p_model) else "\u2014",
+             stringsAsFactors = FALSE)
+}))
+print(knitr::kable(multi_df, col.names = c("Stratum","N significant","Multi R\u00b2","Multi adj-R\u00b2","Multi p"),
+                   caption = "Table CC5. Multivariate model fit per stratum.", align = c("l","r","r","r","r")))
+cat("\n")
+```
+
+```{r clin-forest, fig.cap="Figure CC1. Univariate R\u00b2 for each covariate form across strata. Filled = p < threshold.", fig.height=7}
+plot_df <- all_rows %>%
+  mutate(sig_fill = !is.na(p_model) & p_model < clin_alpha,
+         Covariate_form = paste0(Label, "\n(", Form, ")"))
+ggplot(plot_df, aes(x = R2, y = reorder(Covariate_form, R2),
+                    color = Stratum, shape = sig_fill)) +
+  geom_point(size = 2.6, position = position_dodge(0.6)) +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1),
+                     labels = c(`TRUE` = paste0("p < ", clin_alpha), `FALSE` = paste0("p \u2265 ", clin_alpha))) +
+  labs(x = "R\u00b2 (univariate)", y = NULL, color = "Stratum", shape = "Significance",
+       title = paste0("Univariate clinical R\u00b2 \u2014 ", cfg$outcome_label, " at ", cfg$chain_outcome_visit)) +
+  theme_bw(base_size = 10) + theme(axis.text.y = element_text(size = 8))
+```
+
+```{r clin-coef, fig.cap="Figure CC2. Coefficients of significant univariate predictors, by stratum. Error bars = 95% CI.", fig.height=5}
+beta_lab <- "\u03b2"
+sig_coef <- bind_rows(lapply(names(screens_c), function(k) {
+  sc <- screens_c[[k]]
+  if (length(sc$selected) == 0) return(NULL)
+  bind_rows(lapply(names(sc$selected), function(lbl) {
+    v <- COVARIATES_NAMED[[lbl]]; sel <- sc$selected[[lbl]]
+    key2 <- if (v %in% COVARIATES_CATEGORICAL) paste0(v, "_cat")
+            else if (endsWith(sel, "_T")) paste0(v, "_tert") else paste0(v, "_cont")
+    res <- sc$univ_res[[key2]]
+    if (is.null(res) || is.null(res$tidy_coef)) return(NULL)
+    res$tidy_coef %>% dplyr::filter(Predictor != "(Intercept)") %>%
+      mutate(Stratum = strata_c[[k]]$label, Covariate = lbl,
+             lo = .data[[beta_lab]] - 1.96 * SE, hi = .data[[beta_lab]] + 1.96 * SE)
+  }))
+}))
+if (!is.null(sig_coef) && nrow(sig_coef) > 0) {
+  ggplot(sig_coef, aes(x = .data[[beta_lab]], y = Predictor, color = Stratum, xmin = lo, xmax = hi)) +
+    geom_point(size = 2.4, position = position_dodge(0.5)) +
+    geom_errorbarh(height = 0.2, position = position_dodge(0.5)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    facet_wrap(~ Covariate, scales = "free", ncol = 2) +
+    labs(x = paste0("\u03b2 (\u2192 ", cfg$outcome_label, " ", cfg$chain_outcome_visit, ")"),
+         y = NULL, color = "Stratum",
+         title = paste0("Significant clinical predictor coefficients \u2014 ", cfg$outcome_label)) +
+    theme_bw(base_size = 10) + theme(strip.text = element_text(size = 8))
+} else cat("*No significant univariate predictors in any stratum.*\n")
+```
+
+---
+
+## Participant Accounting (Clinical) {#clinical-naccounting}
+
+```{r clin-naccount, results='asis'}
+nt_render(nt, part = "Clinical",
+          caption = "Table CC6. Participant accounting for every clinical model.")
+```

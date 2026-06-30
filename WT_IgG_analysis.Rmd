@@ -1,0 +1,183 @@
+---
+title: "Systems Serology — Maternal/Cord/Infant Analysis"
+subtitle: "Endpoint-parameterized pipeline · primary stratification on maternal arm (TdaP vs TT)"
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+params:
+  endpoint: "WT_IgG"      # "SBA" | "WT_IgG" | "PTNA"  <-- the ONLY thing to change per endpoint
+output:
+  html_document:        # -> hand this to the summary engine
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:        # -> hand this to the analysis recipient
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 6
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+
+# ---- self-locating resolver -------------------------------------------------
+# Finds config/, R/, parts/, data/ whether they sit beside this .Rmd, under an
+# analysis/ subfolder, or at the project root — and works even when rmarkdown
+# renders from a temp directory. Returns the first candidate that exists.
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+# ---- shared configuration + helper library (sourced once) ----
+source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+
+# ---- resolve the endpoint config from the single param ----
+cfg <- get_endpoint_config(params$endpoint)
+
+# ---- load + recode the antibody data ONCE; every part reuses it ----
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))  # applies VISIT_RECODE
+
+# ---- one participant N-tracker shared across all parts ----
+nt <- new_ntracker()
+```
+
+# `r cfg$outcome_label`: Maternal/Cord/Infant Antibody Analysis {-}
+
+This document is generated from a **single config-driven pipeline**. The endpoint is
+set once (`params$endpoint = "`r params$endpoint`"`), and the outcome
+(**`r cfg$outcome_long`**, `r cfg$outcome_feature`), the visit set, and all labels are
+derived from `config/endpoints.R`. Re-running for `SBA` or `PTNA` is a one-line
+change to that parameter.
+
+**Visit naming.** All visits are recoded for clarity throughout:
+`r paste(paste0(names(VISIT_RECODE), "\u2192", VISIT_RECODE), collapse = ", ")`.
+
+**Stratification.** Primary axis is the **maternal vaccination arm (TdaP vs TT)**;
+within each, results are reported pooled across infant arms and separately for each
+infant priming level (aP, wP).
+
+**WT_IgG special feature.** Unlike SBA and PTNA, WT_IgG is measured at **two**
+pre-INFMon2 time points: the maternal level (used in the Block 1 maternal chain)
+and the **cord blood level** (a direct snapshot of transplacentally transferred
+antibody at birth). Block 10 in Part 4 exploits the cord blood measurement as a
+genuine temporal predictor of the INFMon2 outcome — a test of whether passively
+acquired antibody quantity at birth independently determines the infant's
+whole-cell IgG response two months later. Verify the cord-blood column name in
+`config/endpoints.R` (`cord_predictor = "WTIgG_cord"`) before knitting.
+
+**Downstream use.** The knitted **HTML** is intended for a summary engine; the
+**Word** document is for the analysis recipient. Inline "🧭 Maps to summary"
+callouts tie each analysis block to the matching section / synthesis question of the
+written interpretation summary for this endpoint.
+
+---
+
+```{r part-maternal-chain, child=find_proj_file('parts/01_maternal_chain.Rmd')}
+```
+
+```{r part-clinical, echo=FALSE, child=find_proj_file('parts/02_clinical_covariates.Rmd', optional=TRUE)}
+# Clinical-covariate part — refactored in the next increment.
+# Auto-included once parts/02_clinical_covariates.Rmd exists.
+```
+
+```{r part-concurrent, echo=FALSE, child=find_proj_file('parts/03_concurrent_networks.Rmd', optional=TRUE)}
+# Concurrent within-visit network / mixed-model part — next increment.
+# Auto-included once parts/03_concurrent_networks.Rmd exists.
+```
+
+```{r part-antigen-subclass, echo=FALSE, child=find_proj_file('parts/04_antigen_subclass_predictors.Rmd', optional=TRUE)}
+# Antigen × IgG subclass, FcG secondary binding, and cord blood pre-INFMon2
+# predictor blocks (Blocks 7–10).
+# Block 10 (cord blood temporal predictor) is ACTIVE for this endpoint.
+# cfg$cord_predictor must be set to the correct column name in config/endpoints.R.
+# Auto-included once parts/04_antigen_subclass_predictors.Rmd exists.
+```
+
+```{r part-effector-functions, echo=FALSE, child=find_proj_file('parts/05_effector_functions.Rmd', optional=TRUE)}
+# ADCD / ADCP / ADNP effector function blocks (Blocks 11–14).
+# Kept as a separate group to preserve analytical distinction between
+# binding-level (Parts 1 & 4) and functional-level (Part 5) predictors.
+# Auto-included once parts/05_effector_functions.Rmd exists.
+```
+
+---
+
+# Synthesis Questions to Address {#synthesis}
+
+*The results above (with their "Maps to summary" callouts) are intended to be
+read against the written interpretation summary for `r cfg$outcome_label`. The
+questions below are restated inline so the summary engine has the prompts
+alongside the evidence.*
+
+1. **Which block explains the most variance?** Is the infant outcome determined most
+   by the maternal supply (Block 1), the quantity transferred (Block 3), or the
+   cord→infant change (Block 5)?
+2. **Dominant predictors within the leading block** — which antigen/subclass carries
+   the signal (cross-reference antigen-total and full-12 relative-importance tables)?
+3. **Are the ratio effects (Blocks 2/4/6) independent of quantity?** Is there a
+   reproducible qualitative (subclass-balance) layer, or is the outcome purely
+   quantitative?
+4. **Do aP and wP infants follow different predictive pathways?** Use the infant-split
+   results within each maternal arm and the relative-importance comparisons.
+5. **Does the maternal vaccine (TdaP vs TT) change the chain?** Is the maternal-supply
+   signal booster-dependent (strong in TdaP, attenuated/collapsed in TT)?
+6. **Mechanistic model** — at which step is the signal most amplified or attenuated,
+   and which subclass carries it through the chain? (Attach the Block-5 positive-median
+   caveat to any cord→infant term.)
+7. **Convergence with the concurrent `r paste(cfg$concurrent_visits, collapse="/")`
+   architecture** — does the upstream maternal chain point to the same dominant
+   antigen as the concurrent within-visit analysis?
+8. **Antigen specificity at INFMon2 (Block 7)** — which antigen × IgG subclass
+   combination best predicts `r cfg$outcome_label`? Is the signal concentrated in
+   pertussis-specific antigens (PT / PRN / FHA) or carrier/toxoid antigens
+   (DT / TT / FIM), and does this differ by maternal vaccination arm?
+9. **FcG binding layer (Block 9)** — do Fc-receptor binding features add predictive
+   power beyond IgG subclass quantities (cross-reference elastic-net in Blocks 7–9)?
+   Which FcγR shows the strongest concurrent association, and is it consistent across
+   antigens?
+10. **Cord blood temporal predictor (Block 10)** —
+    `r if (!is.null(cfg$cord_predictor)) paste0("After controlling for maternal arm, does cord blood ", cfg$cord_predictor_label, " independently predict INFMon2 ", cfg$outcome_label, "? Does the cord level mediate or attenuate the maternal chain signal from Block 1?") else paste0("[Not applicable for ", cfg$outcome_label, " — no pre-INFMon2 cord-blood measurement is defined for this endpoint. This question is active for the WT_IgG analysis.]")`
+11. **Effector-to-whole-cell alignment (Blocks 11–14)** — do ADCD, ADCP, or ADNP
+    associate with `r cfg$outcome_label` at INFMon2? Is there a consistent effector
+    hierarchy across antigens (e.g., ADNP > ADCP > ADCD), and is the dominant
+    antigen for effector alignment the same as the dominant antigen for subclass
+    binding (cross-reference Blocks 7 and 14)?
+
+---
+
+# Global Participant Accounting {#global-naccounting}
+
+A single attrition ledger across **all** parts of this analysis, so differing sample
+sizes between sections are fully traceable.
+
+```{r global-naccount, results='asis'}
+nt_render(nt, caption = "Participant accounting across all analysis parts.")
+```
+
+---
+
+*Generated by the config-driven serology pipeline. Set `params$endpoint` to
+`SBA`, `WT_IgG`, or `PTNA`. Knit both formats with*
+`rmarkdown::render("WT_IgG_analysis.Rmd", output_format = "all")`.

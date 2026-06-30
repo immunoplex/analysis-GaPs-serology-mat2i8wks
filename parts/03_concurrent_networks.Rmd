@@ -1,0 +1,356 @@
+```{r conc-setup, include=FALSE}
+# CHILD document. Assumes cfg, data_raw, nt, find_proj_file() exist.
+# Heavy network/NCT packages are optional: if absent, those sections are
+# skipped with a note (the regression + mixed-model layers still run).
+set.seed(20240614)
+NCT_IT <- 1000L   # NCT permutations (slow; lower for a quick pass)
+
+have_net <- all(vapply(c("bootnet", "qgraph", "networktools", "NetworkComparisonTest"),
+                       requireNamespace, logical(1), quietly = TRUE))
+have_lmer <- requireNamespace("lme4", quietly = TRUE)
+have_corr <- requireNamespace("corrplot", quietly = TRUE)
+
+# Network nodes: outcome + pertussis subclasses + FIM subclasses (PATCH).
+# Uses cfg$network_subclasses (NETWORK_SUBCLASSES in config/endpoints.R),
+# which adds FIM — estimable at the infant visits used here. ALL_SUBCLASSES
+# is intentionally NOT used for nodes anymore so the chain stays unaffected.
+net_vars   <- c(cfg$outcome_feature, cfg$network_subclasses)   # PATCH
+node_names <- net_vars
+groups_idx <- list(
+  OUT = which(node_names == cfg$outcome_feature),
+  PT  = which(node_names %in% PT_SUBCLASSES),
+  FHA = which(node_names %in% FHA_SUBCLASSES),
+  PRN = which(node_names %in% PRN_SUBCLASSES),
+  FIM = which(node_names %in% FIM_SUBCLASSES))                  # PATCH: +FIM
+group_colors <- c("gold", "tomato", "steelblue", "seagreen", "mediumpurple")  # PATCH: +FIM colour
+# Build communities from membership (robust to node count / order) instead
+# of a hard-coded positional vector. PATCH.
+communities <- integer(length(node_names))
+communities[groups_idx$OUT] <- 1L
+communities[groups_idx$PT]  <- 2L
+communities[groups_idx$FHA] <- 3L
+communities[groups_idx$PRN] <- 4L
+communities[groups_idx$FIM] <- 5L
+
+# reference visit for single-visit networks / cross-arm NCT
+ref_visit <- if ("InfMon5" %in% cfg$concurrent_visits) "InfMon5" else
+             tail(cfg$concurrent_visits, 1)
+```
+
+# Concurrent Within-Visit Architecture {#concurrent}
+
+This part models the infant's **`r cfg$outcome_label`** against pertussis-antigen IgG
+**measured at the same infant visit** (visits: `r paste(cfg$concurrent_visits, collapse=", ")`),
+rather than tracing the upstream maternal chain. It reproduces the network /
+mixed-model architecture: relative-importance decomposition, the
+pro-/tolerogenic ratio models, the antigen × subclass × level interaction, partial-correlation
+(GGM) networks with bridge centrality, and network-comparison tests (NCT).
+
+**Stratification is maternal-arm primary** (TdaP / TT), with infant splits (aP, wP)
+nested. Network and NCT steps need adequate n (≥ `r NETWORK_MIN` complete cases at a
+visit); underpowered cells are skipped and recorded in the participant accounting.
+
+```{r conc-mapnote, echo=FALSE, results='asis'}
+mapnote("This part corresponds to the **stratified within-visit interpretation summary** ",
+        "(the \"", cfg$outcome_label, " aP vs wP\" narrative), now re-centred on the maternal arm.",
+        feeds = c(
+          "Antigen / subclass relative importance \u2192 summary \u00a71 (PRN dominance) and \u00a73",
+          "FHA negative association \u2192 \u00a72",
+          "Ratio models (overall + by visit) \u2192 \u00a74",
+          "Antigen \u00d7 subclass \u00d7 level interaction \u2192 \u00a75",
+          "GGM networks + bridge centrality \u2192 \u00a76",
+          "NCT (visit-to-visit, arm contrasts) \u2192 \u00a77/\u00a78"))
+if (!have_net)
+  cat("\n> **Note:** network packages (bootnet/qgraph/networktools/NetworkComparisonTest) ",
+      "not installed; network and NCT sections are skipped. Install them to enable \u00a76\u2013\u00a78.\n\n")
+```
+
+---
+
+## Data Preparation
+
+```{r conc-data, results='asis'}
+conc_feats <- c(cfg$outcome_feature, PREDICTOR_FEATURES, cfg$network_subclasses)  # PATCH: +FIM nodes
+data_long_c <- data_raw %>%
+  dplyr::filter(feature %in% conc_feats,
+                visit_name %in% cfg$concurrent_visits,
+                arm_name %in% cfg$maternal_arms) %>%
+  dplyr::select(subject_accession, visit_name, arm_name, infant_arm,
+                feature, log_assay_value) %>%
+  distinct(subject_accession, visit_name, feature, .keep_all = TRUE)
+
+data_wide_c <- data_long_c %>%
+  pivot_wider(id_cols = c(subject_accession, visit_name, arm_name, infant_arm),
+              names_from = feature, values_from = log_assay_value) %>%
+  add_concurrent_ratios()
+
+cat(sprintf("Concurrent dataset: **%d subject\u00d7visit rows \u00d7 %d columns**  \n",
+            nrow(data_wide_c), ncol(data_wide_c)))
+
+cnt <- as.data.frame(table(data_wide_c$arm_name, data_wide_c$visit_name))
+colnames(cnt) <- c("Maternal arm", "Visit", "n_rows")
+cnt <- cnt %>% pivot_wider(names_from = Visit, values_from = n_rows, values_fill = 0)
+knitr::kable(cnt, caption = "Table N1. Subject\u00d7visit rows by maternal arm and visit.") %>% print()
+```
+
+```{r conc-strata, results='hide'}
+strata_x <- build_maternal_strata(data_wide_c)
+conc <- lapply(names(strata_x), function(k)
+  run_concurrent_models(strata_x[[k]]$data, cfg, tracker = nt,
+                        part = "Concurrent", stratum = strata_x[[k]]$label))
+names(conc) <- names(strata_x)
+
+display_conc_stratum <- function(key, full = TRUE) {
+  cat("####", strata_x[[key]]$label, "\n\n")
+  cm <- conc[[key]]
+  show_model(cm$br[["antigen"]])
+  if (full) { show_model(cm$br[["PT"]]); show_model(cm$br[["FHA"]]); show_model(cm$br[["PRN"]]) }
+  show_model(cm$br[["full12"]])
+  show_model(cm$br[["ratio"]], show_relimp = FALSE)
+}
+```
+
+---
+
+## Regression Layer: Antigen, Subclass, and Ratio Models
+
+```{r conc-reg-mapnote, echo=FALSE, results='asis'}
+mapnote("Relative-importance and ratio models \u2014 the basis for the PRN-dominance and ",
+        "FHA-negative findings.",
+        feeds = c("\u00a71 (PRN dominance) and \u00a73 (arm-specific signatures)",
+                  "\u00a72 (FHA negative association)",
+                  "\u00a74 (ratio model)"))
+```
+
+```{r conc-reg, results='asis'}
+for (m in cfg$maternal_arms) {
+  cat("###", m, "mothers\n\n")
+  display_conc_stratum(m, full = TRUE)                       # pooled margin
+  for (i in cfg$infant_arms) {
+    key <- paste0(m, "_", i)
+    if (!is.null(conc[[key]])) display_conc_stratum(key, full = FALSE)
+  }
+}
+```
+
+### Ratio Model by Visit (pooled maternal margins)
+
+```{r conc-ratio-by-visit, results='asis'}
+for (m in cfg$maternal_arms) {
+  d <- strata_x[[m]]$data
+  rbv <- d %>% group_by(visit_name) %>%
+    group_modify(~ broom::tidy(lm(reformulate(c("PT_ratio","FHA_ratio","PRN_ratio"),
+                                              response = cfg$outcome_feature), data = .x))) %>%
+    dplyr::filter(term != "(Intercept)") %>%
+    mutate(across(c(estimate, std.error, statistic), ~round(., 3)),
+           p.value = signif(p.value, 3), sig = pvalue_to_label(p.value)) %>%
+    ungroup()
+  knitr::kable(rbv, caption = paste0("Ratio model by visit \u2014 ", m, " mothers."),
+               align = c("l","l","r","r","r","r","c")) %>% print()
+  cat("\n")
+}
+```
+
+---
+
+## Antigen × Subclass × Level Interaction (mixed model)
+
+```{r conc-lmer-mapnote, echo=FALSE, results='asis'}
+mapnote("The three-way interaction tests whether which subclass matters depends on ",
+        "antigen and on binding level.",
+        feeds = "\u00a75 (three-way antigen \u00d7 subclass interaction)")
+```
+
+```{r conc-lmer, results='asis'}
+if (have_lmer) {
+  for (m in cfg$maternal_arms) {
+    d <- strata_x[[m]]$data
+    dl <- d %>%
+      dplyr::select(subject_accession, visit_name, arm_name,
+                    all_of(cfg$outcome_feature), matches("IgG[1-4]$")) %>%
+      pivot_longer(matches("IgG[1-4]$"), names_to = c("antigen","subclass"),
+                   names_pattern = "(PT|FHA|PRN)_(IgG[1-4])", values_to = "subclass_value") %>%
+      tidyr::drop_na(tidyselect::all_of(c("subclass_value", cfg$outcome_feature)))
+    fml <- as.formula(paste0(cfg$outcome_feature,
+                             " ~ antigen * subclass * subclass_value + (1 | subject_accession)"))
+    mm <- tryCatch(lme4::lmer(fml, data = dl), error = function(e) NULL)
+    if (is.null(mm)) { cat(sprintf("*%s: mixed model could not be fit.*\n\n", m)); next }
+    av <- as.data.frame(anova(mm))
+    av <- cbind(Term = rownames(av), round(av, 3)); rownames(av) <- NULL
+    knitr::kable(av, caption = paste0("Type-III ANOVA of fixed effects \u2014 ", m, " mothers (lmer)."),
+                 row.names = FALSE) %>% print()
+    cat("\n")
+  }
+} else cat("*lme4 not installed; mixed-model interaction skipped.*\n\n")
+```
+
+### Antigen × Subclass Slopes (pooled maternal margins)
+
+```{r conc-slopes, fig.cap=paste0("Figure N1. Antigen \u00d7 subclass slopes \u2192 ", cfg$outcome_label, ", by maternal arm."), fig.height=6}
+dl_all <- bind_rows(lapply(cfg$maternal_arms, function(m)
+  strata_x[[m]]$data %>%
+    dplyr::select(arm_name, all_of(cfg$outcome_feature), matches("IgG[1-4]$")))) %>%
+  pivot_longer(matches("IgG[1-4]$"), names_to = c("antigen","subclass"),
+               names_pattern = "(PT|FHA|PRN)_(IgG[1-4])", values_to = "subclass_value") %>%
+  tidyr::drop_na(tidyselect::all_of(c("subclass_value", cfg$outcome_feature)))
+ggplot(dl_all, aes(x = subclass_value, y = .data[[cfg$outcome_feature]],
+                   color = subclass, linetype = arm_name)) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  facet_grid(antigen ~ arm_name) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Log10 subclass-specific IgG (concurrent)", y = cfg$outcome_y_label,
+       color = "Subclass", linetype = "Maternal arm",
+       title = paste0("Antigen \u00d7 subclass \u2192 ", cfg$outcome_label, " (within-visit)")) +
+  theme_bw(base_size = 11)
+```
+
+---
+
+## GGM Networks and Bridge Centrality
+
+```{r conc-net-mapnote, echo=FALSE, results='asis'}
+mapnote("Partial-correlation networks and bridge centrality at visit ", ref_visit, ".",
+        feeds = "\u00a76 (network architecture, bridge nodes)")
+```
+
+```{r conc-networks, results='asis', fig.height=6, fig.width=7}
+bridge_by_marm <- list(); nets_by_marm <- list()
+if (have_net) {
+  for (m in cfg$maternal_arms) {
+    dnet <- strata_x[[m]]$data %>%
+      dplyr::filter(visit_name == ref_visit) %>%
+      dplyr::select(all_of(net_vars)) %>% tidyr::drop_na()
+    nt_log(nt, "Concurrent", paste0("Network @ ", ref_visit), strata_x[[m]]$label,
+           paste0("GGM network @ ", ref_visit), net_vars, strata_x[[m]]$data %>% dplyr::filter(visit_name == ref_visit))
+    cat(sprintf("\n#### %s mothers \u2014 network at %s (n = %d)\n\n", m, ref_visit, nrow(dnet)))
+    if (nrow(dnet) < NETWORK_MIN) { cat(sprintf("*n < %d; network skipped.*\n\n", NETWORK_MIN)); next }
+    net <- tryCatch(bootnet::estimateNetwork(dnet, default = "EBICglasso", threshold = TRUE),
+                    error = function(e) NULL)
+    if (is.null(net)) { cat("*Network estimation failed.*\n\n"); next }
+    nets_by_marm[[m]] <- net
+    qgraph::qgraph(net$graph, groups = groups_idx, color = group_colors,
+                   layout = "spring", labels = node_names, legend = TRUE,
+                   legend.cex = 0.35, vsize = 8,
+                   title = paste0(m, " \u2014 ", cfg$outcome_label, " network @ ", ref_visit))
+    br <- networktools::bridge(net$graph, communities = communities)
+    bdf <- data.frame(Variable = names(br$`Bridge Strength`),
+                      Bridge_Strength = round(br$`Bridge Strength`, 3),
+                      Bridge_EI = round(br$`Bridge Expected Influence (1-step)`, 3),
+                      row.names = NULL) %>% arrange(desc(Bridge_Strength))
+    bridge_by_marm[[m]] <- bdf
+    print(knitr::kable(bdf, caption = paste0("Bridge centrality \u2014 ", m, " @ ", ref_visit)))
+    cat("\n")
+    if (have_corr) {
+      adj <- net$graph; rownames(adj) <- colnames(adj) <- net_vars
+      corrplot::corrplot(adj, method = "color", type = "lower", tl.col = "black",
+                         tl.cex = 0.7, order = "hclust", addrect = 4, mar = c(0,0,2,0),
+                         col = colorRampPalette(c("blue","white","red"))(200),
+                         title = paste0("Partial correlations \u2014 ", m, " @ ", ref_visit))
+    }
+  }
+} else cat("*Network packages not installed; GGM / bridge sections skipped.*\n\n")
+```
+
+```{r conc-bridge-compare, results='asis'}
+if (length(bridge_by_marm) == 2) {
+  cmp <- merge(bridge_by_marm[["TdaP"]] %>% dplyr::select(Variable, Bridge_Strength) %>%
+                 rename(BS_TdaP = Bridge_Strength),
+               bridge_by_marm[["TT"]] %>% dplyr::select(Variable, Bridge_Strength) %>%
+                 rename(BS_TT = Bridge_Strength), by = "Variable") %>%
+    mutate(delta_BS = round(BS_TdaP - BS_TT, 3)) %>% arrange(desc(abs(delta_BS)))
+  knitr::kable(cmp, caption = paste0("Table N2. Bridge-strength comparison TdaP vs TT @ ", ref_visit, ".")) %>% print()
+}
+```
+
+---
+
+## Network Comparison Tests (NCT)
+
+```{r conc-nct-mapnote, echo=FALSE, results='asis'}
+mapnote("NCT contrasts: maternal arm (TdaP vs TT), infant arm within maternal arm, ",
+        "and first-vs-last visit within maternal arm.",
+        feeds = "\u00a77 (temporal dynamics) and \u00a78 (cross-arm network comparison)")
+```
+
+```{r conc-nct, results='asis'}
+nct_subset <- function(stratum_data, visit) stratum_data %>%
+  dplyr::filter(visit_name == visit) %>% dplyr::select(all_of(net_vars)) %>% tidyr::drop_na()
+
+run_nct <- function(d1, d2, lab) {
+  cat(sprintf("\n**%s** \u2014 n1 = %d, n2 = %d\n\n", lab, nrow(d1), nrow(d2)))
+  if (nrow(d1) < NETWORK_MIN || nrow(d2) < NETWORK_MIN) {
+    cat(sprintf("*One or both groups n < %d; NCT skipped.*\n\n", NETWORK_MIN)); return(invisible())
+  }
+  res <- tryCatch(NetworkComparisonTest::NCT(d1, d2, it = NCT_IT, test.edges = TRUE,
+                  test.centrality = TRUE, centrality = c("strength","expectedInfluence")),
+                  error = function(e) NULL)
+  if (is.null(res)) { cat("*NCT failed.*\n\n"); return(invisible()) }
+  cat(sprintf("- Network-structure invariance (M) p = %.3f\n", res$nwinv.pval))
+  cat(sprintf("- Global-strength invariance (S) p = %.3f\n\n", res$glstrinv.pval))
+}
+
+if (have_net) {
+  # (a) TdaP vs TT at reference visit (pooled infants)
+  run_nct(nct_subset(strata_x[["TdaP"]]$data, ref_visit),
+          nct_subset(strata_x[["TT"]]$data,   ref_visit),
+          paste0("Maternal arm: TdaP vs TT @ ", ref_visit))
+  # (b) aP vs wP within each maternal arm at reference visit
+  for (m in cfg$maternal_arms) {
+    ka <- paste0(m, "_aP"); kw <- paste0(m, "_wP")
+    if (!is.null(strata_x[[ka]]) && !is.null(strata_x[[kw]]))
+      run_nct(nct_subset(strata_x[[ka]]$data, ref_visit),
+              nct_subset(strata_x[[kw]]$data, ref_visit),
+              paste0("Infant arm within ", m, ": aP vs wP @ ", ref_visit))
+  }
+  # (c) first vs last visit within each maternal arm
+  v1 <- cfg$concurrent_visits[1]; vL <- tail(cfg$concurrent_visits, 1)
+  for (m in cfg$maternal_arms)
+    run_nct(nct_subset(strata_x[[m]]$data, v1),
+            nct_subset(strata_x[[m]]$data, vL),
+            paste0("Temporal within ", m, ": ", v1, " vs ", vL))
+} else cat("*Network packages not installed; NCT skipped.*\n\n")
+```
+
+---
+
+## Cross-Stratum Comparisons
+
+```{r conc-relimp, results='asis'}
+rT <- conc[["TdaP"]]$relimp_full; rN <- conc[["TT"]]$relimp_full
+if (!is.null(rT) && !is.null(rN)) {
+  cmp <- merge(data.frame(feature = names(rT@lmg), lmg_TdaP = round(rT@lmg*100, 2)),
+               data.frame(feature = names(rN@lmg), lmg_TT   = round(rN@lmg*100, 2)),
+               by = "feature") %>%
+    mutate(delta_lmg = round(lmg_TdaP - lmg_TT, 2)) %>% arrange(desc(abs(delta_lmg)))
+  knitr::kable(cmp, caption = "Table N3. Full-12 relative importance (lmg %): TdaP vs TT (concurrent).",
+               align = c("l","r","r","r")) %>% print()
+}
+```
+
+```{r conc-ratio-coef, fig.cap="Figure N2. Concurrent ratio-model coefficients: TdaP vs TT. Error bars = 95% CI.", fig.height=5}
+rows <- bind_rows(lapply(cfg$maternal_arms, function(m) {
+  mod <- conc[[m]]$ratio_model
+  if (is.null(mod)) return(NULL)
+  broom::tidy(mod) %>% dplyr::filter(term != "(Intercept)") %>% mutate(maternal_arm = m)
+}))
+if (nrow(rows) > 0)
+  ggplot(rows, aes(x = term, y = estimate, fill = maternal_arm,
+                   ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) +
+    geom_col(position = position_dodge(0.6), width = 0.5) +
+    geom_errorbar(position = position_dodge(0.6), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    scale_fill_manual(values = cfg$marm_colors) +
+    labs(x = "Pro-/tolerogenic ratio", y = paste0("\u03b2 (\u2192 ", cfg$outcome_label, ")"),
+         title = paste0("Concurrent ratio model: TdaP vs TT (", cfg$outcome_label, ")"),
+         fill = "Maternal arm") +
+    theme_bw(base_size = 11)
+```
+
+---
+
+## Participant Accounting (Concurrent) {#concurrent-naccounting}
+
+```{r conc-naccount, results='asis'}
+nt_render(nt, part = "Concurrent",
+          caption = "Table N4. Participant accounting for every concurrent model / network.")
+```

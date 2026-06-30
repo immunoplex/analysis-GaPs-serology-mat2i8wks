@@ -1,0 +1,335 @@
+---
+title: "Response across visits by analyte and antigen"
+subtitle: "Maternal-arm (Tdap-IPV vs TT) effect bubbles — untransformed and IgG-standardized"
+output:
+  html_document:
+    toc: false
+    theme: cosmo
+    highlight: textmate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+suppressPackageStartupMessages({
+  library(data.table)    # used inside connection_transform.R
+  library(tidyverse)     # dplyr, ggplot2, forcats, tidyr, stringr, tibble
+})
+have_ft <- requireNamespace("flextable", quietly = TRUE) &&
+           requireNamespace("officer",  quietly = TRUE)
+if (requireNamespace("RColorBrewer", quietly = TRUE)) library(RColorBrewer)
+
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R \u2014 place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+source(find_proj_file("config/endpoints.R"),      local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),     local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8")
+```
+
+```{r engines}
+## ===========================================================================
+## compute_arm_effect(): single source of truth for the maternal-arm contrast.
+## Per-antigen x analyte stats driving BOTH the bubble plot and the effect/p-value
+## table. Effect size = median(log10 TT) - median(log10 TdaP); positive => lower
+## in TdaP. p-values: Wilcoxon rank-sum, Bonferroni-corrected across tested cells.
+## (Refactored from response_bubbles_matpm_v4.Rmd. CHANGE #2: SBA removed from the
+## analyte order; PTNA kept. Antigen order preserved from the published figure;
+## switch to ANTIGEN_ORDER for project-wide consistency if desired.)
+## ===========================================================================
+ANALYTE_ORDER_BUBBLE <- c("IgG", "IgG3", "IgG1", "IgG2", "IgG4",
+                          "FcgR2a", "FcgR3b", "ADCD", "ADCP", "ADNP", "PTNA")
+ANTIGEN_ORDER_BUBBLE <- c("PT", "FHA", "PRN", "FIM", "DT", "TT")
+
+compute_arm_effect <- function(data = NULL,
+                               analyte_order = ANALYTE_ORDER_BUBBLE,
+                               antigen_order = ANTIGEN_ORDER_BUBBLE,
+                               standstat = NULL) {
+  unique_arms <- base::unique(data$arm_name)
+  if (!all(c("TT", "TdaP") %in% unique_arms))
+    base::stop("arm_name must contain both 'TT' and 'TdaP'")
+
+  stats_df <- data %>%
+    dplyr::group_by(antigen, analyte) %>%
+    dplyr::summarize(
+      mTT_vals   = list(log_assay_value[arm_name == "TT"]),
+      mTdaP_vals = list(log_assay_value[arm_name == "TdaP"]),
+      .groups = "drop") %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      n_TT      = length(stats::na.omit(unlist(mTT_vals))),
+      n_TdaP    = length(stats::na.omit(unlist(mTdaP_vals))),
+      p_value   = if (n_TT >= 2 && n_TdaP >= 2)
+        stats::wilcox.test(unlist(mTT_vals), unlist(mTdaP_vals), exact = FALSE)$p.value
+        else NA_real_,
+      median_mTT   = stats::median(unlist(mTT_vals),   na.rm = TRUE),
+      median_mTdaP = stats::median(unlist(mTdaP_vals), na.rm = TRUE),
+      effect_size  = median_mTT - median_mTdaP,
+      fold_TdaP_vs_TT = 10^(median_mTdaP - median_mTT),
+      direction = dplyr::case_when(
+        is.na(effect_size) ~ "No effect",
+        effect_size > 0    ~ "Lower TdaP",
+        effect_size < 0    ~ "Higher TdaP",
+        TRUE               ~ "No effect")) %>%
+    dplyr::ungroup()
+
+  stats_df$p_value     <- ifelse(stats_df$direction == "No effect" | is.na(stats_df$p_value),
+                                 1, stats_df$p_value)
+  stats_df$p_adj       <- stats::p.adjust(stats_df$p_value, method = "bonferroni", n = nrow(stats_df))
+  stats_df$significant <- stats_df$p_adj < 0.05
+  stats_df$analyte <- forcats::fct_relevel(as.factor(stats_df$analyte),
+                        analyte_order[analyte_order %in% stats_df$analyte])
+  stats_df$antigen <- forcats::fct_relevel(as.factor(stats_df$antigen),
+                        antigen_order[antigen_order %in% stats_df$antigen])
+  stats_df$standstat <- standstat
+  stats_df %>% dplyr::select(-mTT_vals, -mTdaP_vals) %>% dplyr::arrange(antigen, analyte)
+}
+
+plot_arm_effect <- function(data = NULL,
+                            effect_color = c("Lower TdaP" = "salmon",
+                                             "Higher TdaP" = "skyblue",
+                                             "No effect" = "darkgrey"),
+                            analyte_order = ANALYTE_ORDER_BUBBLE,
+                            antigen_order = ANTIGEN_ORDER_BUBBLE,
+                            standstat = NULL) {
+  stats_df <- compute_arm_effect(data = data, analyte_order = analyte_order,
+                                 antigen_order = antigen_order, standstat = standstat) %>%
+    dplyr::mutate(border_size = dplyr::if_else(significant, 1.5, 0.5))
+
+  ggplot2::ggplot(stats_df, ggplot2::aes(x = analyte, y = antigen)) +
+    ggplot2::geom_point(ggplot2::aes(size = abs(effect_size), fill = direction,
+                                     stroke = border_size),
+                        color = "black", shape = 21, show.legend = TRUE) +
+    ggplot2::scale_fill_manual(name = "Effect direction", values = effect_color) +
+    ggplot2::scale_size_continuous(name = "Effect size (|median diff|)", range = c(3, 10)) +
+    ggplot2::scale_x_discrete(name = "Analyte") +
+    ggplot2::scale_y_discrete(name = "Antigen") +
+    ggplot2::labs(
+      title = "Maternal vaccination effects on serology response",
+      caption = "Wilcoxon rank-sum on log10 MFI, Bonferroni-corrected (bold border = adjusted p < 0.05).") +
+    ggplot2::theme_bw() +
+    ## CHANGE #2: rotate the x-axis (analyte) labels 60 degrees to avoid overlap.
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5),
+                   legend.position = "right",
+                   axis.text.x = ggplot2::element_text(angle = 60, hjust = 1)) +
+    ggplot2::guides(fill = ggplot2::guide_legend(order = 1), color = "none",
+                    size = ggplot2::guide_legend(order = 2))
+}
+
+lancet_pval <- function(p) dplyr::case_when(
+  is.na(p)   ~ "..", p < 0.0001 ~ "<0.0001",
+  p < 0.001  ~ formatC(p, format = "f", digits = 4),
+  TRUE       ~ formatC(p, format = "f", digits = 3))
+
+lancet_effect_table <- function(stats_df, caption = NULL,
+    analyte_labels = c(IgG = "Total IgG", IgG1 = "IgG1", IgG2 = "IgG2",
+                       IgG3 = "IgG3", IgG4 = "IgG4",
+                       FcgR2a = "Fc\u03b3RIIa binding", FcgR3b = "Fc\u03b3RIIIb binding",
+                       ADCD = "ADCD", ADCP = "ADCP", ADNP = "ADNP", PTNA = "PTNA"),
+    antigen_labels = c(PT = "Pertussis toxin", FHA = "FHA", PRN = "Pertactin",
+                       FIM = "FIM2/3", DT = "Diphtheria toxoid", TT = "Tetanus toxoid")) {
+  if (!have_ft) return(invisible(NULL))
+  tbl <- stats_df %>%
+    dplyr::mutate(
+      Antigen = dplyr::recode(as.character(antigen), !!!antigen_labels),
+      Analyte = dplyr::recode(as.character(analyte), !!!analyte_labels),
+      n = paste0(n_TT, "/", n_TdaP),
+      `Median (TT)`       = formatC(median_mTT,   format = "f", digits = 2),
+      `Median (Tdap-IPV)` = formatC(median_mTdaP, format = "f", digits = 2),
+      `Difference*`       = formatC(effect_size,  format = "f", digits = 2),
+      `Fold (Tdap-IPV vs TT)` = formatC(fold_TdaP_vs_TT, format = "f", digits = 2),
+      Direction = dplyr::case_when(
+        !significant ~ "No significant difference",
+        direction == "Higher TdaP" ~ "Higher with Tdap-IPV",
+        direction == "Lower TdaP"  ~ "Higher with tetanus toxoid",
+        TRUE ~ "No significant difference"),
+      `p value`          = lancet_pval(p_value),
+      `Adjusted p value` = lancet_pval(p_adj),
+      .keep = "none",
+      significant = significant, antigen = antigen, analyte = analyte) %>%
+    dplyr::arrange(antigen, analyte)
+  bold_rows <- which(tbl$significant)
+  tbl_show <- tbl %>% dplyr::select(Antigen, Analyte, n, `Median (TT)`,
+      `Median (Tdap-IPV)`, `Difference*`, `Fold (Tdap-IPV vs TT)`,
+      Direction, `p value`, `Adjusted p value`)
+  thick <- officer::fp_border(color = "black", width = 1.5)
+  thin  <- officer::fp_border(color = "black", width = 0.5)
+  ft <- flextable::flextable(tbl_show) %>%
+    flextable::font(fontname = "Arial", part = "all") %>%
+    flextable::fontsize(size = 8, part = "all") %>%
+    flextable::bold(part = "header") %>%
+    flextable::align(align = "left",  j = c("Antigen", "Analyte", "Direction"), part = "all") %>%
+    flextable::align(align = "center", j = c("n", "Median (TT)", "Median (Tdap-IPV)",
+        "Difference*", "Fold (Tdap-IPV vs TT)", "p value", "Adjusted p value"), part = "all") %>%
+    flextable::border_remove() %>%
+    flextable::hline_top(border = thick, part = "header") %>%
+    flextable::hline_bottom(border = thin, part = "header") %>%
+    flextable::hline_bottom(border = thick, part = "body") %>%
+    flextable::merge_v(j = "Antigen") %>%
+    flextable::valign(j = "Antigen", valign = "top") %>%
+    flextable::padding(padding.top = 2, padding.bottom = 2, part = "all")
+  if (length(bold_rows) > 0) ft <- flextable::bold(ft, i = bold_rows, part = "body")
+  if (!is.null(caption)) ft <- flextable::set_caption(ft, caption)
+  ft <- flextable::add_footer_lines(ft,
+    "Effect of maternal vaccination (Tdap-IPV vs tetanus toxoid) on infant systems-serology at month 2 (pre-primary). Medians of log10 signal. *Difference = median(TT) - median(Tdap-IPV) on the log10 scale; negative = higher in Tdap-IPV. Fold = anti-log10 of (Tdap-IPV - TT). Two-sided Wilcoxon rank-sum; Bonferroni-adjusted across all antigen x analyte cells. Bold = adjusted p<0.05. PTNA = pertussis-toxin neutralising activity.")
+  flextable::autofit(flextable::fontsize(ft, size = 7, part = "footer"))
+}
+```
+
+```{r config}
+## Recoded infant visits (load_serology_data applies VISIT_RECODE): M02/M05/M09.
+t0 <- "InfMon2"; t1 <- "InfMon5"; t2 <- "InfMon9"
+visit_list <- BUBBLE_VISITS                      # c("InfMon2","InfMon5","InfMon9")
+igglist    <- BUBBLE_IGGLIST                     # total-IgG features re-added post-standardisation
+arms <- c("TdaP", "TT"); refarms <- c("TT", "TdaP")
+
+## CHANGE #2: functional assays remapped to a representative antigen for display.
+## SBA REMOVED (was WHOLE_SBA -> PRN_SBA); PTNA kept (WHOLE_PTNA -> PT_PTNA).
+functional_remap <- tibble::tribble(
+  ~source_feature, ~display_antigen, ~display_analyte,
+  "WHOLE_PTNA",    "PT",             "PTNA")
+
+## Feature panels (SBA-derived "PRN_SBA" removed; "PT_PTNA" kept).
+include_feature <- c(
+  "DT_IgG","DT_IgG1","DT_IgG2","DT_IgG3","DT_IgG4","DT_ADCD","DT_ADNP","DT_ADCP","DT_FcgR2a","DT_FcgR3b",
+  "TT_IgG","TT_IgG1","TT_IgG2","TT_IgG3","TT_IgG4","TT_ADCD","TT_ADNP","TT_ADCP","TT_FcgR2a","TT_FcgR3b",
+  "PT_IgG","PT_IgG1","PT_IgG2","PT_IgG3","PT_IgG4","PT_ADCD","PT_ADNP","PT_ADCP","PT_FcgR2a","PT_FcgR3b",
+  "FHA_IgG","FHA_IgG1","FHA_IgG2","FHA_IgG3","FHA_IgG4","FHA_ADCD","FHA_ADNP","FHA_ADCP","FHA_FcgR2a","FHA_FcgR3b",
+  "PRN_IgG","PRN_IgG1","PRN_IgG2","PRN_IgG3","PRN_IgG4","PRN_ADCD","PRN_ADNP","PRN_ADCP","PRN_FcgR2a","PRN_FcgR3b",
+  "FIM_IgG","FIM_IgG1","FIM_IgG2","FIM_IgG3","FIM_IgG4","FIM_ADCD","FIM_ADNP","FIM_ADCP","FIM_FcgR2a","FIM_FcgR3b",
+  "PT_PTNA")
+include_feature_wo <- setdiff(include_feature, igglist)   # drop total IgG for standardisation
+
+residual_file_ap <- find_proj_file("data/igg_standard_residuals_ap_matpm_prevacvacc_k.RData", optional = TRUE)
+residual_file_wp <- find_proj_file("data/igg_standard_residuals_wp_matpm_prevacvacc_k.RData", optional = TRUE)
+have_std <- requireNamespace("data.table", quietly = TRUE) &&
+            !is.null(residual_file_ap) && !is.null(residual_file_wp)
+```
+
+```{r loaddata}
+## load_serology_data() applies VISIT_RECODE, builds the mixed-case `feature`,
+## sets `arm_name` (TdaP/TT), and runs the mandatory casing guard.
+data <- load_serology_data(find_proj_file("data/c_set.RData"))
+data$antigen  <- as.character(data$antigen)
+data$analyte  <- as.character(data$analyte)
+data$feature  <- as.character(data$feature)
+data$arm_name <- as.character(data$arm_name)
+
+## Remap whole-bacterium functional assays onto a representative antigen column
+## (PTNA under PT). No-op with a warning if the WHOLE_* rows are absent.
+func_src <- data[data$feature %in% functional_remap$source_feature, , drop = FALSE]
+if (nrow(func_src) == 0) {
+  warning("functional_remap: ", paste(functional_remap$source_feature, collapse = ", "),
+          " not found; PTNA will be absent.")
+} else {
+  func_src <- merge(func_src, functional_remap,
+                    by.x = "feature", by.y = "source_feature", all.x = TRUE)
+  func_src$antigen <- func_src$display_antigen
+  func_src$analyte <- func_src$display_analyte
+  func_src$feature <- paste(func_src$antigen, func_src$analyte, sep = "_")
+  func_src$display_antigen <- NULL; func_src$display_analyte <- NULL
+  data <- dplyr::bind_rows(data, func_src[, names(data)])
+}
+
+data <- data[data$feature %in% include_feature &
+             data$arm_name %in% arms &
+             as.character(data$visit_name) %in% visit_list,
+             c("visit_name","subject_accession","antigen","analyte",
+               "arm_name","infant_arm","feature","value_reported","log_assay_value")]
+data <- dplyr::distinct(data, subject_accession, visit_name, feature, .keep_all = TRUE)
+data$arm_name   <- relevel(factor(data$arm_name), ref = refarms[1])   # TT referent
+data$visit_name <- factor(as.character(data$visit_name), levels = visit_list)
+data <- as.data.frame(data)
+
+unstandardized_data <- data
+unstandardized_data$standstat <- "untransformed"
+```
+
+```{r standardized}
+if (have_std) {
+  std_wp <- standardized_set("IgG", unstandardized_data[unstandardized_data$infant_arm == "wP", ],
+                             residual_file_wp, include_feature, include_feature_wo)
+  std_ap <- standardized_set("IgG", unstandardized_data[unstandardized_data$infant_arm == "aP", ],
+                             residual_file_ap, include_feature, include_feature_wo)
+  std_not   <- dplyr::bind_rows(std_wp, std_ap)
+  total_igg <- unstandardized_data[unstandardized_data$feature %in% igglist, names(std_not)]
+  standardized_data <- dplyr::bind_rows(std_not[, names(total_igg)], total_igg)
+  standardized_data$standstat <- "standardized"
+  data_all <- dplyr::bind_rows(unstandardized_data, standardized_data)
+} else {
+  data_all <- unstandardized_data
+}
+## recompute antigen/analyte from feature so both scales are consistent
+data_all$antigen <- stringr::str_split_i(as.character(data_all$feature), "_", 1)
+data_all$analyte <- stringr::str_split_i(as.character(data_all$feature), "_", 2)
+dxdata <- dplyr::distinct(data_all, standstat, subject_accession, visit_name, feature, .keep_all = TRUE)
+scales <- if (have_std) c("untransformed", "standardized") else "untransformed"
+```
+
+`r if (!have_std) "> **Note:** IgG-standardized residual files not found (or data.table missing); the standardized section is skipped. The untransformed section is unaffected.\n"`
+
+```{r trend_loops, results='asis'}
+for (standstat in scales) {
+  cat("\n\n## ", standstat, " {.tabset}\n\n")
+  for (visit in visit_list) {
+    cat("\n\n### ", visit, " {.tabset}\n\n")
+    infant_arm_list <- if (visit == t0) "wP and aP" else c("wP", "aP")
+    for (iarm in infant_arm_list) {
+      cat("\n\n#### ", iarm, "\n\n")
+      sel <- dxdata$visit_name == visit & dxdata$standstat == standstat
+      if (iarm != "wP and aP") sel <- sel & dxdata$infant_arm == iarm
+      txdata <- dxdata[sel, c("subject_accession","antigen","analyte","arm_name","log_assay_value")]
+      ok <- nrow(txdata) > 0 && all(c("TT","TdaP") %in% unique(txdata$arm_name))
+      if (!ok) { cat("\n*No data / both arms not present for this cell.*\n\n"); next }
+      print(plot_arm_effect(data = txdata, standstat = standstat))
+      cat("\n\n")
+    }
+  }
+}
+```
+
+```{r m02_effect_tables, results='asis'}
+## Month-2 (InfMon2, pre-primary) effect-size / p-value tables, pooled wP+aP,
+## from the SAME compute_arm_effect() as the figures. Exported to one .docx.
+if (have_ft) {
+  cat("\n\n## Month-2 effect-size and p-value tables {.tabset}\n\n")
+  m02_ft <- list()
+  for (ss in scales) {
+    txm <- dxdata[dxdata$visit_name == t0 & dxdata$standstat == ss,
+                  c("subject_accession","antigen","analyte","arm_name","log_assay_value")]
+    if (nrow(txm) == 0 || !all(c("TT","TdaP") %in% unique(txm$arm_name))) next
+    st <- compute_arm_effect(data = txm, standstat = ss)
+    ft <- lancet_effect_table(st, caption = sprintf(
+      "Maternal Tdap-IPV vs tetanus-toxoid effect on month-2 systems serology (%s features).", ss))
+    m02_ft[[ss]] <- ft
+    cat(sprintf("\n\n### %s\n\n", ss)); flextable::flextable_to_rmd(ft); cat("\n\n")
+  }
+  out_dir <- tryCatch(find_proj_file("output", optional = TRUE), error = function(e) NULL)
+  if (is.null(out_dir)) out_dir <- file.path(getwd(), "output")
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  if (length(m02_ft))
+    try(do.call(flextable::save_as_docx,
+        c(setNames(m02_ft, paste0(names(m02_ft), " features")),
+          list(path = file.path(out_dir, "M02_effect_size_pvalue_table.docx"),
+               pr_section = officer::prop_section(
+                 page_size = officer::page_size(orient = "landscape"),
+                 type = "continuous")))), silent = TRUE)
+} else {
+  cat("\n\n*Install **flextable** + **officer** for the Lancet-styled month-2 effect tables.*\n\n")
+}
+```
