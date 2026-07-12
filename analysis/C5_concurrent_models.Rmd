@@ -59,7 +59,7 @@ if (!exists("shared_utils", mode = "function")) {
 # only ANTIGENS = c("PT","FHA","PRN") (endpoints.R) for add_concurrent_ratios(),
 # and the FcG/effector vocabularies in the additions file belong to Parts 4/5.
 source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
 
 # ---- resolve the endpoint config from the single param ----
 cfg <- get_endpoint_config(params$endpoint)

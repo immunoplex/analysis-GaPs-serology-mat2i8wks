@@ -54,7 +54,7 @@ if (!exists("shared_utils", mode = "function")) {
 }
 source(shared_utils("config/endpoints.R"),           local = FALSE, encoding = "UTF-8")
 source(shared_utils("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C1_serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_C1_serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
 
 data_raw <- load_serology_data(shared_utils("data/c_set.RData"))
 ```

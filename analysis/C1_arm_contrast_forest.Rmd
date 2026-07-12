@@ -1,7 +1,7 @@
 ```{r inf2-setup, include=FALSE}
 # CHILD document. When included from a master it assumes data_raw, nt, and
 # shared_utils() already exist and that config/endpoints.R +
-# R/C1_serology_helpers.R are sourced. The guarded block below also lets it
+# R/C1_C1_serology_helpers.R are sourced. The guarded block below also lets it
 # knit STANDALONE (mirrors results_B.Rmd / cord_to_infmon2's bootstrap).
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
 
@@ -16,7 +16,7 @@ if (!exists("shared_utils", mode = "function")) {
 }
 if (!exists("data_raw")) {
   source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
-  source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+  source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
   data_raw <- load_serology_data(shared_utils("data/c_set.RData"))
   if (exists("verify_predictor_casing", mode = "function")) verify_predictor_casing(data_raw)
 }

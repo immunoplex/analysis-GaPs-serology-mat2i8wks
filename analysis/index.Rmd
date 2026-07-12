@@ -1,0 +1,49 @@
+---
+title: "GaPs Systems Serology — Analysis Pipeline"
+site: workflowr::wflow_site
+output:
+  workflowr::wflow_html:
+    toc: true
+---
+## Overview
+
+This repository contains the analysis code for:
+
+> **Pertussis immunisation in pregnancy shapes the functional antibody landscape
+> before primary infant pertussis vaccination**
+> Saso, Zens et al. (in preparation)
+
+The analysis uses longitudinal systems serology from up to 312 mother–infant
+dyads in the [Gambian Pertussis Study (GaPs)](https://doi.org/10.1016/s1473-3099(25)00072-6),
+a randomised 2×2 maternal–infant vaccine trial.
+
+## Data
+
+Data are not included in this repository. See `data/README.md` for the full
+schema and data access information.
+
+## Pipeline
+
+The analysis comprises 8 prespecified components plus a cross-validated
+block-ladder summary (CK), matching the manuscript sections exactly.
+
+| Component | Manuscript section | Topic |
+|-----------|-------------------|-------|
+| [C0](C0_data_harmonisation.html) | Methods | Data harmonisation & IgG standardisation |
+| [C1](C1_arm_contrast.html) | Results A | Maternal arm contrast at 8-week baseline |
+| [C2](C2_antibody_chain.html) | Results B | Antibody chain: production → transfer → decay |
+| [C3](C3_responder_phenotype.html) | Results C | Maternal responder phenotype & predictors |
+| [C4a](C4_forward_prediction_PTNA.html) | Results D–E | Forward prediction → PTNA |
+| [C4b](C4_forward_prediction_SBA.html) | Results D–E | Forward prediction → SBA |
+| [C4c](C4_forward_prediction_WTIgG.html) | Results D–E | Forward prediction → WT IgG binding |
+| [C4d](C4_interaction_deming.html) | Results E | Arm interaction & Deming EIV regression | prediction: maternal IgG → infant function |
+| [C5](C5_concurrent_models.html) | Results F | Concurrent infant models |
+| [C6](C6_responder_in_model.html) | Results J | Responder phenotype as predictor of infant function |
+| [C7](C7_effector_pathway.html) | Results H | Effector pathway: IgG1 → FcγR → ADCD → SBA |
+| [C8](C8_subclass_balance.html) | Results I | Subclass balance & complement mediation |
+| [CK](CK_block_ladder.html) | Results K | Cross-validated block-ladder decomposition |
+
+## Execution order
+
+Components must be run in this order due to data dependencies:
+C0 → C1 → C2 → C3 → C4a/C4b/C4c (parallel) → C4d → C5 → C6 → C7 → C8 → CK

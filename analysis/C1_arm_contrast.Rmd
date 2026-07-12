@@ -11,7 +11,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 suppressPackageStartupMessages({
-  library(data.table)    # used inside C0_connection_transform.R
+  library(data.table)    # used inside C0_C0_connection_transform.R
   library(tidyverse)     # dplyr, ggplot2, forcats, tidyr, stringr, tibble
 })
 have_ft <- requireNamespace("flextable", quietly = TRUE) &&
@@ -38,8 +38,8 @@ if (!exists("shared_utils", mode = "function")) {
 }
 
 source(shared_utils("config/endpoints.R"),      local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C1_serology_helpers.R"),     local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_C1_serology_helpers.R"),     local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C0_C0_connection_transform.R"), local = FALSE, encoding = "UTF-8")
 ```
 
 ```{r engines}

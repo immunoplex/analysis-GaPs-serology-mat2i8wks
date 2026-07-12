@@ -33,8 +33,8 @@ suppressPackageStartupMessages({ library(dplyr); library(tidyr); library(ggplot2
 }
 if (!exists("shared_utils")) source(.stub("R/shared_utils.R"))
 source(shared_utils("config/endpoints.R"),            encoding = "UTF-8")
-source(shared_utils("R/C1_serology_helpers.R"),          encoding = "UTF-8")
-source(shared_utils("R/C8_subclass_balance_helpers.R"),  encoding = "UTF-8")
+source(shared_utils("R/C1_C1_serology_helpers.R"),          encoding = "UTF-8")
+source(shared_utils("R/C8_C8_subclass_balance_helpers.R"),  encoding = "UTF-8")
 
 cfg      <- get_endpoint_config(params$endpoint)
 data_raw <- load_serology_data(here::here("./data/d_set.RData"), object_name = "ebaa_extra2")

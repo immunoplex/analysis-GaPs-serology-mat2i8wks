@@ -14,6 +14,6 @@ library(papeR)
 library(foreach)
 library(stringr)
 
-source(here::here("./code/C0_db_load_functions.R"))
-source(here::here("./code/C0_build_interval_days.R"))
+source(here::here("./code/C0_C0_db_load_functions.R"))
+source(here::here("./code/C0_C0_build_interval_days.R"))
 save(INTERVAL_DAYS_BY_SUBJECT, file = here::here("./data/INTERVAL_DAYS_BY_SUBJECT.RData"))

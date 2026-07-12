@@ -7,7 +7,7 @@
 # The maternal Low/High classification is the SAME construct as Phase 07 Stage A
 # (Blom within-(feature,visit) z of the maternal binding features across the two
 # maternal visits -> mean responder score -> PAM k=2). This file reuses the
-# Phase 07 engine in R/C4_within_visit_helpers.R when it is on the search path, and
+# Phase 07 engine in R/C4_C4_within_visit_helpers.R when it is on the search path, and
 # otherwise reconstructs the identical score with a self-contained fallback.
 #
 # All functions take inputs as explicit arguments. Stratification is on the
@@ -104,9 +104,9 @@ subject_maternal_arm <- function(data_raw, arm_col = "arm_name") {
 
 # ---- 1. small stats utilities ----------------------------------------------
 
-# pvalue_to_label lives in R/C1_serology_helpers.R (the shared utility). It is
+# pvalue_to_label lives in R/C1_C1_serology_helpers.R (the shared utility). It is
 # defined here ONLY as a fallback for the rare case this engine is sourced
-# without the shared helpers; when C1_serology_helpers.R is present (the normal
+# without the shared helpers; when C1_C1_serology_helpers.R is present (the normal
 # pipeline), its definition is used and this one does not clobber it.
 if (!exists("pvalue_to_label", mode = "function"))
   pvalue_to_label <- function(p)

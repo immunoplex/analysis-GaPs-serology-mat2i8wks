@@ -1,0 +1,39 @@
+name: "GaPs Systems Serology Pipeline"
+output_dir: docs
+navbar:
+  title: "GaPs Mat→Infant Serology"
+  left:
+    - text: "Overview"
+      href: index.html
+    - text: "Data & Methods"
+      menu:
+        - text: "C0 · Data Harmonisation & IgG Standardisation"
+          href: C0_data_harmonisation.html
+    - text: "Results"
+      menu:
+        - text: "C1 · Arm Contrast (Results A)"
+          href: C1_arm_contrast.html
+        - text: "C2 · Antibody Chain (Results B)"
+          href: C2_antibody_chain.html
+        - text: "C3 · Responder Phenotype (Results C)"
+          href: C3_responder_phenotype.html
+        - text: "─── Forward Prediction (Results D–E) ───"
+          href: "#"
+        - text: "C4 · PTNA prediction"
+          href: C4_forward_prediction_PTNA.html
+        - text: "C4 · SBA prediction"
+          href: C4_forward_prediction_SBA.html
+        - text: "C4 · WT IgG prediction"
+          href: C4_forward_prediction_WTIgG.html
+        - text: "C4 · Interaction & Deming"
+          href: C4_interaction_deming.html
+        - text: "C5 · Concurrent Models (Results F)"
+          href: C5_concurrent_models.html
+        - text: "C6 · Responder in Model (Results J)"
+          href: C6_responder_in_model.html
+        - text: "C7 · Effector Pathway (Results H)"
+          href: C7_effector_pathway.html
+        - text: "C8 · Subclass Balance (Results I)"
+          href: C8_subclass_balance.html
+        - text: "CK · Block Ladder (Results K)"
+          href: CK_block_ladder.html

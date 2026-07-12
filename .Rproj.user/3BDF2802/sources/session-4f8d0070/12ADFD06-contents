@@ -241,6 +241,11 @@ path_map <- c(
   "parts/05_effector_functions\\.Rmd"                = "parts/C7_step14_effector_functions.Rmd",
   
   # config renames (none needed — filenames unchanged)
+  # C4 monolithic renames
+  "predict_M02_PTNA_from_maternal_v2"   = "C4_forward_prediction_PTNA",
+  "predict_M02_SBA_from_maternal_v2"    = "C4_forward_prediction_SBA",
+  "predict_M02_WT_IgG_from_maternal_v2" = "C4_forward_prediction_WTIgG",
+  "interaction_and_deming"              = "C4_interaction_deming",
   
   # code renames
   "build_interval_days"           = "C0_build_interval_days",

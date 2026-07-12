@@ -44,7 +44,7 @@
 # ---------------------------------------------------------------------
 # !! CASING ASSUMPTION — VERIFY, DO NOT ASSUME !!
 # This file names features in mixed case (PT_IgG, PT_IgG1, FcgR2a), which
-# is what the WORKING pipeline (endpoints.R + C1_serology_helpers.R) uses and
+# is what the WORKING pipeline (endpoints.R + C1_C1_serology_helpers.R) uses and
 # what the rendered analyses produced. The chain/concurrent paths match
 # feature names CASE-SENSITIVELY against levels(data$feature); a mismatch
 # silently drops the feature. Call verify_predictor_casing(data_raw)

@@ -34,26 +34,22 @@ has_deming  <- requireNamespace("deming",  quietly = TRUE)   # optional cross-ch
 ```{r bootstrap, include=FALSE}
 ## ---- self-locating resolver (same pattern as the other analysis files) ----
 library(here)
-# ---- shared path resolver: single definition in R/shared_utils.R ----
-if (!exists("shared_utils", mode = "function")) {
-  .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R",
-                "analysis/R/shared_utils.R")
+shared_utils <- function(rel, optional = FALSE) {
+  cand <- character(0)
   if (requireNamespace("here", quietly = TRUE))
-    .ff_cand <- c(here::here("R/shared_utils.R"),
-                  here::here("analysis/R/shared_utils.R"), .ff_cand)
-  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+    cand <- c(cand, here::here(rel), here::here("analysis", rel))
+  rmd_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
                       error = function(e) NA_character_)
-  if (!is.na(.ff_rmd))
-    .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"),
-                  file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand)
-  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
-  if (!length(.ff_hit))
-    stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.")
-  source(.ff_hit[1], local = FALSE)
-  rm(.ff_cand, .ff_rmd, .ff_hit)
+  if (!is.na(rmd_dir)) cand <- c(cand, file.path(rmd_dir, rel),
+                                 file.path(dirname(rmd_dir), rel))
+  cand <- unique(c(cand, file.path(getwd(), rel), rel))
+  hit  <- cand[file.exists(cand)]
+  if (length(hit)) return(normalizePath(hit[1], winslash = "/", mustWork = FALSE))
+  if (optional) return(NULL)
+  stop("Could not locate '", rel, "'.", call. = FALSE)
 }
 source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
 
 data_raw <- load_serology_data(shared_utils("data/c_set.RData"))   # applies VISIT_RECODE
 clin     <- load_clinical_data(shared_utils("data/clin_assess.RData"))
@@ -95,9 +91,6 @@ PAIRS <- list(
   list(key="WT_IgG", outcome="WHOLE_WT_IgG", antigen="PRN", fn="whole-cell IgG binding")
 )
 PRED_ANALYTE <- "IgG1"   # matched-subclass predictor (change to "IgG" to reconcile with table-2 totals)
-PRED_ANALYTES <- c("IgG", "IgG1")   # requirement #6: compare total IgG vs IgG1
-                                    # side-by-side in the slope tables (IgG+IgG1
-                                    # joint model lives in 06 Family 4).
 
 ## case-insensitive feature resolver (guards the IgG/IGG casing issue)
 .avail <- as.character(unique(data_raw$feature))
@@ -159,17 +152,14 @@ fit_interaction <- function(df) {
              adjR2 = round(summary(m)$adj.r.squared, 3))
 }
 
-run_interaction_set <- function(pred_visit, analytes = PRED_ANALYTES) {
-  rows <- list()
-  for (an in analytes) for (p in PAIRS) {
-    df <- build_pair(p$outcome, paste0(p$antigen, "_", an), pred_visit)
-    if (is.null(df)) next
+run_interaction_set <- function(pred_visit) {
+  rows <- lapply(PAIRS, function(p) {
+    df <- build_pair(p$outcome, paste0(p$antigen, "_", PRED_ANALYTE), pred_visit)
+    if (is.null(df)) return(NULL)
     f <- fit_interaction(df)
-    if (is.null(f)) next
-    rows[[length(rows) + 1]] <- cbind(
-      Outcome   = p$fn,
-      Predictor = paste0(p$antigen, " ", an, " @ ", pred_visit), f)
-  }
+    if (is.null(f)) return(NULL)
+    cbind(Outcome = p$fn, Predictor = paste0(p$antigen, " ", PRED_ANALYTE, " @ ", pred_visit), f)
+  })
   do.call(rbind, rows)
 }
 ```
@@ -182,7 +172,7 @@ kable(int_mat, row.names = FALSE,
       col.names = c("Infant outcome", "Predictor", "n",
                     "slope (TT)", "slope (TdaP)", "Δslope (TdaP−TT)",
                     "95% CI low", "95% CI high", "p (interaction)", "adj R²"),
-      caption = "Table 1a. Standardised maternal-group × maternal-delivery IgG / IgG1 interaction. Slopes are standardised (per SD of antibody, in SD of function). A significant Δslope means the maternal antibody–infant function slope differs by maternal vaccine group; a non-significant Δslope means the section-D R² gap is better explained by predictor range / residual variance than by a slope difference.")
+      caption = "Table 1a. Standardised maternal-group × maternal-delivery IgG1 interaction. Slopes are standardised (per SD of antibody, in SD of function). A significant Δslope means the maternal antibody–infant function slope differs by maternal vaccine group; a non-significant Δslope means the section-D R² gap is better explained by predictor range / residual variance than by a slope difference.")
 ```
 
 ## 1b. Concurrent infant antibody predictor — addresses section E
@@ -193,7 +183,7 @@ kable(int_inf, row.names = FALSE,
       col.names = c("Infant outcome", "Predictor", "n",
                     "slope (TT)", "slope (TdaP)", "Δslope (TdaP−TT)",
                     "95% CI low", "95% CI high", "p (interaction)", "adj R²"),
-      caption = "Table 1b. Standardised maternal-group × concurrent (InfMon2) infant IgG / IgG1 interaction — whether the same-sample antibody→function slope in the infant differs by maternal background.")
+      caption = "Table 1b. Standardised maternal-group × concurrent (InfMon2) infant IgG1 interaction — whether the same-sample antibody→function slope in the infant differs by maternal background.")
 ```
 
 ```{r int-plot, fig.width=9, fig.height=3.4}
@@ -250,15 +240,15 @@ deming_by_arm <- function(df, lambda = 1, B = 2000, seed = 1) {
        p_diff = round(2 * min(mean(diffs <= 0, na.rm = TRUE), mean(diffs >= 0, na.rm = TRUE)), 4))
 }
 
-run_deming_set <- function(pred_visit, analytes = PRED_ANALYTES, plot_analyte = "IgG1") {
+run_deming_set <- function(pred_visit) {
   res <- list(); rows <- list()
-  for (an in analytes) for (p in PAIRS) {
-    df <- build_pair(p$outcome, paste0(p$antigen, "_", an), pred_visit)
+  for (p in PAIRS) {
+    df <- build_pair(p$outcome, paste0(p$antigen, "_", PRED_ANALYTE), pred_visit)
     if (is.null(df)) next
     r <- deming_by_arm(df, lambda = params$lambda, B = params$boot_B, seed = params$seed)
-    if (identical(an, plot_analyte)) res[[p$key]] <- list(df = df, r = r, p = p)
-    rows[[paste(p$key, an)]] <- data.frame(
-      Outcome = p$fn, Predictor = paste0(p$antigen, " ", an, " @ ", pred_visit),
+    res[[p$key]] <- list(df = df, r = r, p = p)
+    rows[[p$key]] <- data.frame(
+      Outcome = p$fn, Predictor = paste0(p$antigen, " ", PRED_ANALYTE, " @ ", pred_visit),
       n_TdaP = unname(r$obs$TdaP["n"]), n_TT = unname(r$obs$TT["n"]),
       slope_TdaP = round(unname(r$obs$TdaP["slope"]), 3),
       ci_TdaP = paste0("[", r$ci[[1]][1], ", ", r$ci[[1]][2], "]"),
@@ -302,7 +292,7 @@ kable(dem_inf$table, row.names = FALSE,
       col.names = c("Outcome", "Predictor", "n (TdaP)", "n (TT)",
                     "slope TdaP", "95% CI", "slope TT", "95% CI",
                     "Δslope", "95% CI", "p (diff)"),
-      caption = sprintf("Table 2a. Deming regression (λ = %s) of concurrent infant function on matched infant IgG and IgG1, fitted within each maternal arm. Δslope and its bootstrap CI/p test whether the error-corrected antibody→function slope differs by maternal background.", params$lambda))
+      caption = sprintf("Table 2a. Deming regression (λ = %s) of concurrent infant function on matched infant IgG1, fitted within each maternal arm. Δslope and its bootstrap CI/p test whether the error-corrected antibody→function slope differs by maternal background.", params$lambda))
 deming_plot(dem_inf, "InfMon2")
 ```
 
