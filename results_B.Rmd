@@ -1,0 +1,345 @@
+---
+title: "GaPs Results B: the maternal–infant antibody pathway (Figure 3 + supplemental table)"
+subtitle: "Within-subject production, placental transfer, and postnatal decay — pooled and by maternal arm"
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:
+    toc: true
+    toc_depth: 2
+    fig_width: 11
+    fig_height: 4.3
+params:
+  arm: "ALL"          # "ALL" (pooled, matches the rendered transition analyses) or "TdaP" / "TT"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2); library(knitr)
+})
+```
+
+```{r bootstrap, include=FALSE}
+## ---- self-locating resolver (same pattern as the other analysis files) ----
+library(here)
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+source(find_proj_file("config/endpoints.R"),           local = FALSE, encoding = "UTF-8")
+source(find_proj_file("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
+
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))   # applies VISIT_RECODE
+
+## Maternal-arm handling. The pathway figures and the consolidated findings below
+## are rendered for the pooled cohort AND for each maternal arm (Figures 3, 3-TdaP,
+## 3-TT; Supplemental Table S1), and every quoted number is computed at knit time
+## from the data — there are no values carried over from earlier runs. Keep the
+## full cohort in data_full for the per-arm panels; the optional params$arm filter
+## (kept for backward compatibility) only restricts data_raw / the legacy Table 1.
+data_full <- data_raw
+if (!identical(params$arm, "ALL")) {
+  data_raw <- dplyr::filter(data_raw, as.character(arm_name) == params$arm)
+}
+
+ACCENT   <- "#8A1538"
+# Five-series palette (total IgG + four subclasses) for the expanded Figure 3.
+PATH_PAL    <- c("Total IgG" = "#8A1538", "IgG1" = "#2C7A7B", "IgG2" = "#C9882B",
+                 "IgG3" = "#3B6BA5", "IgG4" = "#7B5EA7")
+PATH_SERIES <- c("Total IgG", "IgG1", "IgG2", "IgG3", "IgG4")
+WT_ROW      <- "WT_IgG"   # whole-cell IgG decay row, pinned to the bottom of Fig 3
+ANTI6  <- ANTIGEN_ORDER   # canonical order from config/endpoints.R
+```
+
+# A. Study population
+
+```{r tab1-demographics}
+clin1      <- load_clinical_data(find_proj_file("data/clin_assess.RData"))
+arm_lookup <- dplyr::distinct(data_full, subject_accession, arm_name)
+demo_tab   <- demographics_by_arm(clin1, arm_lookup)
+kable(demo_tab,
+      caption = "Table 1. Study-population characteristics, overall and by maternal arm (Tdap-IPV vs TT). Continuous variables: median [IQR]; categorical: n (%).",
+      align = c("l", rep("r", ncol(demo_tab) - 1)))
+```
+
+# B. The maternal–infant antibody pathway
+
+We trace three within-subject transitions with the shared `paired_change()` /
+`summarise_paired()` machinery (delta = log10 at the later visit − log10 at the
+earlier visit; Wilcoxon signed-rank vs 0):
+
+* **Production** PregEarly → MatBirth — antibody made during pregnancy
+* **Transfer** MatBirth → CordBlood — placental transfer to the infant
+* **Decay** CordBlood → InfMon2 — postnatal decay of the maternal pool
+
+```{r transitions, include=FALSE}
+MIN_PAIRED <- 10L
+TRANSITIONS <- list(
+  c(from = "PregEarly", to = "MatBirth",  label = "Maternal production\n(PregEarly → delivery)"),
+  c(from = "MatBirth",  to = "CordBlood", label = "Placental transfer\n(delivery → cord)"),
+  c(from = "CordBlood", to = "InfMon2",   label = "Postnatal decay\n(cord → 2 months)")
+)
+tr_levels <- vapply(TRANSITIONS, `[`, "", "label")
+
+# One transition for an arbitrary subject subset `dat`, so the same code makes
+# the pooled figure and the per-arm figures.
+build_transition <- function(tr, dat) {
+  paired <- paired_change(dat, tr["from"], tr["to"])
+  summarise_paired(paired, min_n = MIN_PAIRED) %>%
+    left_join(distinct(paired, feature, antigen, analyte), by = "feature") %>%
+    mutate(transition = factor(tr["label"], levels = tr_levels),
+           from = tr["from"], to = tr["to"])
+}
+build_all_tr <- function(dat) bind_rows(lapply(TRANSITIONS, build_transition, dat = dat))
+
+# y-axis order: antigens top->bottom = PT, FHA, PRN, FIM, TT, DT (ANTIGEN_ORDER),
+# with the whole-cell IgG (WT_IgG) decay row pinned at the very bottom. Factor
+# levels run bottom->top, so WT_IgG is first.
+y_levels <- c(WT_ROW, rev(ANTI6))
+
+# Symmetric within-band offsets so the five series never collide between rows.
+yoff_map <- c("Total IgG" = 0.30, "IgG1" = 0.15, "IgG2" = 0.00,
+              "IgG3" = -0.15, "IgG4" = -0.30)
+
+# Build the plot frame for one subject subset. Includes total IgG + all four
+# subclasses for the six antigens, plus the whole-cell IgG decay row (cord ->
+# InfMon2 only; WT_IgG has no subclasses and is not measured pre-cord). FIM
+# subclasses are absent before InfMon2, so the FIM row carries only total IgG in
+# the production/transfer panels — handled automatically by data availability.
+build_fig_df <- function(dat) {
+  at <- build_all_tr(dat)
+  ag <- at %>%
+    filter(antigen %in% ANTI6,
+           analyte %in% c("IgG", "IgG1", "IgG2", "IgG3", "IgG4")) %>%
+    mutate(row_label = factor(antigen, levels = y_levels),
+           series    = factor(ifelse(analyte == "IgG", "Total IgG", analyte),
+                              levels = PATH_SERIES))
+  wc <- at %>%
+    filter(feature == "WHOLE_WT_IgG", from == "CordBlood") %>%
+    mutate(row_label = factor(WT_ROW, levels = y_levels),
+           series    = factor("Total IgG", levels = PATH_SERIES))
+  bind_rows(ag, wc) %>%
+    mutate(yoff = unname(yoff_map[as.character(series)]),
+           ypos = as.numeric(row_label) + yoff,
+           declabel = ifelse(series == "Total IgG" & from == "CordBlood",
+                             paste0(round(pct_dec), "%↓"), NA_character_))
+}
+
+# Figure renderer shared by the pooled and per-arm panels.
+plot_pathway <- function(fig_df, subtitle = NULL) {
+  ggplot(fig_df, aes(x = median_delta, y = ypos,
+                     colour = series, shape = series, fill = series)) +
+    geom_vline(xintercept = 0, colour = "grey20", linewidth = 0.4) +
+    geom_segment(aes(x = 0, xend = median_delta, yend = ypos),
+                 linewidth = 0.7, alpha = 0.30) +
+    geom_point(size = 2.3, stroke = 0.9) +
+    geom_text(aes(label = declabel), na.rm = TRUE, nudge_y = 0.17, hjust = 1.05,
+              size = 2.2, colour = ACCENT, show.legend = FALSE) +
+    facet_wrap(~ transition, nrow = 1) +
+    scale_y_continuous(breaks = seq_along(y_levels), labels = y_levels,
+                       name = "Antigen") +
+    scale_colour_manual(values = PATH_PAL, drop = FALSE) +
+    scale_fill_manual(values = c("Total IgG" = unname(PATH_PAL["Total IgG"]),
+                                 "IgG1" = "white", "IgG2" = "white",
+                                 "IgG3" = "white", "IgG4" = "white"), drop = FALSE) +
+    scale_shape_manual(values = c("Total IgG" = 21, "IgG1" = 22, "IgG2" = 23,
+                                  "IgG3" = 24, "IgG4" = 25), drop = FALSE) +
+    labs(x = expression("median " * Delta * "log"[10] * " (to − from)"),
+         colour = NULL, shape = NULL, fill = NULL, subtitle = subtitle,
+         title = "Production loads the antigen-specific pool; transfer is near-complete; decay dominates") +
+    theme_minimal(base_size = 11) +
+    theme(legend.position = "bottom",
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor = element_blank(),
+          strip.text = element_text(face = "bold", colour = ACCENT),
+          plot.title = element_text(size = 10, face = "bold"))
+}
+
+# Transition table frame (respects params$arm framing).
+all_tr <- build_all_tr(data_raw)
+```
+
+## Figure 3 — maternal–infant antibody pathway (expanded: total IgG + IgG1–IgG4)
+
+```{r fig3-pooled, fig.width=11, fig.height=5.4}
+plot_pathway(build_fig_df(data_full), subtitle = "All mothers (pooled)")
+```
+
+*Each point is a per-feature median within-subject change (Δlog₁₀ = later −
+earlier visit). Series: total IgG (filled circle) and IgG1–IgG4 (open
+square/diamond/triangles), offset within each antigen band. Rows are the six
+vaccine antigens in canonical order (PT, FHA, PRN, FIM, TT, DT) plus a whole-cell
+IgG (WT_IgG) decay row at the bottom (cord→2 months only). Percentages on the
+total-IgG points in the decay panel are the proportion of infants declining. FIM
+subclasses are not measured before InfMon2, so the FIM row shows only total IgG in
+the production and transfer panels. The pertussis-toxin IgG3 point in the decay
+panel sits near the assay floor (see analyst note) and is not subclass persistence.*
+
+### Figure 3 — Tdap-IPV mothers
+
+```{r fig3-tdap, fig.width=11, fig.height=5.4}
+plot_pathway(build_fig_df(dplyr::filter(data_full, as.character(arm_name) == "TdaP")),
+             subtitle = "Tdap-IPV maternal arm")
+```
+
+### Figure 3 — TT mothers
+
+```{r fig3-tt, fig.width=11, fig.height=5.4}
+plot_pathway(build_fig_df(dplyr::filter(data_full, as.character(arm_name) == "TT")),
+             subtitle = "Tetanus-toxoid (TT) maternal arm")
+```
+
+*Per-arm panels resolve the toxoid question directly: both maternal vaccines
+contain tetanus toxoid, so TT-antigen IgG production should rise in both arms
+(subject to a pre-existing-immunity ceiling), whereas diphtheria toxoid is in the
+Tdap-IPV arm only, so DT-antigen IgG production should rise mainly after Tdap-IPV.
+Read the TT and DT rows of the production (left) panel in each arm figure.*
+
+## Table 1 — transition summary (per antigen, total IgG and IgG1)
+
+```{r tab1}
+tab1 <- all_tr %>%
+  filter(antigen %in% ANTI6, analyte %in% c("IgG", "IgG1")) %>%
+  transmute(Transition = sub("\n.*", "", as.character(transition)),
+            Antigen = antigen, Analyte = ifelse(analyte == "IgG", "Total IgG", analyte),
+            n = n_paired, `% increase` = pct_inc, `% decrease` = pct_dec,
+            `median Δlog10` = median_delta, `p (signed-rank)` = p_signrank,
+            Direction = direction) %>%
+  arrange(match(Transition, c("Maternal production", "Placental transfer", "Postnatal decay")),
+          match(Antigen, ANTI6), Analyte)
+kable(tab1, caption = "Table 1. Within-subject paired change for each antigen across the three pathway transitions.")
+```
+
+```{r decay-subclass, results='asis'}
+dec <- build_transition(TRANSITIONS[[3]], data_full)
+igg1_med <- dec %>% filter(analyte == "IgG1", antigen %in% ANTI6) %>%
+  summarise(m = median(median_delta)) %>% pull(m)
+# Subclass (IgG1-4) antigen features that did NOT decline (median delta >= 0): listed dynamically.
+nondecl <- dec %>%
+  filter(antigen %in% ANTI6, analyte %in% c("IgG1","IgG2","IgG3","IgG4"), median_delta >= 0) %>%
+  arrange(desc(median_delta)) %>%
+  mutate(lab = sprintf("%s %s (%+.2f)", antigen, analyte, median_delta))
+nd_txt <- if (nrow(nondecl)) paste(utils::head(nondecl$lab, 8), collapse = "; ") else "none"
+cat(sprintf(paste0("\n**Decay detail.** Across antigen-specific measurements the median IgG1 change was ",
+                   "%+.2f log10 (net decay). The subclass features that did **not** decline (median Δlog10 ≥ 0) ",
+                   "were: %s — these sit near the lower assay range and are interpreted cautiously as a floor ",
+                   "effect, not as subclass persistence or infant antibody production (which cannot occur before ",
+                   "the 2-month primary immunisation).\n\n"),
+            igg1_med, nd_txt))
+```
+
+## Consolidated pathway findings (computed by arm)
+
+```{r consolidate-calc, include=FALSE}
+# Build the full pathway frame once: pooled + each maternal arm. Reuses the same
+# build_all_tr() machinery as the figures, so the table and prose match the panels.
+sup <- dplyr::bind_rows(
+  build_all_tr(data_full)                                                  %>% dplyr::mutate(arm = "Pooled"),
+  build_all_tr(dplyr::filter(data_full, as.character(arm_name) == "TdaP")) %>% dplyr::mutate(arm = "TdaP"),
+  build_all_tr(dplyr::filter(data_full, as.character(arm_name) == "TT"))   %>% dplyr::mutate(arm = "TT")) %>%
+  dplyr::mutate(arm = factor(arm, levels = c("Pooled", "TdaP", "TT")),
+                tshort = sub("\n.*", "", as.character(transition)))
+
+PROD <- "Maternal production"; XFER <- "Placental transfer"; DECAY <- "Postnatal decay"
+fmtd <- function(x) ifelse(is.na(x), "n/a", sprintf("%+.3f", x))
+
+# median of the per-feature median-deltas over the six antigens, for a (transition, analyte, arm) cell
+gmed <- function(tr, an, a) {
+  v <- sup$median_delta[sup$tshort == tr & sup$analyte == an & sup$arm == a & sup$antigen %in% ANTI6]
+  if (!length(v)) NA_real_ else round(stats::median(v), 3)
+}
+# single antigen production delta (total IgG) by arm — for the toxoid check
+gtox <- function(ant, a) {
+  v <- sup$median_delta[sup$tshort == PROD & sup$analyte == "IgG" & sup$arm == a & sup$antigen == ant]
+  if (!length(v)) NA_real_ else round(v[1], 3)
+}
+```
+
+```{r consolidate-narrative, results='asis'}
+cat(sprintf(paste0(
+  "**Production (PregEarly \u2192 delivery).** Median \u0394log10 across the six antigens for IgG1: ",
+  "pooled %s, TdaP %s, TT %s; for total IgG: pooled %s, TdaP %s, TT %s. The rise concentrates in the ",
+  "TdaP arm and in total IgG / IgG1, the expected signature of a protein-antigen booster. ",
+  "Toxoid check (total-IgG production): tetanus TdaP %s / TT %s; diphtheria TdaP %s / TT %s \u2014 tetanus ",
+  "is in both vaccines (it can rise in both, subject to a pre-existing-immunity ceiling), whereas ",
+  "diphtheria rises mainly after Tdap-IPV.\n\n"),
+  fmtd(gmed(PROD,"IgG1","Pooled")), fmtd(gmed(PROD,"IgG1","TdaP")), fmtd(gmed(PROD,"IgG1","TT")),
+  fmtd(gmed(PROD,"IgG","Pooled")),  fmtd(gmed(PROD,"IgG","TdaP")),  fmtd(gmed(PROD,"IgG","TT")),
+  fmtd(gtox("TT","TdaP")), fmtd(gtox("TT","TT")), fmtd(gtox("DT","TdaP")), fmtd(gtox("DT","TT"))))
+
+cat(sprintf(paste0(
+  "**Transfer (delivery \u2192 cord).** IgG1 median \u0394 pooled %s (cord \u2265 maternal) versus IgG2 %s and ",
+  "IgG3 %s (cord \u2264 maternal) \u2014 the FcRn subclass hierarchy. Per-arm IgG1 transfer: TdaP %s, TT %s, ",
+  "close together, consistent with an Fc-driven mechanism that does not depend on the vaccine received.\n\n"),
+  fmtd(gmed(XFER,"IgG1","Pooled")), fmtd(gmed(XFER,"IgG2","Pooled")), fmtd(gmed(XFER,"IgG3","Pooled")),
+  fmtd(gmed(XFER,"IgG1","TdaP")), fmtd(gmed(XFER,"IgG1","TT"))))
+
+cat(sprintf(paste0(
+  "**Decay (cord \u2192 2 months).** Total IgG median \u0394 pooled %s and IgG1 %s \u2014 net decay of passively ",
+  "transferred antibody. Per-arm IgG1 decay: TdaP %s, TT %s, running in parallel, as catabolism is set ",
+  "by the antibody rather than the vaccine: the vaccine sets the cord starting level, not the slope of ",
+  "waning. Total IgG (RIVM ELISA) and IgG1 (bead array) agree, anchoring the decay signal as real.\n\n"),
+  fmtd(gmed(DECAY,"IgG","Pooled")), fmtd(gmed(DECAY,"IgG1","Pooled")),
+  fmtd(gmed(DECAY,"IgG1","TdaP")), fmtd(gmed(DECAY,"IgG1","TT"))))
+```
+
+## Supplemental Table S1 — full pathway change (all series × antigen × transition × arm)
+
+```{r tabS1}
+tabS1 <- sup %>%
+  dplyr::filter(antigen %in% ANTI6, analyte %in% c("IgG", "IgG1", "IgG2", "IgG3", "IgG4")) %>%
+  dplyr::transmute(
+    Transition = factor(tshort, levels = c(PROD, XFER, DECAY)),
+    Antigen    = factor(antigen, levels = ANTI6),
+    Series     = factor(ifelse(analyte == "IgG", "Total IgG", analyte),
+                        levels = c("Total IgG", "IgG1", "IgG2", "IgG3", "IgG4")),
+    Arm = arm, n = n_paired,
+    `% inc` = pct_inc, `% dec` = pct_dec,
+    `median Δlog10` = median_delta, `p (signed-rank)` = p_signrank, Direction = direction) %>%
+  dplyr::arrange(Transition, Antigen, Series, Arm)
+kable(tabS1,
+  caption = paste0("Supplemental Table S1. Full within-subject paired change behind Figure 3: each ",
+    "vaccine antigen (PT, FHA, PRN, FIM, TT, DT) \u00d7 series (total IgG and IgG1\u2013IgG4) \u00d7 transition ",
+    "(production, transfer, decay) \u00d7 maternal arm (Pooled, TdaP, TT). delta = log10(later) \u2212 ",
+    "log10(earlier); positive = increase. Rows are absent where a series was not measured at both ",
+    "visits (e.g. FIM subclasses before InfMon2) or fell below the n = 10 paired minimum within an arm."))
+```
+
+# Notes (Part B)
+
+* Section B (the pathway figure, Table 1, the consolidated by-arm findings, and Supplemental
+  Table S1) is computed here from `c_set.RData`; every quoted number is generated at knit time,
+  with no values carried over from earlier runs.
+* The antibody **correlates of infant function** (former sections C–F) now live in a separate
+  document, `results_C_to_F.Rmd`, which also lays out the methodological strategy for the
+  variance structure of the infant whole-cell (WHOLE_WT_IgG) outcome at two months.
+* Pre-existing caption note: the study-population table (section A) and the transition-summary
+  table (section B) are both labelled "Table 1" in the source; renumber for the manuscript if a
+  single running sequence is required.
+
+```{r sessioninfo}
+sessionInfo()
+```

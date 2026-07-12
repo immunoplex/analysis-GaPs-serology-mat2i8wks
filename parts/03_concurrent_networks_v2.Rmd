@@ -1,0 +1,491 @@
+```{r conc-setup, include=FALSE}
+# =============================================================================
+# CHILD document — CONCURRENT WITHIN-VISIT ARCHITECTURE (v2, expanded + staged)
+# -----------------------------------------------------------------------------
+# Assumes cfg, data_raw, nt, find_proj_file() exist (created by the driver).
+#
+# WHAT CHANGED vs v1
+#   1. Feature set expanded beyond PT/FHA/PRN subclasses:
+#        - FIM antigen (total + subclasses)
+#        - FcγR binding: FcgR2a, FcgR3b   (all 6 antigens)
+#        - Effector functions: ADCD       (all 6 antigens)
+#                              ADCP, ADNP  (PT/PRN/DT/TT only — FHA & FIM absent)
+#      Vocabulary is built from the ACTUAL analyte casing in the data
+#      (ADCD/ADCP/ADNP upper-case, FcgR2a/FcgR3b mixed-case) and then filtered
+#      to features actually present, so a coverage/casing gap is reported, not
+#      silently dropped by complete-case deletion.
+#   2. DATA MODE: raw (log_assay_value) only for now. The two-mode machinery
+#      (raw + total-IgG-standardised) is retained but igg_std is DEFERRED:
+#      DATA_MODES defaults to "raw", so standardize_wide() is never called.
+#      To re-enable later, set DATA_MODES <- c("raw","igg_std") and finalise
+#      the standardize_wide() definition.
+#   3. Visit restricted to the infant 8-week timepoint (InfMon2) only.
+#   4. Staged execution with console/terminal logging: cheap layers
+#      (regression / relimp / ratio / mixed model) run first; expensive layers
+#      (GGM networks, then NCT permutations) run last and are individually
+#      toggleable, so a fast pass is a one-line change.
+# =============================================================================
+set.seed(20240614)
+
+# ---- control knobs (a driver may pre-define any of these to override) -------
+if (!exists("CONC_VISIT"))    CONC_VISIT    <- "InfMon2"          # 8-week infant timepoint
+if (!exists("DATA_MODES"))    DATA_MODES    <- c("raw")   # igg_std deferred — raw only for now
+if (!exists("NCT_IT"))        NCT_IT        <- 1000L              # NCT permutations (lower for quick pass)
+if (!exists("RUN_NETWORKS"))  RUN_NETWORKS  <- TRUE               # STAGE 4
+if (!exists("RUN_NCT"))       RUN_NCT       <- TRUE               # STAGE 5 (most expensive)
+if (!exists("RUN_EFFECTOR_NET")) RUN_EFFECTOR_NET <- TRUE         # optional 2nd (FcγR+ADCD) network
+
+have_net  <- all(vapply(c("bootnet", "qgraph", "networktools", "NetworkComparisonTest"),
+                        requireNamespace, logical(1), quietly = TRUE))
+have_lmer <- requireNamespace("lme4",     quietly = TRUE)
+have_corr <- requireNamespace("corrplot", quietly = TRUE)
+RUN_NETWORKS <- RUN_NETWORKS && have_net
+RUN_NCT      <- RUN_NCT      && have_net
+
+# ---- console / terminal logging --------------------------------------------
+# message() writes to stderr, so these lines appear live in the R console /
+# terminal (and the render log) while the document knits — the "better
+# feedback" requested. They are independent of the knitted HTML/Word output.
+.RUNLOG <- new.env(parent = emptyenv())
+.RUNLOG$t0   <- Sys.time()
+.RUNLOG$rows <- list()
+.hms <- function() format(Sys.time(), "%H:%M:%S")
+.el  <- function() as.numeric(difftime(Sys.time(), .RUNLOG$t0, units = "secs"))
+.stage <- function(k, K, msg) message(sprintf("\n[%s | +%5.1fs] === STAGE %d/%d — %s ===",
+                                              .hms(), .el(), k, K, msg))
+.info  <- function(...) message(sprintf("[%s | +%5.1fs]     %s", .hms(), .el(), sprintf(...)))
+.mark  <- function(label) {
+  .RUNLOG$rows[[length(.RUNLOG$rows) + 1]] <-
+    data.frame(step = label, elapsed_s = round(.el(), 1), stringsAsFactors = FALSE)
+  invisible()
+}
+N_STAGES <- 5L
+message(sprintf("[%s] concurrent v2 START — endpoint=%s outcome=%s visit=%s modes=%s",
+                .hms(), cfg$endpoint, cfg$outcome_feature, CONC_VISIT,
+                paste(DATA_MODES, collapse = "+")))
+.info("capabilities: networks=%s lmer=%s corrplot=%s | NCT_IT=%d RUN_NCT=%s",
+      have_net, have_lmer, have_corr, NCT_IT, RUN_NCT)
+
+# ---- expanded feature vocabulary (built in the data's own casing) -----------
+ANTIGENS6      <- c("PT", "FHA", "PRN", "DT", "TT", "FIM")
+ADCPNP_ANTIGENS <- c("PT", "PRN", "DT", "TT")     # FHA & FIM have no ADCP/ADNP
+FCG_RECEPTORS  <- c("FcgR2a", "FcgR3b")           # mixed-case, as stored
+EFF_ADCD       <- "ADCD"                           # upper-case, as stored
+
+ANTIGEN_TOTALS6 <- paste0(ANTIGENS6, "_IgG")                                   # 6
+FCG_ALL         <- as.vector(t(outer(ANTIGENS6, FCG_RECEPTORS, paste, sep = "_")))  # 12
+ADCD_ALL        <- paste0(ANTIGENS6, "_ADCD")                                  # 6
+ADCPNP_ALL      <- as.vector(t(outer(ADCPNP_ANTIGENS, c("ADCP", "ADNP"), paste, sep = "_")))  # 8
+# PT/FHA/PRN/FIM subclass vectors already defined in config (PT_SUBCLASSES …).
+SUBCLASS_ALL    <- c(PT_SUBCLASSES, FHA_SUBCLASSES, PRN_SUBCLASSES, FIM_SUBCLASSES)  # +FIM
+
+# ---- verify presence against the loaded (post-recode) feature levels --------
+# load_serology_data() rebuilds `feature = paste(antigen, analyte)` in mixed
+# case; verify_predictor_casing() already guards the chain/subclass set, but it
+# does NOT cover FcγR / effector features, so we check them here and report.
+present_feats <- as.character(unique(data_raw$feature))
+keep_present  <- function(v) v[v %in% present_feats]
+report_gap    <- function(name, v) {
+  miss <- setdiff(v, present_feats)
+  if (length(miss)) .info("%-22s %d/%d present; ABSENT: %s",
+                          name, length(v) - length(miss), length(v),
+                          paste(miss, collapse = ", "))
+  else .info("%-22s %d/%d present", name, length(v), length(v))
+}
+report_gap("antigen totals",  ANTIGEN_TOTALS6)
+report_gap("subclasses(+FIM)", SUBCLASS_ALL)
+report_gap("FcγR binding",     FCG_ALL)
+report_gap("ADCD",             ADCD_ALL)
+report_gap("ADCP/ADNP",        ADCPNP_ALL)
+
+ANTIGEN_TOTALS6 <- keep_present(ANTIGEN_TOTALS6)
+FCG_ALL         <- keep_present(FCG_ALL)
+ADCD_ALL        <- keep_present(ADCD_ALL)
+ADCPNP_ALL      <- keep_present(ADCPNP_ALL)
+
+# All antigen-specific features that get standardised in igg_std mode (totals
+# and the whole-cell outcome are NOT standardised — they carry quantity, and
+# the outcome has no antigen total to divide by).
+STD_TARGETS <- keep_present(c(SUBCLASS_ALL, FCG_ALL, ADCD_ALL, ADCPNP_ALL))
+
+# Predictor blocks used by the regression layer, in run order.
+BLOCKS <- list(
+  antigen  = list(label = "Antigen totals (6)",                 feats = ANTIGEN_TOTALS6, sec = "Antigen",  relimp = TRUE),
+  PT       = list(label = "PT subclasses",                      feats = keep_present(PT_SUBCLASSES),  sec = "Subclass", relimp = TRUE),
+  FHA      = list(label = "FHA subclasses",                     feats = keep_present(FHA_SUBCLASSES), sec = "Subclass", relimp = TRUE),
+  PRN      = list(label = "PRN subclasses",                     feats = keep_present(PRN_SUBCLASSES), sec = "Subclass", relimp = TRUE),
+  FIM      = list(label = "FIM subclasses",                     feats = keep_present(FIM_SUBCLASSES), sec = "Subclass", relimp = TRUE),
+  fcgr     = list(label = "FcγR binding (all antigens)",        feats = FCG_ALL,         sec = "FcgR",     relimp = TRUE),
+  adcd     = list(label = "ADCD (all antigens)",                feats = ADCD_ALL,        sec = "Effector", relimp = TRUE),
+  adcpnp   = list(label = "ADCP + ADNP (PT/PRN/DT/TT)",         feats = ADCPNP_ALL,      sec = "Effector", relimp = TRUE),
+  full_sub = list(label = "Full subclass (PT/FHA/PRN/DT/TT ×4)", feats = keep_present(cfg$all_subclasses), sec = "Full", relimp = TRUE),
+  ratio    = list(label = "Pro/tolerogenic ratios",             feats = c("PT_ratio", "FHA_ratio", "PRN_ratio"), sec = "Ratio", relimp = FALSE)
+)
+
+# Interaction antigens for the mixed model (must have full IgG1–4 subclasses).
+INTERACTION_ANTIGENS <- c("PT", "FHA", "PRN")
+
+# Network node sets.
+NET_SUBCLASS_NODES <- keep_present(c(cfg$outcome_feature, NETWORK_SUBCLASSES))  # outcome + PT/FHA/PRN/FIM ×4
+NET_EFFECTOR_NODES <- keep_present(c(cfg$outcome_feature, FCG_ALL, ADCD_ALL))   # outcome + FcγR + ADCD
+
+# =============================================================================
+# igg_std STANDARDISATION  —  PROVISIONAL DEFINITION, CONFIRM BEFORE USE
+# -----------------------------------------------------------------------------
+# Placeholder = per-antigen total-IgG normalisation on the log scale:
+#     feature_std = log_value(A_analyte) − log_value(A_IgG)
+# i.e. express each antigen-specific subclass / FcγR / effector RELATIVE to the
+# same antigen's total IgG at the same draw. Totals and the whole-cell outcome
+# are left untouched. Pro-/tolerogenic ratios are invariant to this transform
+# (the total cancels), so the ratio block is identical across modes.
+#
+# If the project's "total-IgG-standardised" values are instead (a) stored in
+# ebaa_extra2 under a column/flag, or (b) the precomputed igg_standard_residuals
+# objects, replace the body of this function with a lookup/join — the rest of
+# the pipeline is agnostic to how the standardised matrix is produced.
+# =============================================================================
+standardize_wide <- function(dw, targets = STD_TARGETS) {
+  for (f in targets) {
+    ag  <- sub("_.*$", "", f)
+    tot <- paste0(ag, "_IgG")
+    if (tot %in% names(dw) && f %in% names(dw))
+      dw[[f]] <- dw[[f]] - dw[[tot]]
+  }
+  dw
+}
+
+# ---- build one mode's wide matrix at the single concurrent visit ------------
+prep_mode <- function(mode) {
+  feats <- keep_present(c(cfg$outcome_feature, ANTIGEN_TOTALS6, STD_TARGETS))
+  dl <- data_raw %>%
+    dplyr::filter(feature %in% feats,
+                  visit_name == CONC_VISIT,
+                  arm_name %in% cfg$maternal_arms) %>%
+    dplyr::select(subject_accession, arm_name, infant_arm, feature, log_assay_value) %>%
+    dplyr::distinct(subject_accession, feature, .keep_all = TRUE)
+  dw <- dl %>%
+    tidyr::pivot_wider(id_cols = c(subject_accession, arm_name, infant_arm),
+                       names_from = feature, values_from = log_assay_value) %>%
+    add_concurrent_ratios()                       # ratios from RAW subclasses (mode-invariant)
+  if (identical(mode, "igg_std")) dw <- standardize_wide(dw)
+  dw
+}
+
+# ---- expanded per-stratum block runner (uses generic run_lm → N-tracker) ----
+run_blocks_x <- function(d, stratum, mode, tracker = nt) {
+  oc <- cfg$outcome_feature
+  out <- list()
+  for (bn in names(BLOCKS)) {
+    b <- BLOCKS[[bn]]
+    preds <- intersect(b$feats, names(d))
+    if (length(preds) < 1) { out[[bn]] <- NULL; next }
+    out[[bn]] <- run_lm(oc, preds, d,
+                        label = sprintf("%s [%s]", b$label, mode),
+                        show_relimp_calc = b$relimp,
+                        tracker = tracker, part = "Concurrent",
+                        section = paste0(b$sec, " · ", mode), stratum = stratum)
+  }
+  out
+}
+
+show_stratum_blocks <- function(res, full = TRUE) {
+  ids <- if (full) names(res) else c("antigen", "PT", "FHA", "PRN", "FIM",
+                                     "fcgr", "adcd", "adcpnp", "full_sub", "ratio")
+  for (id in ids) if (!is.null(res[[id]]))
+    show_model(res[[id]], show_relimp = !identical(id, "ratio"))
+}
+```
+
+# Concurrent Within-Visit Architecture (Expanded) {#concurrent}
+
+This part models the infant's **`r cfg$outcome_label`** against antibody features
+**measured at the same infant visit**, restricted to the **8-week timepoint
+(`r CONC_VISIT`)**. Relative to the original version it adds the **FIM** antigen,
+the **FcγR binding** features (FcgR2a, FcgR3b), and the **antigen-specific effector
+functions** (ADCD for all six antigens; ADCP and ADNP for PT/PRN/DT/TT only), on the
+**untransformed (raw) log assay values**. The total-IgG-standardised mode is deferred
+and not run here.
+
+**Stratification is maternal-arm primary** (TdaP / TT), with infant splits (aP, wP)
+nested. Networks / NCT need ≥ `r NETWORK_MIN` complete cases; underpowered cells are
+skipped and recorded in the participant accounting. Execution is staged
+(cheap → expensive) with live console logging.
+
+```{r conc-mapnote, echo=FALSE, results='asis'}
+mapnote("Expanded within-visit layer at ", CONC_VISIT, " for **", cfg$outcome_label,
+        "**, raw + total-IgG-standardised.",
+        feeds = c(
+          "Antigen / subclass / effector relative importance \u2192 \u00a71, \u00a73",
+          "FHA negative association \u2192 \u00a72",
+          "Ratio models \u2192 \u00a74",
+          "Antigen \u00d7 subclass \u00d7 level interaction \u2192 \u00a75",
+          "GGM networks + bridge centrality \u2192 \u00a76",
+          "NCT (arm / infant-arm contrasts at 8 weeks) \u2192 \u00a77"))
+if (!have_net)
+  cat("\n> **Note:** network packages not installed; STAGES 4\u20135 skipped.\n\n")
+```
+
+---
+
+## STAGE 1 — Data Preparation and Coverage
+
+```{r conc-prep, results='asis'}
+.stage(1, N_STAGES, "data preparation + coverage")
+wide_by_mode  <- list()
+strata_by_mode <- list()
+for (md in DATA_MODES) {
+  dw <- prep_mode(md)
+  wide_by_mode[[md]]   <- dw
+  strata_by_mode[[md]] <- build_maternal_strata(dw)
+  .info("mode=%-7s wide = %d rows \u00d7 %d cols", md, nrow(dw), ncol(dw))
+  cat(sprintf("**Mode `%s`** — %d subjects \u00d7 %d columns at %s.  \n",
+              md, nrow(dw), ncol(dw), CONC_VISIT))
+  cnt <- as.data.frame(table(dw$arm_name), stringsAsFactors = FALSE)
+  colnames(cnt) <- c("Maternal arm", "n_subjects")
+  knitr::kable(cnt, caption = sprintf("Subjects by maternal arm (mode = %s, %s).",
+                                      md, CONC_VISIT)) %>% print()
+  cat("\n")
+}
+.mark("stage1_prep")
+```
+
+---
+
+## STAGE 2 — Regression Layer (relative importance + ratios) {#regression}
+
+```{r conc-reg-mapnote, echo=FALSE, results='asis'}
+mapnote("Relative-importance and ratio models across the expanded feature set ",
+        "(subclass, FcγR, ADCD, ADCP/ADNP), raw + standardised.",
+        feeds = c("\u00a71 (dominant antigen/analyte), \u00a73 (arm signatures)",
+                  "\u00a72 (FHA negative association)", "\u00a74 (ratio model)"))
+```
+
+```{r conc-reg, results='asis'}
+.stage(2, N_STAGES, "regression / relative importance / ratios")
+conc_by_mode <- list()
+for (md in DATA_MODES) {
+  cat("\n## Mode: `", md, "`\n\n", sep = "")
+  sx <- strata_by_mode[[md]]
+  conc <- lapply(names(sx), function(k) {
+    r <- run_blocks_x(sx[[k]]$data, stratum = sx[[k]]$label, mode = md)
+    .info("mode=%-7s stratum=%-26s blocks fitted", md, sx[[k]]$label)
+    r
+  })
+  names(conc) <- names(sx)
+  conc_by_mode[[md]] <- conc
+  for (m in cfg$maternal_arms) {
+    cat("### ", m, " mothers\n\n", sep = "")
+    show_stratum_blocks(conc[[m]], full = TRUE)
+    for (i in cfg$infant_arms) {
+      key <- paste0(m, "_", i)
+      if (!is.null(conc[[key]])) {
+        cat("#### ", sx[[key]]$label, "\n\n", sep = "")
+        show_stratum_blocks(conc[[key]], full = FALSE)
+      }
+    }
+  }
+}
+.mark("stage2_regression")
+```
+
+### Cross-stratum full-subclass relative importance (TdaP vs TT)
+
+```{r conc-relimp-compare, results='asis'}
+for (md in DATA_MODES) {
+  cc <- conc_by_mode[[md]]
+  rT <- cc[["TdaP"]]$full_sub$relimp; rN <- cc[["TT"]]$full_sub$relimp
+  if (!is.null(rT) && !is.null(rN)) {
+    cmp <- merge(data.frame(feature = names(rT@lmg), lmg_TdaP = round(rT@lmg * 100, 2)),
+                 data.frame(feature = names(rN@lmg), lmg_TT   = round(rN@lmg * 100, 2)),
+                 by = "feature") %>%
+      dplyr::mutate(delta_lmg = round(lmg_TdaP - lmg_TT, 2)) %>%
+      dplyr::arrange(dplyr::desc(abs(delta_lmg)))
+    knitr::kable(cmp, caption = sprintf("Full-subclass relative importance (lmg %%): TdaP vs TT — mode %s.", md),
+                 align = c("l", "r", "r", "r")) %>% print()
+    cat("\n")
+  }
+}
+```
+
+---
+
+## STAGE 3 — Antigen × Subclass × Level Interaction (mixed model) {#interaction}
+
+```{r conc-lmer-mapnote, echo=FALSE, results='asis'}
+mapnote("Three-way antigen \u00d7 subclass \u00d7 binding-level interaction. At a single ",
+        "visit the (1|subject) random intercept is identified across the ",
+        "antigen\u00d7subclass rows, not across visits.",
+        feeds = "\u00a75 (three-way interaction)")
+```
+
+```{r conc-lmer, results='asis'}
+.stage(3, N_STAGES, "mixed-model interaction (lmer)")
+if (have_lmer) {
+  patt <- paste0("(", paste(INTERACTION_ANTIGENS, collapse = "|"), ")_(IgG[1-4])")
+  for (md in DATA_MODES) {
+    cat("### Mode: `", md, "`\n\n", sep = "")
+    for (m in cfg$maternal_arms) {
+      d <- strata_by_mode[[md]][[m]]$data
+      dl <- d %>%
+        dplyr::select(subject_accession, dplyr::all_of(cfg$outcome_feature),
+                      dplyr::matches("(PT|FHA|PRN)_IgG[1-4]$")) %>%
+        tidyr::pivot_longer(dplyr::matches("IgG[1-4]$"),
+                            names_to = c("antigen", "subclass"),
+                            names_pattern = patt, values_to = "subclass_value") %>%
+        tidyr::drop_na(tidyselect::all_of(c("subclass_value", cfg$outcome_feature)))
+      fml <- stats::as.formula(paste0(cfg$outcome_feature,
+                    " ~ antigen * subclass * subclass_value + (1 | subject_accession)"))
+      mm <- tryCatch(lme4::lmer(fml, data = dl), error = function(e) NULL)
+      if (is.null(mm)) { cat(sprintf("*%s: mixed model could not be fit.*\n\n", m)); next }
+      av <- as.data.frame(anova(mm)); av <- cbind(Term = rownames(av), round(av, 3)); rownames(av) <- NULL
+      knitr::kable(av, caption = sprintf("Type-III ANOVA of fixed effects — %s mothers (mode %s).", m, md),
+                   row.names = FALSE) %>% print(); cat("\n")
+      .info("mode=%-7s arm=%-4s lmer fitted (n_rows=%d)", md, m, nrow(dl))
+    }
+  }
+} else cat("*lme4 not installed; mixed-model interaction skipped.*\n\n")
+.mark("stage3_lmer")
+```
+
+---
+
+## STAGE 4 — GGM Networks and Bridge Centrality {#networks}
+
+```{r conc-net-mapnote, echo=FALSE, results='asis'}
+mapnote("Partial-correlation (EBICglasso) networks and bridge centrality at ",
+        CONC_VISIT, ". A subclass(+FIM) network, and — if enabled — a FcγR+ADCD ",
+        "network.", feeds = "\u00a76 (network architecture, bridge nodes)")
+```
+
+```{r conc-networks, results='asis', fig.height=6, fig.width=7}
+.stage(4, N_STAGES, "GGM networks + bridge centrality")
+bridge_store <- list()   # bridge_store[[mode]][[which]][[arm]]
+run_one_network <- function(dat, nodes, communities, groups_idx, group_colors,
+                            title, tracker_label, mode, which) {
+  d <- dat %>% dplyr::select(dplyr::all_of(nodes)) %>% tidyr::drop_na()
+  nt_log(nt, "Concurrent", paste0(which, " network @ ", CONC_VISIT),
+         title, tracker_label, nodes, dat)
+  cat(sprintf("\n**%s** (n = %d)\n\n", title, nrow(d)))
+  .info("mode=%-7s %s network: %s n=%d", mode, which, title, nrow(d))
+  if (nrow(d) < NETWORK_MIN) { cat(sprintf("*n < %d; skipped.*\n\n", NETWORK_MIN)); return(NULL) }
+  net <- tryCatch(bootnet::estimateNetwork(d, default = "EBICglasso", threshold = TRUE),
+                  error = function(e) NULL)
+  if (is.null(net)) { cat("*Network estimation failed.*\n\n"); return(NULL) }
+  qgraph::qgraph(net$graph, groups = groups_idx, color = group_colors,
+                 layout = "spring", labels = nodes, legend = TRUE,
+                 legend.cex = 0.33, vsize = 7, title = title)
+  br <- networktools::bridge(net$graph, communities = communities)
+  bdf <- data.frame(Variable = names(br$`Bridge Strength`),
+                    Bridge_Strength = round(br$`Bridge Strength`, 3),
+                    Bridge_EI = round(br$`Bridge Expected Influence (1-step)`, 3),
+                    row.names = NULL) %>% dplyr::arrange(dplyr::desc(Bridge_Strength))
+  print(knitr::kable(bdf, caption = paste0("Bridge centrality — ", title))); cat("\n")
+  bdf
+}
+
+# community assignment for the subclass(+FIM) network, robust to node order
+sub_comm <- function(nodes) {
+  comm <- integer(length(nodes))
+  comm[nodes == cfg$outcome_feature] <- 1L
+  comm[nodes %in% PT_SUBCLASSES]  <- 2L
+  comm[nodes %in% FHA_SUBCLASSES] <- 3L
+  comm[nodes %in% PRN_SUBCLASSES] <- 4L
+  comm[nodes %in% FIM_SUBCLASSES] <- 5L
+  comm
+}
+sub_groups <- function(nodes) list(
+  OUT = which(nodes == cfg$outcome_feature),
+  PT  = which(nodes %in% PT_SUBCLASSES),  FHA = which(nodes %in% FHA_SUBCLASSES),
+  PRN = which(nodes %in% PRN_SUBCLASSES), FIM = which(nodes %in% FIM_SUBCLASSES))
+sub_cols <- c("gold", "tomato", "steelblue", "seagreen", "mediumpurple")
+
+if (RUN_NETWORKS) {
+  for (md in DATA_MODES) {
+    cat("### Mode: `", md, "`\n\n", sep = "")
+    bridge_store[[md]] <- list(subclass = list(), effector = list())
+    for (m in cfg$maternal_arms) {
+      dat <- strata_by_mode[[md]][[m]]$data   # already single-visit (InfMon2); no visit_name column
+      # subclass(+FIM) network
+      nodes <- NET_SUBCLASS_NODES
+      bdf <- run_one_network(dat, nodes, sub_comm(nodes), sub_groups(nodes), sub_cols,
+                             sprintf("%s — %s subclass network @ %s", m, cfg$outcome_label, CONC_VISIT),
+                             m, md, "subclass")
+      if (!is.null(bdf)) bridge_store[[md]]$subclass[[m]] <- bdf
+      # optional FcγR + ADCD "secondary/effector" network
+      if (RUN_EFFECTOR_NET) {
+        nod2 <- NET_EFFECTOR_NODES
+        comm2 <- integer(length(nod2)); comm2[nod2 == cfg$outcome_feature] <- 1L
+        comm2[nod2 %in% FCG_ALL] <- 2L; comm2[nod2 %in% ADCD_ALL] <- 3L
+        grp2 <- list(OUT = which(nod2 == cfg$outcome_feature),
+                     FcgR = which(nod2 %in% FCG_ALL), ADCD = which(nod2 %in% ADCD_ALL))
+        bdf2 <- run_one_network(dat, nod2, comm2, grp2, c("gold", "darkorange", "purple"),
+                                sprintf("%s — %s FcγR+ADCD network @ %s", m, cfg$outcome_label, CONC_VISIT),
+                                m, md, "effector")
+        if (!is.null(bdf2)) bridge_store[[md]]$effector[[m]] <- bdf2
+      }
+    }
+  }
+} else cat("*Networks disabled (RUN_NETWORKS = FALSE or packages absent).*\n\n")
+.mark("stage4_networks")
+```
+
+---
+
+## STAGE 5 — Network Comparison Tests (NCT) {#nct}
+
+```{r conc-nct-mapnote, echo=FALSE, results='asis'}
+mapnote("NCT at the single 8-week visit: maternal arm (TdaP vs TT) and infant arm ",
+        "(aP vs wP) within maternal arm. Temporal contrasts are not applicable at a ",
+        "single visit.", feeds = "\u00a77 (cross-arm network comparison)")
+```
+
+```{r conc-nct, results='asis'}
+.stage(5, N_STAGES, sprintf("NCT permutations (it = %d)", NCT_IT))
+nct_subset <- function(dat, nodes) dat %>%
+  dplyr::select(dplyr::all_of(nodes)) %>% tidyr::drop_na()
+run_nct <- function(d1, d2, lab) {
+  cat(sprintf("\n**%s** — n1 = %d, n2 = %d\n\n", lab, nrow(d1), nrow(d2)))
+  .info("NCT %-48s n1=%d n2=%d", lab, nrow(d1), nrow(d2))
+  if (nrow(d1) < NETWORK_MIN || nrow(d2) < NETWORK_MIN) {
+    cat(sprintf("*One or both groups n < %d; NCT skipped.*\n\n", NETWORK_MIN)); return(invisible()) }
+  res <- tryCatch(NetworkComparisonTest::NCT(d1, d2, it = NCT_IT, test.edges = FALSE,
+                  test.centrality = TRUE, centrality = c("strength", "expectedInfluence")),
+                  error = function(e) NULL)
+  if (is.null(res)) { cat("*NCT failed.*\n\n"); return(invisible()) }
+  cat(sprintf("- Network-structure invariance (M) p = %.3f\n", res$nwinv.pval))
+  cat(sprintf("- Global-strength invariance (S) p = %.3f\n\n", res$glstrinv.pval))
+}
+if (RUN_NCT) {
+  nodes <- NET_SUBCLASS_NODES
+  for (md in DATA_MODES) {
+    cat("### Mode: `", md, "`\n\n", sep = "")
+    sx <- strata_by_mode[[md]]
+    run_nct(nct_subset(sx[["TdaP"]]$data, nodes), nct_subset(sx[["TT"]]$data, nodes),
+            sprintf("Maternal arm: TdaP vs TT @ %s", CONC_VISIT))
+    for (m in cfg$maternal_arms) {
+      ka <- paste0(m, "_aP"); kw <- paste0(m, "_wP")
+      if (!is.null(sx[[ka]]) && !is.null(sx[[kw]]))
+        run_nct(nct_subset(sx[[ka]]$data, nodes), nct_subset(sx[[kw]]$data, nodes),
+                sprintf("Infant arm within %s: aP vs wP @ %s", m, CONC_VISIT))
+    }
+  }
+} else cat("*NCT disabled (RUN_NCT = FALSE or packages absent).*\n\n")
+.mark("stage5_nct")
+```
+
+---
+
+## Run Manifest and Participant Accounting {#concurrent-naccounting}
+
+```{r conc-manifest, results='asis'}
+message(sprintf("[%s | +%5.1fs] concurrent v2 DONE — endpoint=%s", .hms(), .el(), cfg$endpoint))
+tm <- dplyr::bind_rows(.RUNLOG$rows)
+if (nrow(tm)) {
+  tm$stage_seconds <- round(c(tm$elapsed_s[1], diff(tm$elapsed_s)), 1)
+  knitr::kable(tm, caption = "Stage timing (cumulative and per-stage seconds).",
+               col.names = c("Step", "Cumulative (s)", "This stage (s)")) %>% print()
+  cat("\n")
+}
+nt_render(nt, part = "Concurrent",
+          caption = "Participant accounting for every concurrent model / network (both modes).")
+```

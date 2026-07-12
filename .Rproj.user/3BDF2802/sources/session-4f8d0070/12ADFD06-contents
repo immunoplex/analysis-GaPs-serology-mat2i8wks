@@ -1,0 +1,201 @@
+# ── GaPs Repository Diagnostic Script ─────────────────────────────────────────
+# Run from project root: source("gap_diagnostic.R")
+# Produces: repo_diagnostic.txt in your working directory
+
+library(fs)
+library(dplyr)
+library(stringr)
+
+# 1. Full directory tree (excluding .git and data folders)
+cat("=== DIRECTORY TREE ===\n")
+tree <- dir_tree(
+  path = ".",
+  recurse = TRUE,
+  regexp = "^\\.git$|^data$",  # exclude these
+  invert = TRUE
+)
+
+# 2. All files with metadata
+cat("\n=== FILE INVENTORY ===\n")
+all_files <- dir_info(
+  path = ".",
+  recurse = TRUE,
+  regexp = "\\.git",
+  invert = TRUE
+) %>%
+  select(path, type, size, modification_time) %>%
+  mutate(
+    extension   = path_ext(path),
+    filename    = path_file(path),
+    directory   = path_dir(path),
+    depth       = str_count(path, "/")
+  ) %>%
+  arrange(directory, filename)
+
+# 3. Summary by extension
+cat("\n=== FILES BY TYPE ===\n")
+type_summary <- all_files %>%
+  filter(type == "file") %>%
+  count(extension, sort = TRUE) %>%
+  mutate(extension = if_else(extension == "", "[no extension]", extension))
+
+print(type_summary)
+
+# 4. Rmd files specifically — these are the pipeline backbone
+cat("\n=== RMD FILES ===\n")
+rmd_files <- all_files %>%
+  filter(str_detect(extension, regex("rmd", ignore_case = TRUE))) %>%
+  select(path, size, modification_time)
+print(rmd_files, n = Inf)
+
+# 5. R script files
+cat("\n=== R SCRIPTS ===\n")
+r_scripts <- all_files %>%
+  filter(extension == "R" | extension == "r") %>%
+  select(path, size, modification_time)
+print(r_scripts, n = Inf)
+
+# 6. HTML output files (to match back to Rmd sources)
+cat("\n=== HTML OUTPUTS ===\n")
+html_files <- all_files %>%
+  filter(extension == "html") %>%
+  select(path, size, modification_time)
+print(html_files, n = Inf)
+
+# 7. Config and yaml files
+cat("\n=== CONFIG / YAML FILES ===\n")
+config_files <- all_files %>%
+  filter(extension %in% c("yml", "yaml", "json", "toml", "cfg", "ini")) %>%
+  select(path, size, modification_time)
+print(config_files, n = Inf)
+
+# 8. Data folder summary (structure only, no file listing for privacy)
+cat("\n=== DATA FOLDER STRUCTURE (dirs only) ===\n")
+if (dir_exists("data")) {
+  data_dirs <- dir_info("data", recurse = TRUE) %>%
+    filter(type == "directory") %>%
+    select(path)
+  print(data_dirs)
+  
+  data_file_types <- dir_info("data", recurse = TRUE) %>%
+    filter(type == "file") %>%
+    mutate(extension = path_ext(path)) %>%
+    count(extension, sort = TRUE)
+  cat("\nData file types (no paths):\n")
+  print(data_file_types)
+}
+
+# 9. Orphaned HTMLs (HTML with no matching Rmd in same dir)
+cat("\n=== ORPHANED HTML FILES (no matching Rmd) ===\n")
+html_stems <- html_files %>%
+  mutate(stem = path_ext_remove(filename), dir = directory)
+rmd_stems  <- rmd_files %>%
+  mutate(stem = path_ext_remove(filename), dir = directory)
+orphaned <- html_stems %>%
+  anti_join(rmd_stems, by = c("stem", "dir"))
+print(orphaned)
+
+# 10. Rmd files with no matching HTML (not yet rendered)
+cat("\n=== UNRENDERED RMD FILES (no matching HTML) ===\n")
+unrendered <- rmd_stems %>%
+  anti_join(html_stems, by = c("stem", "dir"))
+print(unrendered)
+
+# ── Write everything to file ───────────────────────────────────────────────────
+sink("repo_diagnostic.txt")
+cat("=== GaPs REPO DIAGNOSTIC ===\n")
+cat("Generated:", format(Sys.time()), "\n\n")
+
+cat("=== DIRECTORY TREE ===\n")
+print(tree)
+
+cat("\n=== FILE INVENTORY ===\n")
+print(all_files, n = Inf)
+
+cat("\n=== FILES BY TYPE ===\n")
+print(type_summary, n = Inf)
+
+cat("\n=== RMD FILES ===\n")
+print(rmd_files, n = Inf)
+
+cat("\n=== R SCRIPTS ===\n")
+print(r_scripts, n = Inf)
+
+cat("\n=== HTML OUTPUTS ===\n")
+print(html_files, n = Inf)
+
+cat("\n=== CONFIG / YAML FILES ===\n")
+print(config_files, n = Inf)
+
+cat("\n=== ORPHANED HTML FILES ===\n")
+print(orphaned, n = Inf)
+
+cat("\n=== UNRENDERED RMD FILES ===\n")
+print(unrendered, n = Inf)
+
+sink()
+
+cat("\n✓ Diagnostic written to repo_diagnostic.txt\n")
+cat("  Please share this file to proceed with refactoring strategy.\n")
+
+
+######################
+# ── Content fingerprint comparison ────────────────────────────────────────────
+# Run from project root before any git mv operations
+
+library(stringr)
+
+# Files to compare
+candidates <- c(
+  "PTNA_analysis.Rmd",
+  "SBA_analysis.Rmd",
+  "WT_IgG_analysis.Rmd"
+)
+
+# Files they are suspected to be superseded by
+superseding <- c(
+  "analysis/predict_M02_PTNA_from_maternal_v2.Rmd",
+  "analysis/predict_M02_SBA_from_maternal_v2.Rmd",
+  "analysis/predict_M02_WT_IgG_from_maternal_v2.Rmd",
+  "concurrent_analysis.Rmd",
+  "interaction_and_deming.Rmd"
+)
+
+all_files <- c(candidates, superseding)
+
+extract_functions <- function(path) {
+  if (!file.exists(path)) return(character(0))
+  lines <- readLines(path, warn = FALSE)
+  # Extract function calls, chunk labels, data objects loaded
+  fns   <- str_extract_all(lines, "[a-zA-Z_.][a-zA-Z0-9_.]*(?=\\()") |> unlist()
+  loads <- str_extract_all(lines, "(?<=load\\()['\"]?[^'\"\\)]+") |> unlist()
+  reads <- str_extract_all(lines, "(?<=readRDS\\()['\"]?[^'\"\\)]+") |> unlist()
+  unique(c(fns, loads, reads))
+}
+
+cat("=== CONTENT FINGERPRINTS ===\n\n")
+sink("content_comparison.txt")
+for (f in all_files) {
+  cat("FILE:", f, "\n")
+  cat("  Lines:", if (file.exists(f)) length(readLines(f, warn=FALSE)) else "NOT FOUND", "\n")
+  cat("  Size: ", if (file.exists(f)) file.size(f) else "N/A", "bytes\n")
+  fns <- extract_functions(f)
+  cat("  Key calls:", paste(head(fns, 20), collapse=", "), "\n")
+  # Show data loads specifically
+  if (file.exists(f)) {
+    lines <- readLines(f, warn=FALSE)
+    data_lines <- lines[str_detect(lines, "load\\(|readRDS\\(|read\\.csv\\(")]
+    if (length(data_lines)) {
+      cat("  Data loads:\n")
+      for (dl in data_lines) cat("   ", trimws(dl), "\n")
+    }
+    # Show chunk names
+    chunks <- lines[str_detect(lines, "^```\\{r")]
+    if (length(chunks)) {
+      cat("  Chunks:", paste(head(chunks, 8), collapse=" | "), "\n")
+    }
+  }
+  cat("\n")
+}
+sink()
+cat("✓ Written to content_comparison.txt\n")

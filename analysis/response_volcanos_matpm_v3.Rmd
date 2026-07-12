@@ -1,0 +1,577 @@
+---
+title: "Response across visits by analyte and antigen"
+subtitle: "Separately by untransformed and standardized"
+author: "Scot Zens"
+output:
+  workflowr::wflow_html:
+    toc: false
+    number_sections: false
+    theme: cosmo
+    highlight: textmate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+## workflowr::wflow_build(files = here("./analysis/response_volcanos_matpm_v3.Rmd"))
+library(data.table) # for the function in the connection_transform.R code
+library(tidyverse)  # for dplyr, ggplot2, forcats, tidyr, stringr, tibble, and magrittr pipe
+library(here)       # for here::here used in file paths
+library(reshape2)   # for reshape2::pivot_wider 
+library(RColorBrewer) # for brewer.pal color palettes
+
+volcano_plot_arm_effect <- function(data = NULL, effect_label = c("Lower TdaP", "Higher TdaP")) {
+    
+  cutoff_padj <- 0.05
+  cutoff_log <- -log10(cutoff_padj)
+  
+  if(length(effect_label) != 2) stop("effect_label must be length 2 (one for each arm_name)")
+  
+  data <- dplyr::mutate(data,
+                        antigen_analyte = paste(antigen, analyte, sep = "_"),
+                        arm_name = factor(arm_name))
+  
+  arms <- c("TT","TdaP")
+  if(length(arms) != 2) stop("arm_name must have exactly two levels.")
+  
+  # We'll define effect_size = median(mTdaP) - median(mTT)
+  # So arms[?] must correspond to mTT or mTdaP - confirm and reorder if needed
+  # We want arms in order: c("mTT", "mTdaP"), then effect_size = median(mTdaP) - median(mTT)
+  
+  # Reorder arm_name levels to have mTT first then mTdaP second, for consistency
+  # If this is not the case in data, reorder
+  desired_levels <- c("TT", "TdaP")
+  if(!all(desired_levels %in% arms)) stop("arm_name must contain 'TT' and 'TdaP'")
+  data$arm_name <- factor(data$arm_name, levels = desired_levels)
+  arms <- levels(data$arm_name) # updated
+  
+  results <- data %>%
+    dplyr::group_by(antigen_analyte, analyte) %>%
+    dplyr::summarize(
+      median_1 = median(log_assay_value[arm_name == arms[1]], na.rm = TRUE), # mTT
+      median_2 = median(log_assay_value[arm_name == arms[2]], na.rm = TRUE), # mTdaP
+      effect_size = median_2 - median_1,  # positive effect = higher mTdaP
+      wilcox_test = list(stats::wilcox.test(log_assay_value ~ arm_name)),
+      .groups = "drop"
+    ) %>%
+    dplyr::mutate(
+      p_value = purrr::map_dbl(wilcox_test, ~.$p.value)
+    ) %>%
+    dplyr::select(-wilcox_test)
+  
+  # results <- results %>%
+  #   dplyr::mutate(
+  #     p_adj = stats::p.adjust(p_value, method = "bonferroni"),
+  #     neg_log10_p_adj = -log10(p_adj),
+  #     label = antigen_analyte,
+  #     
+  #     # Now effect_label[2] = "Higher mTdaP" corresponds to effect_size > 0
+  #     # Reverse assignment from before
+  #     direction_label = ifelse(effect_size > 0, effect_label[2], effect_label[1])
+  #   )
+  results <- results %>%
+  dplyr::mutate(
+    p_adj = stats::p.adjust(p_value, method = "bonferroni"),
+    neg_log10_p_adj = -log10(p_adj),
+    label = antigen_analyte,
+    direction_label = ifelse(effect_size > 0, effect_label[2], effect_label[1]),
+    label_to_show = ifelse(p_adj <= cutoff_padj, antigen_analyte, NA_character_)  # Label only significant points
+  )
+  
+  plot_results <- results
+
+  
+  # p <- ggplot2::ggplot(results,
+  #                      ggplot2::aes(x = effect_size,
+  #                                   y = neg_log10_p_adj,
+  #                                   color = analyte)) +
+  #   ggplot2::geom_point(shape = 16) +
+  #   ggplot2::geom_hline(yintercept = cutoff_log, linetype = "dashed", color = "grey40") +
+  #   ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  #   ggrepel::geom_text_repel(
+  #     ggplot2::aes(label = label, color = analyte),
+  #     box.padding = 0.4,
+  #     max.overlaps = 5,
+  #     segment.color = "grey50",
+  #     segment.size = 0.5,
+  #     point.padding = 0.25,
+  #     show.legend = FALSE
+  #   ) +
+    
+p <- ggplot2::ggplot(results,
+                     ggplot2::aes(x = effect_size,
+                                  y = neg_log10_p_adj,
+                                  color = analyte)) +
+  ggplot2::geom_point(shape = 16) +
+  ggplot2::geom_hline(yintercept = cutoff_log, linetype = "dashed", color = "grey40") +
+  ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  ggrepel::geom_text_repel(
+    ggplot2::aes(label = label_to_show, color = analyte),  # use label_to_show for selective labeling
+    box.padding = 0.4,
+    max.overlaps = Inf,                # optional: allow many labels, if desired
+    segment.color = "grey50",
+    segment.size = 0.5,
+    point.padding = 0.25,
+    show.legend = FALSE
+  ) +
+    ggplot2::labs(
+      x = "Effect size (Median log assay value difference: TdaP - TT)",
+      y = expression(-log[10] ~ "Bonferroni adjusted p-value"),
+      title = "Maternal vaccination effects on serology response",
+      color = "Analyte",
+      caption = paste(
+        "Wilcoxon rank sum test per antigen-analyte comparing arm_name (TT vs TdaP).\n",
+        "Effect size is median(TdaP) - median(TT), so positive values indicate higher response in TdaP.\n",
+        "P-values adjusted with Bonferroni correction.\n",
+        "Dashed lines represent zero effect size and significance cutoff at 0.05."
+      )
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(plot.caption = ggplot2::element_text(hjust = 0))
+  
+  return(p)
+}
+
+#### set options
+options(useFancyQuotes = FALSE)
+
+manu <- "Responses across visits"
+# selected_maternal_arm <- selected_maternal_arm <- "TdaP"
+# selected_maternal_arm <- selected_maternal_arm <- "TT"
+marm_list <- as.vector(c("mTdaP", "mTT"))
+iarm_list <- as.vector(c("aP", "wP"))
+
+#### load colors
+source(here("./code/colors.R"), local = TRUE)
+iarm.apwps.color <- c('aP' = "dodgerblue2",'wP' = "forestgreen")
+marm.apwps.color <- c('mTdaP' = "skyblue",'mTT' = "salmon")
+
+color.Welch.fill <- brewer.pal(3, "YlGn")[2]
+
+covariate.colors <- c(
+  "arm_name" = "tomato",
+  "birth_weight" = "lightblue",
+  "infant_sex" = "forestgreen",
+  "delivery_mode" = "#9467bd",
+  "parity" = "#8c564b",
+  "gravidity" = "firebrick",
+  "gestational_age_vaccination" = "darkorange",
+  "vaccine_birth_interval_days" = "steelblue",
+  "gestational_age_birth" = "mediumseagreen",
+  "maternal_age" = "salmon",
+  # "log_igg_t0" = "#AF8DC3",
+  "Residual" = "yellow",
+  "DT_IgGt0" = "#23AECE",
+  "FHA_IgGt0" = "#C51B7D", 
+  "PRN_IgGt0" = "#FEE08B", 
+  "PT_IgGt0" = "#5EA4A2", 
+  "TT_IgGt0" = "#E04C5C"
+)
+
+antigen.colors <- c(
+  "zmixture" = "firebrick",
+  "zPC1" = "salmon",
+  "zPC2" = "#E04C5C",
+  "DT" = "#FEE08B",
+  "FHA" = "#23AECE",
+  "PRN" = "steelblue",
+  "PT" = "#AF8DC3",
+  "TT" = "mediumseagreen" 
+)
+
+#### load boxplot and confounder adjustment functions
+# source(here("./code/boxplot_functions.R"), local = TRUE)
+# source(here("./code/forestplot_functions.R"), local = TRUE)
+# source(here("./code/dim_reduc_functions.R"), local = TRUE)
+source(here("./code/connection_transform.R"), local = TRUE)
+# source(here("./code/cluster_functions_b.R"), local = TRUE)
+
+include_feature <- c("DT_IgG","DT_IgG1","DT_IgG2","DT_IgG3","DT_IgG4","DT_ADCD","DT_ADNP","DT_ADCP","DT_FcgR2a","DT_FcgR3b",
+      "TT_IgG","TT_IgG1","TT_IgG2","TT_IgG3","TT_IgG4","TT_ADCD","TT_ADNP","TT_ADCP","TT_FcgR2a","TT_FcgR3b",
+      "PT_IgG","PT_IgG1","PT_IgG2","PT_IgG3","PT_IgG4","PT_ADCD","PT_ADNP","PT_ADCP","PT_FcgR2a","PT_FcgR3b",
+      "FHA_IgG","FHA_IgG1","FHA_IgG2","FHA_IgG3","FHA_IgG4","FHA_ADCD","FHA_ADNP","FHA_ADCP","FHA_FcgR2a","FHA_FcgR3b",
+      "PRN_IgG","PRN_IgG1","PRN_IgG2","PRN_IgG3","PRN_IgG4","PRN_ADCD","PRN_ADNP","PRN_ADCP","PRN_FcgR2a","PRN_FcgR3b")
+
+include_feature_wo <- c("DT_IgG1","DT_IgG2","DT_IgG3","DT_IgG4","DT_ADCD","DT_ADNP","DT_ADCP","DT_FcgR2a","DT_FcgR3b",
+      "TT_IgG1","TT_IgG2","TT_IgG3","TT_IgG4","TT_ADCD","TT_ADNP","TT_ADCP","TT_FcgR2a","TT_FcgR3b",
+      "PT_IgG1","PT_IgG2","PT_IgG3","PT_IgG4","PT_ADCD","PT_ADNP","PT_ADCP","PT_FcgR2a","PT_FcgR3b",
+      "FHA_IgG1","FHA_IgG2","FHA_IgG3","FHA_IgG4","FHA_ADCD","FHA_ADNP","FHA_ADCP","FHA_FcgR2a","FHA_FcgR3b",
+      "PRN_IgG1","PRN_IgG2","PRN_IgG3","PRN_IgG4","PRN_ADCD","PRN_ADNP","PRN_ADCP","PRN_FcgR2a","PRN_FcgR3b")
+
+### select covariates, set time points for difference and fold-change, name variables
+covariates <- c("birth_weight", "infant_sex", "delivery_mode", "parity", "gravidity", "gestational_age_vaccination", "vaccine_birth_interval_days", "gestational_age_birth", 
+"maternal_age", "log_igg_t0")
+
+covariates_named_list <- list(
+  "Arm Name" = "arm_name",
+  "Birth Weight" = "birth_weight",
+  "Infant Sex" = "infant_sex",
+  "Delivery Mode" = "delivery_mode",
+  "Parity" = "parity",
+  # "Gravidity" = "gravidity",
+  "Gestational Age at Vaccine" = "gestational_age_vaccination",
+  "Infant Interval Between Vaccination and Delivery Days" = "vaccine_birth_interval_days",
+  "Gestational Age at Delivery" = "gestational_age_birth",
+  "Maternal Age at Vaccination" = "maternal_age",
+  "Maternal BMI at Vaccination" = "maternal_bmi",
+  "Maternal hemoglobin" = "maternal_Hb"
+  # "Baseline IgG" = "log_igg_t0",
+  # "Baseline DT IgG" = "DT_IgGt0",
+  # "Baseline FHA IgG" = "FHA_IgGt0", 
+  # "Baseline PRN IgG" = "PRN_IgGt0", 
+  # "Baseline PT IgG" = "PT_IgGt0", 
+  # "Baseline TT IgG" = "TT_IgGt0"
+)
+
+covariate.colors <- c(
+  "arm_name" = "tomato",
+  "birth_weight" = "lightblue",
+  "infant_sex" = "forestgreen",
+  "delivery_mode" = "#9467bd",
+  "parity" = "#8c564b",
+  "gravidity" = "firebrick",
+  "gestational_age_vaccination" = "darkorange",
+  "vaccine_birth_interval_days" = "steelblue",
+  "gestational_age_birth" = "mediumseagreen",
+  "maternal_age" = "salmon",
+  "maternal_bmi" = "#FEE08B",
+  "maternal_Hb" = "#C51B7D" 
+  # "log_igg_t0" = "#AF8DC3",
+  # "Residual" = "yellow",
+  # "DT_IgGt0" = "#23AECE",
+  # "FHA_IgGt0" = "#C51B7D", 
+  # "PRN_IgGt0" = "#FEE08B", 
+  # "PT_IgGt0" = "#5EA4A2", 
+  # "TT_IgGt0" = "#E04C5C"
+)
+
+covar_list <- c("arm_name","infant_sex", "delivery_mode", "parity", "gravidity")
+selected_covar <- 1
+
+covar_cont_list <- c("birth_weight",
+                    "gestational_age_vaccination",
+                    "vaccine_birth_interval_days",
+                    "gestational_age_birth",
+                    "maternal_age", "log_igg_t0"
+                     )
+selected_covar_cont <- 1
+
+covar_cat_list <- c("arm_name","infant_sex", "delivery_mode", "parity", "gravidity")
+selected_covar_cat <- 1
+
+igglist<-c("DT_IgG", "FHA_IgG", "PRN_IgG", "PT_IgG", "TT_IgG")
+
+t0 <- "prevaccinated"
+t1 <- "mo4"
+t2 <- "vaccinated"
+t3 <- "vaccinated9"
+
+t0 <- "M02"
+t1 <- "M04"
+t2 <- "M05"
+t3 <- "M09"
+# visits <- c(t0,t1,t2)
+visit_list <- c(t0,t1,t2,t3)
+
+visit_label <- function(visit = "vaccinated") {
+  case_when(
+    visit == "M02" ~ "month 2",
+    visit == "M04" ~ "month 4",
+        visit == "M05" ~ "month 5",
+    visit == "M09" ~ "month 9",
+    TRUE ~ NA_character_  # optional: for cases that don't match
+  )
+}
+
+visit_number <- function(visit = "vaccinated") {
+  case_when(
+    visit == "M02" ~ 2,
+    visit == "M04" ~ 4,
+    visit == "M05" ~ 5,
+    visit == "M09" ~ 9
+  )
+}
+            
+# Helper function to convert p-values to significance labels
+pvalue_to_label <- function(p) {
+  if(p < 0.001) return("***")
+  else if (p < 0.01) return("**")
+  else if (p < 0.05) return("*")
+  else return("ns")
+}
+
+tdiff1 <- "prevaccinated/vaccinated"
+tfold1 <- "prevaccinated/vaccinated_fold"
+tdiff2 <- "vaccinated9/vaccinated"
+tfold2 <- "vaccinated/vaccinated9_fold"
+
+antigen_list <- c("PT", "FHA", "PRN", "DT", "TT")
+# analytelist<-c("ADCD", "ADCP", "ADNP","IgG", "IgG1", "IgG2", "IgG3", "IgG4","FcgR2a","FcgR3b")
+# igglist<-c("DT_IgG", "gB_IgG","FHA_IgG", "PRN_IgG", "PT_IgG", "TT_IgG")
+# fulligglist<-c("ELISA_PRN_IgG", "ELISA_FHA_IgG", "ELISA_PT_IgG", "PT_IgG", "PRN_IgG", "FHA_IgG", "TT_IgG", "DT_IgG", "gB_IgG")
+
+# supervised_clusters = list(
+#   c("IgG"),
+#   c("IgG1"),
+#   c("IgG2"),
+#   c("IgG3"),
+#   c("IgG4"),
+#   c("FcgR2a"),
+#   c("FcgR3b"),
+#   c("ADCD"),
+#   c("ADCP"),
+#   c("ADNP")
+# )
+
+analytes_order <- c("IgG","IgG1","IgG2","IgG3","IgG4","FcgR2a","FcgR3b","ADCD","ADCP","ADNP")
+
+arms <- c("TdaP", "TT")
+
+refarms <- c("TT","TdaP")
+
+# # start supervised cluster loop
+# supervised_cluster_list <- c("SC_ADCD", "SC_ADNP", "SC_ADCP", "SC_FcgR2a", "SC_FcgR3b", "SC_IgG", "SC_IgG1", "SC_IgG3", "SC_IgG2","SC_IgG4")
+# 
+# 
+# ## create a dataframe to loop over that contains the parameters needed
+# loop_id <- 1:length(visits)
+# visit_v <- visits
+# cluster_v <- c("cluster","cluster", "cluster")
+# title_v <- c(paste(manu, visits[1], sep = ": "), paste(manu, visits[2], sep = ": "), paste(manu, visits[3], sep = ": "))
+# loop_frame <- data.frame(loop_id, visit_v, cluster_v, title_v)
+# 
+# cloop_name <- c("Antigen","Supervised","Unsupervised")
+# cloop_var <- c("antigen_c","supervised_c","cluster")
+# cloop_id <- 1:length(cloop_name)
+# cloop_suffix <- c(" ","fc","us")
+# cluster_frame <- data.frame(cloop_id, cloop_name, cloop_var, cloop_suffix)
+
+# residual_pathname_tdap <- "./data/igg_standard_residuals_tdap_apwp_prevacvacc.RData"
+# modelfit_pathname_tdap <- "./data/igg_standard_model_fit_tdap_apwp_prevacvacc.RData"
+# residual_filename_tdap <- here("./data/igg_standard_residuals_tdap_apwp_prevacvacc.RData")
+# modelfit_filename_tdap <- here("./data/igg_standard_model_fit_tdap_apwp_prevacvacc.RData")
+# 
+# residual_pathname_tt <- "./data/igg_standard_residuals_tt_apwp_prevacvacc.RData"
+# modelfit_pathname_tt <- "./data/igg_standard_model_fit_tt_apwp_prevacvacc.RData"
+# residual_filename_tt <- here("./data/igg_standard_residuals_tt_apwp_prevacvacc.RData")
+# modelfit_filename_tt <- here("./data/igg_standard_model_fit_tt_apwp_prevacvacc.RData")
+
+residual_pathname_ap <-"./data/igg_standard_residuals_ap_matpm_prevacvacc_k.RData"
+modelfit_pathname_ap <-"./data/igg_standard_model_fit_ap_matpm_prevacvacc_k.RData"
+residual_filename_ap <- here::here("./data/igg_standard_residuals_ap_matpm_prevacvacc_k.RData")
+modelfit_filename_ap <- here::here("./data/igg_standard_model_fit_ap_matpm_prevacvacc_k.RData")
+
+residual_pathname_wp <-"./data/igg_standard_residuals_wp_matpm_prevacvacc_k.RData"
+modelfit_pathname_wp <-"./data/igg_standard_model_fit_wp_matpm_prevacvacc_k.RData"
+residual_filename_wp <- here::here("./data/igg_standard_residuals_wp_matpm_prevacvacc_k.RData")
+modelfit_filename_wp <- here::here("./data/igg_standard_model_fit_wp_matpm_prevacvacc_k.RData")
+
+```
+
+```{r loaddata, include=FALSE, echo=FALSE}
+#### load data
+load(file = here("./data/a_set.RData"))
+# data <- data[data$maternal_arm==selected_maternal_arm, ]
+data$arm_name <- data$maternal_arm
+# data$arm_name <- fct_recode(data$arm_name, "mTT" = "TT", "mTdaP" = "TdaP")
+
+table(data$maternal_arm)
+table(data$arm_name)
+table(data$infant_arm)
+table(data$visit_name)
+table(data$feature)
+
+## create a check across the two sets of total IgG
+# 
+# igg_data <- pivot_wider(data = data[data$feature %in% c("PT_IgG","PT_Total_IgG"), colnames(data) != "analyte"], names_from = "feature", values_from = "value_reported")
+# 
+# ggplot(data=igg_data, mapping = aes(x = PT_IgG, y = PT_Total_IgG)) +
+#   geom_point()
+# 
+# 
+# chka_set <- data[data$infant_arm=="wP" & data$feature == "PT_IgG" & data$visit_name == "prevaccinated",]
+# ggplot(data=chka_set, mapping = aes(x = arm_name, y = value_reported)) +
+#   geom_point()
+# 
+# chkb_set <- data[data$infant_arm=="wP" & data$feature == "PT_Total_IgG" & data$visit_name == "prevaccinated",]
+# ggplot(data=chkb_set, mapping = aes(x = arm_name, y = value_reported)) +
+#   geom_point()
+
+data <- data[
+    data$feature %in% include_feature 
+    # & data$arm_name %in% arms 
+    # & data$visit_name %in% visit_list
+    , c("visit_name","subject_accession","antigen","arm_name", "analyte", "infant_arm", "feature","value_reported")]
+data$feature <- droplevels(data$feature)
+table(data$arm_name)
+table(data$maternal_arm)
+table(data$visit_name)
+table(data$feature)
+
+ddata <- distinct(data[data$feature %in% include_feature , c("infant_arm", "visit_name","subject_accession","antigen","arm_name", "analyte", "feature", "value_reported")], subject_accession, visit_name, feature, .keep_all = TRUE)
+
+ddata$arm_name <- factor(ddata$arm_name)
+table(ddata$arm_name)
+ddata$arm_name <- relevel(ddata$arm_name, ref="TT")
+table(ddata$arm_name)
+data <- ddata
+data <- data[data$arm_name %in% arms, ]
+data <- data[data$visit_name %in% visit_list, ]
+
+data$arm_name <- droplevels(data$arm_name)
+data$visit_name <- droplevels(data$visit_name)
+data$study_accession <- ifelse(data$arm_name %in% arms, "SDY2818", NA)
+# names(check_assessment_wide)[names(check_assessment_wide) == "gestational_age_vaccination"] <- "gestational_age_at_vaccine"
+# names(check_assessment_wide)[names(check_assessment_wide) == "gestational_age_birth"] <- "gestational_age_at_delivery"
+# names(check_assessment_wide)[names(check_assessment_wide) == "infant_interval_between_vaccination_and_delivery_days"] <- "vaccine_birth_interval_days"
+# names(check_assessment_wide)[names(check_assessment_wide) == "maternal_age"] <- "maternal_age_at_delivery"
+# 
+# data_clin <- dplyr::distinct(check_assessment_wide[ , c("study_accession","subject_accession", "birth_weight", "infant_sex", "delivery_mode", "parity", "gravidity", "gestational_age_at_vaccine", "vaccine_birth_interval_days", "gestational_age_at_delivery", "maternal_age_at_delivery")])
+# data_clin$birth_weight <- as.numeric(data_clin$birth_weight)/1000
+data$log_assay_value <- log10(data$value_reported+1)
+
+```
+
+
+```{r unstandardized_data, include=FALSE}
+data_e <- data[data$feature %in% igglist
+                 & data$visit_name==t0
+                 # & data$antigen %in% antigenlist
+               , c("subject_accession","antigen","value_reported","log_assay_value")]
+# data_e$log_igg_t0 <- log2(data_e$value_reported + 1)
+data_e$subject_accession <- droplevels(factor(data_e$subject_accession))
+data_e$antigen <- droplevels(data_e$antigen)
+names(data_e)[names(data_e) == "value_reported"] <-"igg_t0"
+names(data_e)[names(data_e) == "log_assay_value"] <-"log_igg_t0"
+
+
+data_es <- data_e[ , c("subject_accession", "antigen", "log_igg_t0")]
+data_es$antigen <- paste(data_es$antigen, "IgGt0", sep = "_")
+data_ee <- pivot_wider(data = data_es, names_from = antigen, values_from = log_igg_t0)
+
+data <- data[data$feature %in% include_feature
+             & data$arm_name %in% arms
+             & data$visit_name %in% visit_list,
+             c("visit_name","subject_accession","antigen", "analyte", "infant_arm","arm_name","feature","value_reported","log_assay_value")]
+
+data$feature <- droplevels(data$feature)
+data$antigen <- droplevels(data$antigen)
+data$arm_name <- droplevels(data$arm_name)
+data$visit_name <- droplevels(data$visit_name)
+
+table(data$feature, data$antigen)
+table(data$arm_name)
+table(data$arm_name, data$visit_name)
+
+# data <- merge(data, data_clin, by = "subject_accession", all.x = TRUE)
+data <- merge(data, data_e, by = c("subject_accession", "antigen"), all.x = TRUE)
+data <- merge(data, data_ee, by = c("subject_accession"), all.x = TRUE)
+
+## drop extra arms in factor
+data$arm_name <- droplevels(data$arm_name)
+table(data$arm_name)
+
+## relabel arm_name
+data$arm_name <- relevel(data$arm_name, ref=as.character(refarms[1]))
+arms <- levels(data$arm_name)
+arm.short.color <- rev(arm.apwps.color)
+arm.color = arm.short.color
+table(data$arm_name)
+
+data$log_assay_value <- log10(data$value_reported+1)
+
+# data$study_accession <- factor(data$study_accession)
+# data$subject_accession <- factor(data$subject_accession)
+# data$analyte_reported <- str_split_i(data$feature, "_", 2)
+# data$analyte_reported <- factor(data$analyte_reported)
+# data$birth_weight <- as.numeric(data$birth_weight)
+# data$infant_sex <- factor(data$infant_sex)
+# data$parity <- ifelse(data$parity>0,1,0)
+# data$parity <- factor(as.numeric(data$parity))
+# data$gravidity <- ifelse(data$gravidity>1,2,1)
+# data$gravidity <- factor(as.numeric(data$gravidity))
+# data$delivery_mode <- factor(data$delivery_mode)
+# data$gestational_age_at_vaccine <- as.numeric(data$gestational_age_at_vaccine)
+# data$gestational_age_at_delivery <- as.numeric(data$gestational_age_at_delivery)
+# data$maternal_age_at_delivery <- as.numeric(data$maternal_age_at_delivery)
+# data$vaccine_birth_interval_days <- as.numeric(data$vaccine_birth_interval_days)
+# data$log_igg_t0 <- as.numeric(data$log_igg_t0)
+
+data <- as.data.frame(data)
+unstandardized_data <- data
+unstandardized_data$standstat <- "untransformed"
+```
+
+
+```{r standardized_data, include=FALSE}
+standardized_data_wp <- standardized_set(standardized_analyte = "IgG",
+                                      connection_data = data[data$infant_arm=="wP",],
+                                      residual_file = residual_filename_wp
+                                      )
+standardized_data_ap <- standardized_set(standardized_analyte="IgG",
+                                      connection_data = data[data$infant_arm=="aP",],
+                                      residual_file=residual_filename_ap
+                                      )
+standardized_data <- rbind(standardized_data_wp, standardized_data_ap)
+
+standardized_data$log_assay_value <- as.vector(scale(standardized_data$log_assay_value))
+
+total_igg_data <- data %>%
+  filter(grepl("IgG$", feature))
+total_igg_data$log_assay_value <- as.vector(scale(total_igg_data$log_assay_value))
+standardized_data = rbind(standardized_data[ , names(total_igg_data)], total_igg_data)
+
+standardized_data$standstat <- "standardized"
+
+standardized_data_no_total_igg =
+standardized_data %>%
+  filter(!grepl("IgG$", feature))
+```
+
+
+```{r assemble_unstandard_standardized, include=FALSE}
+data <- rbind(unstandardized_data, standardized_data)
+data$antigen_c <- data$antigen
+data$analyte <- factor(str_split_i(as.character(data$feature),"_",2))
+dxdata <- distinct(data, standstat, subject_accession, visit_name , feature, .keep_all = TRUE)
+dxdata <- dxdata[!is.na(dxdata$value),]
+dxdata$visit_number <- visit_number(dxdata$visit_name)
+feature_d_names <- unique(dxdata$feature)
+tdata <- pivot_wider(dxdata, id_cols = c("standstat","subject_accession", "visit_number" ,"visit_name"), names_from = "feature", values_from = "log_assay_value")
+
+```
+
+```{r trend_loops, echo=FALSE, warning=FALSE, message=FALSE, results='asis'}
+for (standstat in c("untransformed","standardized")) {
+    cat("\n\n")
+    cat(paste("##", standstat, "{.tabset}", "\n\n"))
+    for (visit in visit_list) {
+      cat("\n\n")
+      cat(paste("###", visit, "{.tabset}", "\n\n"))
+      infant_arm_list <- c("wP", "aP")
+        for (infant_arm in infant_arm_list) {
+          cat("\n\n")
+          cat(paste("####", infant_arm, "{.tabset}", "\n\n"))
+          txdata <- dxdata[dxdata$standstat==standstat 
+                           & dxdata$visit_name==visit
+                           & dxdata$infant_arm==infant_arm,
+                           c("subject_accession", "antigen", "analyte", "arm_name", "log_assay_value")
+                           ]
+          
+          p<- volcano_plot_arm_effect(data = txdata,
+                                      effect_label = c("Lower TdaP", "Higher TdaP"))
+          
+      cat("\n\n")
+      print(p)
+      cat("\n\n")
+          
+        } # end infant arm loop
+    } # end visit loop
+} # end standstat loop
+
+
+```
+
+```{r workflowr, include=FALSE}
+## workflowr::wflow_build(files = here::here("./analysis/response_volcanos_matpm_v3.Rmd"))
+```
+

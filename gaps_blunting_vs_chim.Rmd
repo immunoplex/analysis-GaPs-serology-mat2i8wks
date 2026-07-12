@@ -1,0 +1,818 @@
+---
+title: "Blunted infant pertussis responses (InfMon2 to InfMon5) vs the de Graaf CHIM 'resistant' adult correlate"
+subtitle: "A documented, arm-stratified algorithm that flags each GaPs infant as blunted / not-blunted on the post-priming response, then compares absolute 5-month serum IgG with the CHIM anchors (de Graaf Lancet Microbe 2026, Table 1)."
+author: "Prepared for co-author review"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+    code_folding: hide
+params:
+  # ---- focal antigens; PT is the tentative CHIM correlate --------------------
+  antigens_all:     !r c("PT", "PRN", "FHA", "FIM")
+  blunt_primary:    "PT"                         # single-antigen flag drives the main comparison
+  blunt_panel:      !r c("PT", "PRN", "FHA")     # multi-antigen sensitivity flag (FIM usually not blunted)
+  # ---- response definition: pre-primary baseline -> post-primary response ----
+  baseline_visit:   "InfMon2"                    # transplacental / pre-primary draw (M02)
+  response_visit:   "InfMon5"                    # post-priming draw (M05); co-author's focal 5-month
+  total_igg_label:  "IgG"                        # total IgG (subclasses are IgG1..IgG4)
+  # ---- blunting rule ---------------------------------------------------------
+  blunt_method:     "quantile"    # "quantile" | "median" | "zscore"
+  blunt_quantile:   0.3333333     # bottom third within arm = blunted (primary)
+  blunt_z:          -0.4307       # zscore method: ~bottom tertile under normality
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
+options(scipen = 999, stringsAsFactors = FALSE)
+```
+
+```{r libs, include=FALSE}
+library(dplyr); library(tidyr); library(knitr)
+```
+
+# What this document does, and why the design changed
+
+The de Graaf controlled human infection (CHIM) study identified adults who **resisted
+colonisation** after *B pertussis* challenge, associated with **higher pre-inoculation serum
+anti-PT IgG** (a tentative correlate of protection). The co-author's question: **do post-priming
+serum PT IgG concentrations in GaPs infants — especially the blunted ones — sit above the CHIM
+resistant-adult concentration?**
+
+Answering that needs a **defined, reproducible "blunted" flag**, not an eyeballed subgroup. Two
+facts fix the design:
+
+1. **The M02 / M05 / M09 infant draws were randomised across plates.** There is therefore *no*
+   batch-of-plates offset between these timepoints, so the **within-subject change in
+   concentration units is a valid response** and can be used directly (unlike the maternal/cord
+   vs infant contrast, which required rank-standardisation in the earlier modules).
+2. **The infant priming vaccine (aP vs wP) dominates the expected response.** So the expectation
+   against which "blunted = less than expected" is judged is built **within infant arm**.
+
+**Algorithm (one flag per subject):**
+
+- **Response** R = log10(conc at `InfMon5`) − log10(conc at `InfMon2`) — the post-priming log
+  fold-rise, per subject per antigen (total IgG). Requires a finite positive value at both draws.
+- **Expectation**, per **infant arm** (aP, wP) separately: the arm's own response distribution.
+  "Expected given the exposure" = the arm-typical response.
+- **Blunted** = response falls in the low tail of its arm's response distribution. Primary rule:
+  **below the arm's lower tertile** (`blunt_method = "quantile"`, q = 1/3). Two sensitivity rules
+  are also computed: **below the arm median** and **arm-standardised z below `r params$blunt_z`**.
+- **Validation:** the flag is cross-tabulated against the **maternal arm (TdaP vs TT)**. Because
+  blunting is caused by maternal antibody, a valid flag should be **enriched for maternal-TdaP**
+  among the blunted infants — this is the biological check that the statistical flag is capturing
+  real blunting rather than noise.
+
+**Important separation of quantities.** The *flag* is derived from the **response** (a change).
+The *CHIM comparison* uses the **absolute InfMon5 concentration** (a level), because the co-author
+is asking whether the achieved 5-month level clears the ~6.2 IU/mL resistant-adult anchor. These
+are deliberately different quantities and are never conflated.
+
+**A note on the primary rule.** A within-arm quantile equalises the blunted *fraction* across
+arms by construction, so this flag is for **identifying blunted individuals**, not for comparing
+blunting *rates* between aP and wP. Rate/severity differences are addressed by (i) the
+maternal-arm enrichment check and (ii) the design-based maternal×infant table at the end.
+
+---
+
+# CHIM anchors — de Graaf Table 1 (published GMs, not digitized Figure 3)
+
+```{r chim-anchors}
+chim <- tibble::tribble(
+  ~antigen, ~unit,   ~n_col, ~gm_col, ~col_lo, ~col_hi, ~p_table1, ~n_res, ~gm_res, ~res_lo, ~res_hi,
+  "PT",     "IU/mL",  20,     1.9,     0.9,     4.0,     0.028,      30,     6.2,     3.0,    12.8,
+  "PRN",    "IU/mL",  20,     7.3,     2.4,    22.3,     0.037,      30,    17.6,     8.1,    38.2,
+  "FHA",    "IU/mL",  20,     8.5,     2.5,    29.2,     0.010,      30,    30.1,    13.5,    67.3,
+  "FIM",    "AU/mL",  20,    28.2,     7.4,   108.0,     0.97,       30,    25.4,     8.6,    75.5
+)
+kable(
+  chim %>% transmute(
+    Antigen = antigen, Unit = unit,
+    `CHIM colonised (susceptible) GM (95% CI)` = sprintf("%.1f (%.1f\u2013%.1f)", gm_col, col_lo, col_hi),
+    `CHIM resistant (protected) GM (95% CI)`   = sprintf("%.1f (%.1f\u2013%.1f)", gm_res, res_lo, res_hi),
+    `p (Table 1)` = p_table1),
+  caption = "de Graaf 2026 Table 1 pre-inoculation serum IgG. PT/PRN/FHA in IU/mL; FIM in AU/mL. PT anchors carried through: resistant GM = 6.2 (3.0-12.8); colonised GM = 1.9 (0.9-4.0).")
+```
+
+---
+
+# Load `d_set` and confirm the columns
+
+```{r load-dset, results='asis'}
+DSET_PATH <- if (file.exists("d_set.RData")) "d_set.RData" else
+             if (file.exists("data/d_set.RData")) "data/d_set.RData" else "d_set.RData"
+stopifnot(file.exists(DSET_PATH))
+.e <- new.env(); .loaded <- load(DSET_PATH, envir = .e)
+d_set <- if ("ebaa_extra2" %in% .loaded) get("ebaa_extra2", envir = .e) else {
+  .dfs <- .loaded[vapply(.loaded, function(o) is.data.frame(get(o, envir = .e)), logical(1))]
+  stopifnot(length(.dfs) >= 1); get(.dfs[1], envir = .e)
+}
+d_set <- as.data.frame(d_set)
+cat(sprintf("Loaded **%d** rows, **%d** columns from `%s` (object: %s).\n\n",
+            nrow(d_set), ncol(d_set), DSET_PATH, paste(.loaded, collapse = ", ")))
+cat("Columns: ", paste0("`", names(d_set), "`", collapse = ", "), "\n\n")
+
+show_levels <- function(df, col, max_n = 30) {
+  if (!col %in% names(df)) return(sprintf("- **%s**: (absent)\n", col))
+  u <- sort(unique(as.character(df[[col]])))
+  sprintf("- **%s** (%d): %s\n", col, length(u), paste(utils::head(u, max_n), collapse = ", "))
+}
+for (cc in c("visit_name","antigen","analyte","feature","infant_arm","arm_name","subject_accession"))
+  cat(show_levels(d_set, cc))
+```
+
+```{r resolve-columns}
+# Column resolution with fallbacks (edit here only if discovery above differs).
+pick <- function(cands, default = NA_character_) {
+  hit <- cands[cands %in% names(d_set)]
+  if (length(hit)) hit[1] else default
+}
+VISIT_COL   <- pick(c("visit_name","visit","visit_id","planned_visit","timepoint"), "visit_name")
+ANTIGEN_COL <- pick(c("antigen","ag","analyte_antigen"), "antigen")
+ANALYTE_COL <- pick(c("analyte","isotype","assay","measurement"), "analyte")
+CONC_COL    <- pick(c("value_reported","concentration","conc","result","value"), NA_character_)
+SUBJ_COL    <- pick(c("subject_accession","subject_id","subject","usubjid","pin"), names(d_set)[1])
+
+# Infant priming arm: prefer a direct column; else derive from arm_name text.
+INFANT_ARM_COL <- pick(c("infant_arm","inf_arm","infant_vaccine","child_arm"), NA_character_)
+# Maternal arm (TdaP/TT) lives in arm_name per module 07.
+MAT_ARM_COL    <- pick(c("arm_name","maternal_arm","mat_arm","maternal_vaccine"), NA_character_)
+
+if (is.na(CONC_COL)) stop("No concentration column found; set CONC_COL to the numeric titre column.")
+```
+
+```{r derive-infant-arm, results='asis'}
+d <- d_set
+d$sid    <- as.character(d[[SUBJ_COL]])
+d$vis   <- as.character(d[[VISIT_COL]])
+d$ag_ <- as.character(d[[ANTIGEN_COL]])
+d$an_ <- as.character(d[[ANALYTE_COL]])
+d$conc_    <- suppressWarnings(as.numeric(d[[CONC_COL]]))
+d$matarm  <- if (!is.na(MAT_ARM_COL)) as.character(d[[MAT_ARM_COL]]) else NA_character_
+
+# Visit recode fallback: the project's load_serology_data() maps raw codes to
+# labels (M00->CordBlood, M02->InfMon2, M05->InfMon5, M09->InfMon9,
+# P02->PregEarly, P09->MatBirth). If d_set stores the RAW codes, our label-based
+# params would match nothing, so apply the same recode here when the labels are
+# absent but the raw codes are present.
+VISIT_RECODE <- c(M00 = "CordBlood", M02 = "InfMon2", M04 = "InfMon4",
+                  M05 = "InfMon5", M09 = "InfMon9", P02 = "PregEarly", P09 = "MatBirth")
+if (!any(c("InfMon2","InfMon5") %in% d$vis) && any(names(VISIT_RECODE) %in% d$vis)) {
+  hit <- d$vis %in% names(VISIT_RECODE)
+  d$vis[hit] <- unname(VISIT_RECODE[d$vis[hit]])
+  cat("> Applied the project visit recode (raw codes like M02/M05 -> InfMon2/InfMon5), ",
+      "since the recoded labels were not already present in `d_set$", VISIT_COL, "`.\n\n", sep = "")
+}
+
+if (!is.na(INFANT_ARM_COL)) {
+  d$infarm <- as.character(d[[INFANT_ARM_COL]])
+} else if (!is.na(MAT_ARM_COL)) {
+  # Fallback: try to read wP/aP out of arm_name if infant priming is encoded there.
+  an <- tolower(d$matarm)
+  d$infarm <- ifelse(grepl("wp|whole", an), "wP",
+               ifelse(grepl("\\bap\\b|acellular|dtap", an), "aP", NA_character_))
+  cat("> **`infant_arm` column not found** — attempted to derive wP/aP from `arm_name`. ",
+      "In the GaPs pipeline the infant priming arm is normally resolved via ",
+      "`resolve_infant_arm()` from a clinical table; if the derivation below looks wrong, ",
+      "add an `infant_arm` column to `d_set` (values 'wP'/'aP') and re-knit.\n\n")
+} else {
+  d$infarm <- NA_character_
+  cat("> **No infant-arm information available.** The arm-stratified expectation cannot be ",
+      "built; the flag will fall back to a single pooled expectation. Add `infant_arm` to ",
+      "`d_set` for the intended behaviour.\n\n")
+}
+
+cat("Infant-arm counts (rows):\n\n")
+print(kable(as.data.frame(table(infant_arm = d$infarm, useNA = "ifany")), caption = "infant_arm"))
+if (!is.na(MAT_ARM_COL)) {
+  cat("\nMaternal-arm counts (rows):\n\n")
+  print(kable(as.data.frame(table(maternal_arm = d$matarm, useNA = "ifany")), caption = "arm_name (maternal)"))
+}
+```
+
+---
+
+# Build the per-subject response and the blunting flag
+
+```{r build-response, results='asis'}
+BASE <- params$baseline_visit      # InfMon2
+RESP <- params$response_visit      # InfMon5
+AG   <- params$antigens_all
+
+# --- Robustly resolve the TOTAL-IgG analyte label -------------------------
+an_levels <- sort(unique(d$an_))
+TOTAL_IGG <- params$total_igg_label
+if (!(TOTAL_IGG %in% an_levels)) {
+  # try common alternative spellings for a *total* (non-subclass) IgG
+  alt <- an_levels[grepl("^ig ?g", tolower(an_levels)) &
+                   !grepl("ig ?g[1-4]|adcd|wt", tolower(an_levels))]
+  if (length(alt) == 1) {
+    cat(sprintf("> Total-IgG label '%s' not found; using detected '%s' instead.\n\n", TOTAL_IGG, alt))
+    TOTAL_IGG <- alt
+  } else {
+    cat(sprintf("> **Total-IgG label '%s' not found.** Analyte levels present: %s. ",
+                TOTAL_IGG, paste(an_levels, collapse = ", ")))
+    cat("Set `params$total_igg_label` to the correct value and re-knit.\n\n")
+  }
+}
+
+# --- Step-by-step row-count diagnostic (so an empty result is explained) ----
+n0 <- nrow(d)
+n1 <- sum(d$an_ == TOTAL_IGG, na.rm = TRUE)
+n2 <- sum(d$an_ == TOTAL_IGG & d$ag_ %in% AG, na.rm = TRUE)
+n3 <- sum(d$an_ == TOTAL_IGG & d$ag_ %in% AG & d$vis %in% c(BASE, RESP), na.rm = TRUE)
+n4 <- sum(d$an_ == TOTAL_IGG & d$ag_ %in% AG & d$vis %in% c(BASE, RESP) &
+          is.finite(d$conc_) & d$conc_ > 0, na.rm = TRUE)
+diag_tbl <- data.frame(
+  step = c("all rows", "analyte == total IgG", "+ antigen in panel",
+           sprintf("+ visit in {%s, %s}", BASE, RESP), "+ finite positive conc"),
+  rows = c(n0, n1, n2, n3, n4))
+print(knitr::kable(diag_tbl, caption = "Row counts after each build-response filter (find where it zeroes)."))
+cat("\n\n")
+
+# Long -> per subject x antigen, one baseline and one response concentration.
+core <- d %>%
+  filter(an_ == TOTAL_IGG,
+         ag_ %in% AG,
+         vis %in% c(BASE, RESP),
+         is.finite(conc_), conc_ > 0) %>%
+  distinct(sid, ag_, vis, .keep_all = TRUE) %>%
+  select(sid, infarm, matarm, ag_, vis, conc_) %>%
+  mutate(logc_ = log10(conc_)) %>%
+  select(-conc_) %>%
+  pivot_wider(names_from = vis, values_from = logc_)
+
+# Guard for antigens/visits that may be missing after pivot. Base-R rename so
+# there is no non-standard-evaluation fragility with dynamic column names.
+has_base <- BASE %in% names(core); has_resp <- RESP %in% names(core)
+if (nrow(core) > 0 && has_base && has_resp) {
+  names(core)[names(core) == BASE] <- "logc_base"
+  names(core)[names(core) == RESP] <- "logc_resp"
+  core$response  <- core$logc_resp - core$logc_base   # Delta log10 fold-rise
+  core$conc_resp <- 10^core$logc_resp                 # absolute InfMon5 conc (CHIM cmp)
+  core$conc_base <- 10^core$logc_base
+} else {
+  core$logc_base <- NA_real_; core$logc_resp <- NA_real_
+  core$response <- NA_real_; core$conc_resp <- NA_real_; core$conc_base <- NA_real_
+  cat(sprintf("> **After pivot, one/both of '%s'/'%s' had no data** (paired baseline+response ",
+              BASE, RESP))
+  cat("rows = 0). The comparison will be empty; check the diagnostic table above and the ",
+      "visit spelling in the discovery section.\n\n")
+}
+
+# How many subjects have a usable PT response?
+n_pt <- if ("response" %in% names(core))
+  sum(core$ag_ == params$blunt_primary & is.finite(core$response)) else 0L
+cat(sprintf("Subjects with a usable **%s** response (finite %s->%s change): **%d**.\n\n",
+            params$blunt_primary, BASE, RESP, n_pt))
+```
+
+```{r flag-engine}
+# ---------------------------------------------------------------------------
+# flag_blunted(): given per-subject responses for ONE antigen (or a panel score)
+# plus each subject's infant arm, return a logical 'blunted' vector using an
+# arm-stratified rule. Expectation = the arm's own response distribution.
+#   method "quantile": blunted if response < arm quantile(q)          [primary]
+#   method "median"  : blunted if response < arm median               [50/50]
+#   method "zscore"  : blunted if (response - arm_median)/arm_MAD < z  [robust z]
+# Returns a data.frame with response, arm z, arm cut, and the flag, so every
+# decision is auditable.
+# ---------------------------------------------------------------------------
+flag_blunted <- function(resp, arm, method = "quantile", q = 1/3, zthr = -0.4307) {
+  # Guard: empty input -> return a correctly-typed empty frame (no crash).
+  if (length(resp) == 0) {
+    return(data.frame(response = numeric(0), arm = character(0),
+                      arm_z = numeric(0), arm_cut = numeric(0), blunted = logical(0)))
+  }
+  arm <- as.character(arm)
+  out <- data.frame(response = resp, arm = arm,
+                    arm_z = NA_real_, arm_cut = NA_real_, blunted = NA)
+  for (a in unique(arm[!is.na(arm)])) {
+    idx <- which(arm == a & is.finite(resp))
+    if (length(idx) < 3) next
+    r  <- resp[idx]
+    md <- stats::median(r)
+    ma <- stats::mad(r); if (!is.finite(ma) || ma == 0) ma <- stats::sd(r)
+    out$arm_z[idx] <- if (is.finite(ma) && ma > 0) (r - md) / ma else 0
+    cut <- switch(method,
+                  quantile = as.numeric(stats::quantile(r, probs = q, names = FALSE)),
+                  median   = md,
+                  zscore   = md + zthr * ma)
+    out$arm_cut[idx] <- cut
+    out$blunted[idx] <- r < cut
+  }
+  out
+}
+
+# --- Primary single-antigen flag (PT) ---------------------------------------
+prim <- params$blunt_primary
+pt_resp <- core %>% filter(ag_ == prim)
+if (nrow(pt_resp) == 0) {
+  # keep a well-formed empty frame so downstream code and joins still run
+  pt_resp <- pt_resp %>% mutate(blunted_primary = logical(0),
+                                resp_z_primary = numeric(0),
+                                arm_cut_primary = numeric(0))
+} else {
+  fb_pt <- flag_blunted(pt_resp$response, pt_resp$infarm,
+                        method = params$blunt_method, q = params$blunt_quantile, zthr = params$blunt_z)
+  pt_resp$blunted_primary <- fb_pt$blunted
+  pt_resp$resp_z_primary  <- fb_pt$arm_z
+  pt_resp$arm_cut_primary <- fb_pt$arm_cut
+}
+
+# --- Panel flag (mean arm-standardised response z across the panel) ---------
+pan_ag <- intersect(params$blunt_panel, unique(core$ag_))
+pan <- core %>% filter(ag_ %in% pan_ag, is.finite(response))
+if (nrow(pan) == 0) {
+  pan_z <- data.frame(sid = character(0), infarm = character(0), matarm = character(0),
+                      panel_z = numeric(0), n_ag = integer(0), blunted_panel = logical(0))
+} else {
+  # standardise each antigen's response within arm, then average per subject
+  pan_z <- pan %>%
+    group_by(ag_, infarm) %>%
+    mutate(z = { md <- stats::median(response[is.finite(response)]);
+                 ma <- stats::mad(response[is.finite(response)]);
+                 if (!is.finite(ma) || ma == 0) ma <- stats::sd(response[is.finite(response)]);
+                 if (is.finite(ma) && ma > 0) (response - md)/ma else 0 }) %>%
+    ungroup() %>%
+    group_by(sid, infarm, matarm) %>%
+    summarise(panel_z = mean(z, na.rm = TRUE), n_ag = sum(is.finite(z)), .groups = "drop")
+  fb_pan <- flag_blunted(pan_z$panel_z, pan_z$infarm,
+                         method = params$blunt_method, q = params$blunt_quantile, zthr = params$blunt_z)
+  pan_z$blunted_panel <- fb_pan$blunted
+}
+
+# --- Assemble the per-subject flag table (the requested column) -------------
+subj_flags <- core %>%
+  select(sid, infarm, matarm) %>% distinct() %>%
+  left_join(pt_resp %>% transmute(sid, response_PT = response,
+                                  PT_M05 = conc_resp, PT_M02 = conc_base,
+                                  resp_z_PT = resp_z_primary, blunted_PT = blunted_primary),
+            by = "sid") %>%
+  left_join(pan_z %>% select(sid, panel_z, blunted_panel), by = "sid") %>%
+  rename(subject_accession = sid, infant_arm = infarm, maternal_arm = matarm)
+
+# absolute InfMon5 level for every antigen (wide) for the CHIM comparison
+m05_abs <- core %>%
+  transmute(subject_accession = sid, antigen = ag_, conc_resp) %>%
+  filter(is.finite(conc_resp))
+```
+
+```{r flag-summary, results='asis'}
+cat(sprintf("Response defined as log10(%s) \u2212 log10(%s), total IgG. Primary flag on **%s**; ",
+            RESP, BASE, prim))
+cat(sprintf("panel flag on **%s** (mean arm-standardised response z). Rule: **%s**",
+            paste(pan_ag, collapse = "+"), params$blunt_method))
+if (params$blunt_method == "quantile") cat(sprintf(" (below arm quantile q=%.3f).", params$blunt_quantile))
+if (params$blunt_method == "zscore")   cat(sprintf(" (arm z < %.3f).", params$blunt_z))
+cat("\n\n")
+
+if (all(is.na(subj_flags$blunted_PT))) {
+  cat("> **No PT response could be computed.** Check that both '", BASE, "' and '", RESP,
+      "' exist for total-IgG PT in the discovery output; edit the params if the visit labels differ.\n\n")
+} else {
+  # arm-specific cut points actually used, for transparency
+  cuts <- pt_resp %>% filter(is.finite(arm_cut_primary)) %>%
+    group_by(infarm) %>%
+    summarise(n = sum(is.finite(response)),
+              median_rise = round(stats::median(response, na.rm = TRUE), 3),
+              cut_deltalog10 = round(dplyr::first(arm_cut_primary), 3),
+              n_blunted = sum(blunted_primary, na.rm = TRUE), .groups = "drop")
+  print(kable(cuts, col.names = c("Infant arm","n with PT response","Median \u0394log10 rise",
+                                  "Blunted cut (\u0394log10)","n blunted"),
+              caption = sprintf("PT response by infant arm and the arm-specific blunted cut-point (%s rule).",
+                                params$blunt_method)))
+  cat("\n\n")
+}
+```
+
+## Validation — is the blunted flag enriched for maternal TdaP?
+
+```{r validation, results='asis'}
+if (!all(is.na(subj_flags$blunted_PT)) && any(!is.na(subj_flags$maternal_arm))) {
+  vv <- subj_flags %>% filter(!is.na(blunted_PT), !is.na(maternal_arm))
+  # overall
+  tab <- table(maternal_arm = vv$maternal_arm, blunted = ifelse(vv$blunted_PT, "blunted", "not"))
+  ft  <- tryCatch(stats::fisher.test(tab), error = function(e) NULL)
+  print(kable(as.data.frame.matrix(tab),
+              caption = "Blunted-PT flag x maternal arm (all infants). A valid flag should over-represent TdaP among blunted."))
+  if (!is.null(ft)) cat(sprintf("\nFisher exact p = **%.3g** (odds ratio %.2f).\n\n",
+                                ft$p.value, unname(ft$estimate)))
+  # blunted rate by maternal arm, within infant arm
+  rate <- vv %>% group_by(infant_arm, maternal_arm) %>%
+    summarise(n = dplyr::n(), pct_blunted = round(100*mean(blunted_PT), 0), .groups = "drop")
+  print(kable(rate, caption = "Blunted-PT rate (%) by infant arm x maternal arm."))
+  cat("\n\n> Read this as the biological check: within each infant arm, maternal-TdaP infants ",
+      "should show a higher blunted rate than maternal-TT infants if the flag is capturing ",
+      "genuine maternal-antibody blunting.\n\n")
+} else {
+  cat("> Validation skipped (need both the PT flag and a maternal-arm column).\n\n")
+}
+```
+
+---
+
+# Blunting as a ceiling / threshold phenomenon (mechanistic flag)
+
+The tertile flag above is **purely distributional** — it labels the low tail of the response
+distribution, agnostic to *why*. If blunting is instead a **saturation / ceiling** effect (the
+immune system approaches a maximum achievable antibody level, so infants who start high — lots of
+maternal antibody — have little headroom and respond less), the mechanistically-correct flag is
+different, and the two can identify almost **opposite** infants.
+
+**Model.** On the log scale, with b = log10(InfMon2) (pre-primary maternal-antibody baseline) and
+y = log10(InfMon5) (achieved level): regress **y on b** per infant arm.
+
+- slope **beta = 1** -> no blunting (vaccine adds a fixed increment regardless of baseline);
+- **beta = 0** -> hard ceiling (achieved level set by the ceiling C, independent of baseline);
+- **0 < beta < 1** -> partial interference.
+
+We (1) estimate beta and test it against 1 (the coupling-robust test — we deliberately do **not**
+regress the response r=y-b on b, because r and b are mathematically coupled and would show a
+spurious negative slope even under noise); (2) fit a **segmented** model to locate a **breakpoint
+psi** (the threshold) and check whether the upper segment flattens (a genuine plateau); and
+(3) define **ceiling-blunted = baseline above psi** — the infants in the interference regime.
+The plateau height back-transformed is the **ceiling C in IU/mL**, directly comparable to the
+CHIM resistant anchor (6.2).
+
+```{r ceiling-engine}
+# ---------------------------------------------------------------------------
+# fit_ceiling(): per-arm regression of achieved (y) on baseline (b), both log10.
+#   - beta_linear + test vs 1 (coupling-robust interference test)
+#   - continuous two-segment hinge fit y ~ b + pmax(b-psi,0), grid over psi,
+#     choose psi by min RSS; compare to the single line by AIC
+#   - slope_lo (below psi), slope_hi (above psi); slope_hi ~ 0 => plateau
+#   - ceiling_log10 = fitted y at the plateau onset (b = psi)
+# No external packages; base lm only. Returns a list or NULL.
+# ---------------------------------------------------------------------------
+fit_ceiling <- function(b, y, min_seg = 8L, q_lo = 0.15, q_hi = 0.85) {
+  ok <- is.finite(b) & is.finite(y); b <- b[ok]; y <- y[ok]; n <- length(b)
+  if (n < 2L * min_seg) return(NULL)
+  lin  <- stats::lm(y ~ b)
+  sm   <- summary(lin)$coefficients
+  beta <- unname(sm["b", "Estimate"]); se <- unname(sm["b", "Std. Error"])
+  # test beta vs 1 (H0: no blunting)
+  t1   <- (beta - 1) / se
+  p_b1 <- 2 * stats::pt(-abs(t1), df = n - 2)
+  beta_ci <- beta + c(-1, 1) * stats::qt(0.975, df = n - 2) * se
+
+  # candidate breakpoints: interior baseline values leaving >= min_seg per side
+  bs <- sort(b)
+  lo <- stats::quantile(b, q_lo, names = FALSE); hi <- stats::quantile(b, q_hi, names = FALSE)
+  cand <- unique(bs[bs >= lo & bs <= hi])
+  cand <- cand[vapply(cand, function(p) sum(b <= p) >= min_seg && sum(b > p) >= min_seg, logical(1))]
+  seg <- NULL
+  if (length(cand) >= 1) {
+    best_rss <- Inf
+    for (psi in cand) {
+      hinge <- pmax(b - psi, 0)
+      f <- stats::lm(y ~ b + hinge)
+      rss <- sum(stats::resid(f)^2)
+      if (is.finite(rss) && rss < best_rss) { best_rss <- rss; seg <- list(psi = psi, fit = f) }
+    }
+  }
+  out <- list(n = n, beta = beta, beta_ci = beta_ci, p_beta_vs1 = p_b1,
+              aic_linear = stats::AIC(lin), lin = lin, seg_ok = FALSE)
+  if (!is.null(seg)) {
+    cf <- stats::coef(seg$fit)
+    slope_lo <- unname(cf["b"]); slope_hi <- unname(cf["b"] + cf["hinge"])
+    ceiling_log10 <- unname(cf["(Intercept)"] + cf["b"] * seg$psi)  # fitted y at b = psi
+    out$seg_ok <- TRUE
+    out$psi <- seg$psi; out$slope_lo <- slope_lo; out$slope_hi <- slope_hi
+    out$ceiling_log10 <- ceiling_log10; out$aic_seg <- stats::AIC(seg$fit)
+    out$delta_aic <- out$aic_linear - out$aic_seg   # >0 favours the segmented (ceiling) model
+    out$fit <- seg$fit
+  }
+  out
+}
+```
+
+```{r ceiling-fit, results='asis'}
+prim <- params$blunt_primary
+res_gm_pt <- chim$gm_res[chim$antigen == "PT"]     # 6.2
+ceil_dat <- core %>% filter(ag_ == prim, is.finite(logc_base), is.finite(logc_resp))
+
+ceil_flags <- tibble::tibble(subject_accession = character(0),
+                             ceiling_blunted = logical(0))
+ceil_summ <- list(); ceil_fits <- list()
+
+arms_present <- unique(ceil_dat$infarm[!is.na(ceil_dat$infarm)])
+if (length(arms_present) == 0) arms_present <- NA  # pooled fallback
+
+for (ar in arms_present) {
+  sub <- if (is.na(ar)) ceil_dat else ceil_dat %>% filter(infarm == ar)
+  fc  <- fit_ceiling(sub$logc_base, sub$logc_resp)
+  if (is.null(fc)) next
+  ceil_fits[[as.character(ar)]] <- list(fit = fc, data = sub)
+  # flag: baseline above breakpoint (interference regime). If no segment, no ceiling flag.
+  if (isTRUE(fc$seg_ok)) {
+    fl <- sub %>% transmute(subject_accession = sid,
+                            ceiling_blunted = logc_base > fc$psi)
+    ceil_flags <- dplyr::bind_rows(ceil_flags, fl)
+  }
+  ceil_summ[[length(ceil_summ) + 1]] <- tibble::tibble(
+    `Infant arm` = ifelse(is.na(ar), "(pooled)", ar),
+    n = fc$n,
+    `beta (y~b)` = round(fc$beta, 2),
+    `beta 95% CI` = sprintf("%.2f\u2013%.2f", fc$beta_ci[1], fc$beta_ci[2]),
+    `p(beta!=1)` = signif(fc$p_beta_vs1, 2),
+    `breakpoint psi (IU/mL)` = if (isTRUE(fc$seg_ok)) round(10^fc$psi, 1) else NA_real_,
+    `slope below` = if (isTRUE(fc$seg_ok)) round(fc$slope_lo, 2) else NA_real_,
+    `slope above` = if (isTRUE(fc$seg_ok)) round(fc$slope_hi, 2) else NA_real_,
+    `ceiling C (IU/mL)` = if (isTRUE(fc$seg_ok)) round(10^fc$ceiling_log10, 1) else NA_real_,
+    `dAIC seg-vs-line` = if (isTRUE(fc$seg_ok)) round(fc$delta_aic, 1) else NA_real_,
+    `n ceiling-blunted` = if (isTRUE(fc$seg_ok)) sum(sub$logc_base > fc$psi) else NA_integer_)
+}
+
+if (length(ceil_summ)) {
+  print(kable(dplyr::bind_rows(ceil_summ),
+    caption = paste0("Ceiling/threshold fit for ", prim, " (achieved InfMon5 on baseline InfMon2, ",
+      "log10, per infant arm). beta=1 no blunting, beta->0 hard ceiling; p is the coupling-robust ",
+      "test of beta vs 1. A positive dAIC favours the segmented (ceiling) model over a single line. ",
+      "'ceiling C' is the plateau level in IU/mL, compare with the CHIM resistant anchor 6.2.")))
+  cat("\n\n")
+} else {
+  cat("> Ceiling fit unavailable (need >= ~16 paired PT baseline/response values per arm).\n\n")
+}
+
+# attach the ceiling flag to the master per-subject table
+subj_flags <- subj_flags %>%
+  dplyr::left_join(dplyr::distinct(ceil_flags, subject_accession, .keep_all = TRUE),
+                   by = "subject_accession")
+```
+
+```{r ceiling-plot, fig.width=9, fig.height=4.2}
+if (length(ceil_fits) && requireNamespace("ggplot2", quietly = TRUE)) {
+  library(ggplot2)
+  plotdat <- dplyr::bind_rows(lapply(names(ceil_fits), function(ar) {
+    dd <- ceil_fits[[ar]]$data
+    dd$arm_lab <- ar; dd
+  }))
+  # fitted lines per arm (segmented if available, else linear)
+  fitlines <- dplyr::bind_rows(lapply(names(ceil_fits), function(ar) {
+    fc <- ceil_fits[[ar]]$fit; dd <- ceil_fits[[ar]]$data
+    gx <- seq(min(dd$logc_base, na.rm = TRUE), max(dd$logc_base, na.rm = TRUE), length.out = 100)
+    if (isTRUE(fc$seg_ok)) {
+      cf <- stats::coef(fc$fit)
+      gy <- cf["(Intercept)"] + cf["b"] * gx + cf["hinge"] * pmax(gx - fc$psi, 0)
+    } else {
+      cf <- stats::coef(fc$lin); gy <- cf[1] + cf[2] * gx
+    }
+    data.frame(arm_lab = ar, logc_base = gx, logc_resp = as.numeric(gy))
+  }))
+  breaks10 <- function(x) 10^x
+  p <- ggplot(plotdat, aes(logc_base, logc_resp)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "grey60") +  # y=b (no rise)
+    geom_hline(yintercept = log10(res_gm_pt), linetype = "dashed", color = "#b2182b") +  # 6.2 anchor
+    { if (!is.null(plotdat$matarm)) geom_point(aes(color = matarm), alpha = 0.7, size = 1.6)
+      else geom_point(alpha = 0.7, size = 1.6) } +
+    geom_line(data = fitlines, linewidth = 0.9, color = "black") +
+    facet_wrap(~ arm_lab, nrow = 1) +
+    labs(x = sprintf("Baseline log10 %s IgG (InfMon2)", prim),
+         y = sprintf("Achieved log10 %s IgG (InfMon5)", prim),
+         color = "Maternal arm",
+         title = sprintf("%s: achieved (InfMon5) vs baseline (InfMon2) by infant arm", prim),
+         subtitle = "Dotted = no-rise line (y=b); dashed red = CHIM resistant anchor 6.2 IU/mL; black = fitted (segmented if supported)") +
+    theme_bw(base_size = 11)
+  print(p)
+} 
+```
+
+---
+
+# CHIM comparison — absolute InfMon5 PT IgG by blunted status
+
+The flag comes from the *response*; this table reports the *absolute* 5-month level against the
+CHIM PT anchors (resistant GM 6.2, colonised GM 1.9 IU/mL).
+
+```{r cmp-helpers}
+gm_ci <- function(x, conf = 0.95) {
+  x <- x[is.finite(x) & x > 0]; n <- length(x)
+  if (n < 2) return(c(gm = if (n) x else NA_real_, lo = NA_real_, hi = NA_real_))
+  lx <- log(x); m <- mean(lx); se <- stats::sd(lx)/sqrt(n)
+  tt <- stats::qt(1 - (1 - conf)/2, df = n - 1)
+  c(gm = exp(m), lo = exp(m - tt*se), hi = exp(m + tt*se))
+}
+row_vs_chim <- function(vals, antigen_code, group_label) {
+  vals <- vals[is.finite(vals) & vals > 0]
+  a <- chim[chim$antigen == antigen_code, ]
+  ci <- gm_ci(vals)
+  tibble::tibble(
+    Antigen = antigen_code, Group = group_label, n = length(vals),
+    GM = round(unname(ci["gm"]), 1),
+    `GM 95% CI` = if (is.na(ci["lo"])) NA_character_ else sprintf("%.1f\u2013%.1f", ci["lo"], ci["hi"]),
+    Median = round(stats::median(vals), 1),
+    `xGM vs resistant` = if (is.na(ci["gm"])) NA_real_ else round(unname(ci["gm"])/a$gm_res, 1),
+    `% > resistant GM (6.2)` = round(100*mean(vals > a$gm_res), 0),
+    `% > colonised GM (1.9)` = round(100*mean(vals > a$gm_col), 0))
+}
+chim_ref_rows <- function(antigen_code) {
+  a <- chim[chim$antigen == antigen_code, ]
+  tibble::tibble(
+    Antigen = antigen_code,
+    Group = c("CHIM adult colonised (susceptible)","CHIM adult resistant (protected)"),
+    n = c(a$n_col, a$n_res), GM = c(a$gm_col, a$gm_res),
+    `GM 95% CI` = c(sprintf("%.1f\u2013%.1f", a$col_lo, a$col_hi),
+                    sprintf("%.1f\u2013%.1f", a$res_lo, a$res_hi)),
+    Median = c(NA_real_, NA_real_),
+    `xGM vs resistant` = c(round(a$gm_col/a$gm_res, 1), 1),
+    `% > resistant GM (6.2)` = c(NA_real_, NA_real_),
+    `% > colonised GM (1.9)` = c(NA_real_, NA_real_))
+}
+```
+
+```{r pt-cmp-table, results='asis'}
+pt_levels <- subj_flags %>% filter(is.finite(PT_M05), PT_M05 > 0)
+if (nrow(pt_levels) == 0) {
+  cat("> No InfMon5 PT levels available.\n\n")
+} else {
+  rows <- list(chim_ref_rows("PT"))
+  add <- function(v, lbl) if (length(v[is.finite(v) & v > 0]) >= 1)
+    rows[[length(rows)+1]] <<- row_vs_chim(v, "PT", lbl)
+
+  add(pt_levels$PT_M05, "All GaPs infants (InfMon5)")
+  # by blunted status
+  add(pt_levels$PT_M05[which(!pt_levels$blunted_PT)], "Not blunted (PT rule)")
+  add(pt_levels$PT_M05[which( pt_levels$blunted_PT)], "Blunted (PT rule)")
+  # blunted x infant arm (the co-author's 'most blunted' = blunted & wP)
+  for (ar in c("wP","aP")) {
+    add(pt_levels$PT_M05[which(!pt_levels$blunted_PT & pt_levels$infant_arm == ar)],
+        sprintf("Not blunted, %s-primed", ar))
+    add(pt_levels$PT_M05[which(pt_levels$blunted_PT & pt_levels$infant_arm == ar)],
+        sprintf("Blunted, %s-primed%s", ar, if (ar=="wP") " (most blunted)" else ""))
+  }
+  # panel-flag sensitivity
+  if (!all(is.na(pt_levels$blunted_panel))) {
+    add(pt_levels$PT_M05[which(pt_levels$blunted_panel)], "Blunted (panel rule, sensitivity)")
+  }
+  # ceiling/threshold flag (mechanistic) — contrast with the distributional rule
+  if ("ceiling_blunted" %in% names(pt_levels) && any(!is.na(pt_levels$ceiling_blunted))) {
+    add(pt_levels$PT_M05[which(!pt_levels$ceiling_blunted)], "Not ceiling-blunted (below threshold)")
+    add(pt_levels$PT_M05[which( pt_levels$ceiling_blunted)], "Ceiling-blunted (above baseline threshold)")
+  }
+  print(kable(dplyr::bind_rows(rows),
+    caption = "PT IgG (IU/mL). CHIM anchors from de Graaf Table 1; GaPs rows are absolute InfMon5 total-IgG PT. 'xGM vs resistant' = infant GM / 6.2. '% > resistant GM' = share above 6.2 IU/mL; '% > colonised GM' = share above 1.9. Note the contrast between the distributional (tertile) 'Blunted' rows and the mechanistic 'Ceiling-blunted' rows — ceiling-blunted infants sit near the ceiling and may have HIGHER achieved levels than tertile-blunted infants."))
+}
+```
+
+## Sensitivity: PRN / FHA / FIM (absolute InfMon5, split by the PT flag)
+
+```{r other-cmp, results='asis'}
+for (ag in c("PRN","FHA","FIM")) {
+  lv <- m05_abs %>% filter(antigen == ag) %>%
+    left_join(subj_flags %>% select(subject_accession, blunted_PT, infant_arm), by = "subject_accession")
+  if (nrow(lv) == 0) { cat(sprintf("\n> %s: no InfMon5 levels.\n\n", ag)); next }
+  rows <- list(chim_ref_rows(ag))
+  add <- function(v, lbl) if (length(v[is.finite(v) & v > 0]) >= 1)
+    rows[[length(rows)+1]] <<- row_vs_chim(v, ag, lbl)
+  add(lv$conc_resp, sprintf("All GaPs infants (InfMon5)"))
+  add(lv$conc_resp[which(!lv$blunted_PT)], "Not blunted (PT rule)")
+  add(lv$conc_resp[which( lv$blunted_PT)], "Blunted (PT rule)")
+  a <- chim[chim$antigen == ag, ]
+  print(kable(dplyr::bind_rows(rows), caption = sprintf(
+    "%s IgG (%s). Split by the PT-based blunted flag. Table 1 colonised-vs-resistant %s.",
+    ag, a$unit,
+    if (ag == "FIM") "was NOT significant (p=0.97) - the resistant 'threshold' is not a correlate for FIM" else
+      sprintf("p=%s", format(a$p_table1)))))
+  cat("\n\n")
+}
+```
+
+---
+
+# Design-based cross-check: maternal (TdaP/TT) x infant (wP/aP)
+
+This is the threshold-free, design-based view (matches the GaPs paper's own framing): absolute
+InfMon5 PT IgG in the four randomised cells, no derived flag involved.
+
+```{r design-table, results='asis'}
+if (nrow(pt_levels) && any(!is.na(pt_levels$maternal_arm))) {
+  rows <- list(chim_ref_rows("PT"))
+  add <- function(v, lbl) if (length(v[is.finite(v) & v > 0]) >= 1)
+    rows[[length(rows)+1]] <<- row_vs_chim(v, "PT", lbl)
+  for (mm in c("TdaP","TT")) for (ii in c("wP","aP")) {
+    sel <- which(pt_levels$maternal_arm == mm & pt_levels$infant_arm == ii)
+    tag <- if (mm=="TdaP" && ii=="wP") " (design 'most blunted')" else ""
+    add(pt_levels$PT_M05[sel], sprintf("Maternal-%s x %s%s", mm, ii, tag))
+  }
+  add(pt_levels$PT_M05[which(pt_levels$maternal_arm=="TdaP")], "All maternal-TdaP (blunted arm)")
+  add(pt_levels$PT_M05[which(pt_levels$maternal_arm=="TT")],   "All maternal-TT (unblunted arm)")
+  print(kable(dplyr::bind_rows(rows),
+    caption = "PT IgG (IU/mL), InfMon5, by randomised maternal x infant cell (design-based; no derived flag)."))
+} else {
+  cat("> Design table skipped (maternal-arm column unavailable).\n\n")
+}
+```
+
+---
+
+# Export the per-subject flag table
+
+```{r export, results='asis'}
+out_cols <- subj_flags %>%
+  transmute(subject_accession, infant_arm, maternal_arm,
+            PT_M02, PT_M05, response_PT_deltalog10 = round(response_PT, 4),
+            resp_z_PT = round(resp_z_PT, 3),
+            blunted_PT, panel_z = round(panel_z, 3), blunted_panel,
+            ceiling_blunted = if ("ceiling_blunted" %in% names(subj_flags)) ceiling_blunted else NA)
+readr_ok <- requireNamespace("readr", quietly = TRUE)
+fn <- "subject_blunting_flags.csv"
+if (readr_ok) readr::write_csv(out_cols, fn) else utils::write.csv(out_cols, fn, row.names = FALSE)
+cat(sprintf("Wrote **%s** (%d subjects) with the per-subject blunted flags.\n\n", fn, nrow(out_cols)))
+print(kable(utils::head(out_cols, 12), caption = "First rows of the exported per-subject flag table."))
+```
+
+---
+
+# Auto-generated narrative (for pasting into the LLM / manuscript)
+
+```{r narrative, results='asis'}
+if (nrow(pt_levels) > 0 && !all(is.na(pt_levels$blunted_PT))) {
+  res_gm <- chim$gm_res[chim$antigen=="PT"]; col_gm <- chim$gm_col[chim$antigen=="PT"]
+  desc <- function(v, lbl) {
+    v <- v[is.finite(v) & v > 0]; if (!length(v)) return(NULL)
+    ci <- gm_ci(v)
+    sprintf(paste0("- **%s** (n=%d): GM = %.1f IU/mL (95%% CI %.1f\u2013%.1f), median %.1f \u2014 ",
+                   "**%.1f\u00d7** the resistant-adult PT GM (6.2); **%d%%** above 6.2 and **%d%%** above 1.9 IU/mL."),
+            lbl, length(v), unname(ci["gm"]), unname(ci["lo"]), unname(ci["hi"]),
+            stats::median(v), unname(ci["gm"])/res_gm,
+            round(100*mean(v > res_gm)), round(100*mean(v > col_gm)))
+  }
+  cat("Absolute InfMon5 PT IgG vs the CHIM resistant-adult anchor (6.2 IU/mL):\n\n")
+  for (s in list(
+      desc(pt_levels$PT_M05, "All GaPs infants"),
+      desc(pt_levels$PT_M05[which(!pt_levels$blunted_PT)], "Not-blunted infants"),
+      desc(pt_levels$PT_M05[which(pt_levels$blunted_PT)], "Blunted infants"),
+      desc(pt_levels$PT_M05[which(pt_levels$blunted_PT & pt_levels$infant_arm=="wP")], "Blunted wP-primed (most blunted)")))
+    if (!is.null(s)) cat(s, "\n")
+  cat("\n")
+  bl <- pt_levels$PT_M05[which(pt_levels$blunted_PT)]; bl <- bl[is.finite(bl) & bl>0]
+  if (length(bl)) {
+    g <- exp(mean(log(bl)))
+    verdict <- if (g > res_gm)
+      sprintf("**Headline:** even flagged-blunted GaPs infants have a 5-month PT IgG GM of %.1f IU/mL, **above** the CHIM resistant-adult anchor of 6.2 (%.1f\u00d7), with %d%% of blunted infants exceeding 6.2 IU/mL. So blunting, as detected here, does not push infants below the tentative correlate concentration.",
+              g, g/res_gm, round(100*mean(bl > res_gm)))
+    else
+      sprintf("**Headline:** flagged-blunted GaPs infants have a 5-month PT IgG GM of %.1f IU/mL, **below** the resistant-adult anchor (6.2); %d%% still exceed 6.2 IU/mL.",
+              g, round(100*mean(bl > res_gm)))
+    cat(verdict, "\n\n")
+  }
+  # ceiling verdict, if a ceiling was estimated
+  if (length(ceil_summ)) {
+    cs <- dplyr::bind_rows(ceil_summ)
+    cc <- cs$`ceiling C (IU/mL)`[is.finite(cs$`ceiling C (IU/mL)`)]
+    if (length(cc)) {
+      cat(sprintf(paste0("**Ceiling read:** the achieved-on-baseline fit estimates a PT IgG ceiling of ",
+        "%s IU/mL (per arm). %s the CHIM resistant anchor (6.2), so ceiling-constrained (maximally ",
+        "blunted-by-interference) infants are pinned %s it.\n\n"),
+        paste(sprintf("%.1f", cc), collapse = " / "),
+        if (all(cc > res_gm)) "This is above" else if (all(cc < res_gm)) "This is below" else "This straddles",
+        if (all(cc > res_gm)) "above" else if (all(cc < res_gm)) "below" else "around"))
+    }
+  }
+} else cat("> Narrative skipped (no PT flag).\n\n")
+```
+
+# Caveats to keep in the narrative
+
+- **Two blunting definitions, possibly opposite populations.** The *distributional* (tertile)
+  flag labels the low tail of the response distribution — which can include low-baseline,
+  constitutively poor responders with genuinely *low* achieved levels. The *ceiling* flag labels
+  infants above the baseline threshold (high maternal antibody, little headroom) — whose responses
+  are suppressed but whose *achieved* levels sit near the ceiling and may be *higher*. Check both;
+  they answer different questions. For the co-author's purpose, the decisive quantity is the
+  **estimated ceiling C in IU/mL vs 6.2**: if C exceeds 6.2, even ceiling-constrained infants are
+  pinned above the adult resistant anchor.
+- **Coupling and regression dilution.** The ceiling test regresses achieved-on-baseline (beta vs 1),
+  never response-on-baseline, to avoid the mathematical-coupling artifact that fabricates a negative
+  slope under noise. Even so, measurement error in the baseline biases beta downward, so a modest
+  beta < 1 is suggestive; a supported breakpoint with a flattening upper segment (positive dAIC) is
+  the stronger evidence for a real ceiling. If neither appears, the honest read is "no ceiling — the
+  distributional flag is labelling low responders, not interference."
+- **The CHIM correlate is tentative and directional.** 6.2 IU/mL is the resistant-adult group
+  geometric mean, not a validated protective cut-off; the colonised (0.9-4.0) and resistant
+  (3.0-12.8) CIs overlap. "% above 6.2" is a descriptive framing, not a protection probability.
+- **The blunted flag is a within-arm low-response definition.** A within-arm quantile equalises
+  the blunted fraction across arms by construction, so use the flag to *identify* blunted
+  individuals, not to compare blunting *rates* between aP and wP. The maternal-arm enrichment
+  table is the check that the flag tracks real (maternal-antibody-driven) blunting; the
+  design-based maternal x infant table is the rate/severity view.
+- **Response vs level.** The flag uses the InfMon2->InfMon5 *change*; the CHIM comparison uses the
+  absolute InfMon5 *level*. A blunted *rise* can still leave a *level* above the adult anchor
+  (the GaPs paper's own observation that wP infants remain at or above aP infants in absolute
+  terms). Both quantities are reported so this is explicit.
+- **Units.** PT/PRN/FHA in RIVM IU/mL (directly comparable per the assay provenance you
+  confirmed); FIM in AU/mL, and its Table 1 difference was non-significant, so FIM has no
+  resistant "threshold" to clear.
+- **Age/kinetics mismatch.** GaPs values are peak post-priming infant titres; CHIM adults are
+  decades from priming. High infant titres now do not imply durable protection at the ages when
+  CHIM-type exposure occurs.
+- **Sensitivity rules provided.** Median-split and z-threshold flags are computable by changing
+  `blunt_method`; the panel-based flag is reported alongside the PT flag so the conclusion can be
+  checked for robustness to the flagging rule.
+
+*Anchors: de Graaf et al., Lancet Microbe 2026, Table 1. Response window InfMon2 (M02) -> InfMon5 (M05), co-randomised plates.*

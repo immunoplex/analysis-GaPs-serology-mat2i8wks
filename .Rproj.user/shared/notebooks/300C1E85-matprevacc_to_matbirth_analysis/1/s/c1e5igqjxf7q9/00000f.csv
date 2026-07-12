@@ -1,0 +1,5 @@
+"0","knitr::kable(antigen_sum %>%"
+"0","  transmute(Antigen = antigen, `N features` = n_features,"
+"0","            `N mostly increasing` = n_inc, `N mostly decreasing` = n_dec, `N mixed` = n_mix,"
+"0","            `Median delta (log10)` = med_delta, `Overall direction` = dominant),"
+"0","  caption = ""Table 6. Per-antigen summary of change (later vs earlier visit), ordered by median delta (most negative first). Each row pools all analytes available for that antigen."") %>% print()"

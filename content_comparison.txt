@@ -1,0 +1,54 @@
+FILE: PTNA_analysis.Rmd 
+  Lines: 172 
+  Size:  8576 bytes
+  Key calls: Sys.Date, set, library, exists, c, requireNamespace, here, tryCatch, dirname, current_input, function, is.na, file.path, file.exists, length, stop, source, rm, find_proj_file, get_endpoint_config 
+  Chunks: ```{r global-opts, include=FALSE} | ```{r bootstrap, include=FALSE} | ```{r part-maternal-chain, child=find_proj_file('parts/01_maternal_chain.Rmd')} | ```{r part-clinical, echo=FALSE, child=find_proj_file('parts/02_clinical_covariates.Rmd', optional=TRUE)} | ```{r part-concurrent, echo=FALSE, child=find_proj_file('parts/03_concurrent_networks.Rmd', optional=TRUE)} | ```{r part-antigen-subclass, echo=FALSE, child=find_proj_file('parts/04_antigen_subclass_predictors.Rmd', optional=TRUE)} | ```{r part-effector-functions, echo=FALSE, child=find_proj_file('parts/05_effector_functions.Rmd', optional=TRUE)} | ```{r global-naccount, results='asis'} 
+
+FILE: SBA_analysis.Rmd 
+  Lines: 172 
+  Size:  8554 bytes
+  Key calls: Sys.Date, set, library, exists, c, requireNamespace, here, tryCatch, dirname, current_input, function, is.na, file.path, file.exists, length, stop, source, rm, find_proj_file, get_endpoint_config 
+  Chunks: ```{r global-opts, include=FALSE} | ```{r bootstrap, include=FALSE} | ```{r part-maternal-chain, child=find_proj_file('parts/01_maternal_chain.Rmd')} | ```{r part-clinical, echo=FALSE, child=find_proj_file('parts/02_clinical_covariates.Rmd', optional=TRUE)} | ```{r part-concurrent, echo=FALSE, child=find_proj_file('parts/03_concurrent_networks.Rmd', optional=TRUE)} | ```{r part-antigen-subclass, echo=FALSE, child=find_proj_file('parts/04_antigen_subclass_predictors.Rmd', optional=TRUE)} | ```{r part-effector-functions, echo=FALSE, child=find_proj_file('parts/05_effector_functions.Rmd', optional=TRUE)} | ```{r global-naccount, results='asis'} 
+
+FILE: WT_IgG_analysis.Rmd 
+  Lines: 183 
+  Size:  9326 bytes
+  Key calls: Sys.Date, set, library, exists, c, requireNamespace, here, tryCatch, dirname, current_input, function, is.na, file.path, file.exists, length, stop, source, rm, find_proj_file, get_endpoint_config 
+  Chunks: ```{r global-opts, include=FALSE} | ```{r bootstrap, include=FALSE} | ```{r part-maternal-chain, child=find_proj_file('parts/01_maternal_chain.Rmd')} | ```{r part-clinical, echo=FALSE, child=find_proj_file('parts/02_clinical_covariates.Rmd', optional=TRUE)} | ```{r part-concurrent, echo=FALSE, child=find_proj_file('parts/03_concurrent_networks.Rmd', optional=TRUE)} | ```{r part-antigen-subclass, echo=FALSE, child=find_proj_file('parts/04_antigen_subclass_predictors.Rmd', optional=TRUE)} | ```{r part-effector-functions, echo=FALSE, child=find_proj_file('parts/05_effector_functions.Rmd', optional=TRUE)} | ```{r global-naccount, results='asis'} 
+
+FILE: analysis/predict_M02_PTNA_from_maternal_v2.Rmd 
+  Lines: 1420 
+  Size:  54628 bytes
+  Key calls: Sys.Date, cat, set, data.frame, paste0, c, kable, library, function, case_when, log10, reformulate, lm, summary, tidy, mutate, pvalue_to_label, across, round, signif 
+  Data loads:
+    load(file = here::here("./data/c_set.RData")) 
+  Chunks: ```{r global-opts, include=FALSE} | ```{r framework-table, echo=FALSE} | ```{r setup} | ```{r data-load} | ```{r data-diagnostics, results='asis'} | ```{r data-pivot} | ```{r data-derive} | ```{r missingness-summary, results='asis'} 
+
+FILE: analysis/predict_M02_SBA_from_maternal_v2.Rmd 
+  Lines: 1420 
+  Size:  54624 bytes
+  Key calls: Sys.Date, cat, set, data.frame, paste0, c, kable, library, function, case_when, log10, reformulate, lm, summary, tidy, mutate, pvalue_to_label, across, round, signif 
+  Data loads:
+    load(file = here::here("./data/c_set.RData")) 
+  Chunks: ```{r global-opts, include=FALSE} | ```{r framework-table, echo=FALSE} | ```{r setup} | ```{r data-load} | ```{r data-diagnostics, results='asis'} | ```{r data-pivot} | ```{r data-derive} | ```{r missingness-summary, results='asis'} 
+
+FILE: analysis/predict_M02_WT_IgG_from_maternal_v2.Rmd 
+  Lines: 1420 
+  Size:  54636 bytes
+  Key calls: Sys.Date, cat, set, data.frame, paste0, c, kable, library, function, case_when, log10, reformulate, lm, summary, tidy, mutate, pvalue_to_label, across, round, signif 
+  Data loads:
+    load(file = here::here("./data/c_set.RData")) 
+  Chunks: ```{r global-opts, include=FALSE} | ```{r framework-table, echo=FALSE} | ```{r setup} | ```{r data-load} | ```{r data-diagnostics, results='asis'} | ```{r data-pivot} | ```{r data-derive} | ```{r missingness-summary, results='asis'} 
+
+FILE: concurrent_analysis.Rmd 
+  Lines: 203 
+  Size:  9700 bytes
+  Key calls: Sys.Date, set, library, exists, c, requireNamespace, here, tryCatch, dirname, current_input, function, is.na, file.path, file.exists, length, stop, source, rm, add_concurrent_ratios, find_proj_file 
+  Chunks: ```{r global-opts, include=FALSE} | ```{r bootstrap, include=FALSE} | ```{r part-concurrent, child=find_proj_file('parts/03_concurrent_networks_v2.Rmd')} | ```{r naccount, results='asis'} 
+
+FILE: interaction_and_deming.Rmd 
+  Lines: 366 
+  Size:  18679 bytes
+  Key calls: Sys.Date, set, suppressPackageStartupMessages, library, requireNamespace, exists, c, here, tryCatch, dirname, current_input, function, is.na, file.path, file.exists, length, stop, source, rm, find_proj_file 
+  Chunks: ```{r setup, include=FALSE} | ```{r bootstrap, include=FALSE} | ```{r spec} | ```{r interaction-engine} | ```{r int-matbirth} | ```{r int-infmon2} | ```{r int-plot, fig.width=9, fig.height=3.4} | ```{r deming-engine} 
+

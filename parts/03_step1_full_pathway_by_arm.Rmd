@@ -1,0 +1,74 @@
+# Step 1 — Full Pathway Network by Arm {#step1}
+
+For each antigen and each maternal arm, a single Gaussian graphical model (EBICglasso,
+partial correlations) is fit on the chain nodes **IgG1, IgG3, FcγR2a, FcγR3b, ADCD** together
+with **`r cfg$outcome_label`**. Because all four node types sit in one graph, the edges the
+parallel-regression design could not show — IgG→FcγR, FcγR→ADCD, ADCD→outcome — are now
+directly readable. The chain-edge table isolates exactly those hypothesised adjacencies.
+
+```{r step1-run, results='asis', fig.width=6.5, fig.height=5.5}
+.stage(1, "full pathway network by arm")
+stopifnot(exists("path_wide"))
+
+# partial-correlation edge between two nodes, read off the estimated graph
+edge_of <- function(g, nodes, a, b) if (all(c(a, b) %in% nodes)) g[a, b] else NA_real_
+
+chain_edges_tbl <- function(g, nodes, A) {
+  o <- OUTCOME
+  rows <- list(
+    c(paste0(A, "_IgG1"),   paste0(A, "_FcgR2a")),
+    c(paste0(A, "_IgG1"),   paste0(A, "_FcgR3b")),
+    c(paste0(A, "_IgG3"),   paste0(A, "_FcgR2a")),
+    c(paste0(A, "_IgG3"),   paste0(A, "_FcgR3b")),
+    c(paste0(A, "_FcgR2a"), paste0(A, "_ADCD")),
+    c(paste0(A, "_FcgR3b"), paste0(A, "_ADCD")),
+    c(paste0(A, "_ADCD"),   o),
+    c(paste0(A, "_FcgR2a"), o),
+    c(paste0(A, "_FcgR3b"), o),
+    c(paste0(A, "_IgG1"),   o))
+  data.frame(
+    link = vapply(rows, function(r) paste(sub(paste0("^", A, "_"), "", r[1]),
+                                          sub(paste0("^", A, "_"), "", sub(OUTCOME, "OUTCOME", r[2])),
+                                          sep = " — "), character(1)),
+    partial_r = vapply(rows, function(r) round(edge_of(g, nodes, r[1], r[2]), 3), numeric(1)),
+    stringsAsFactors = FALSE)
+}
+
+if (!have_net) {
+  cat("*Network packages not installed; step 1 skipped.*\n\n")
+} else {
+  for (A in PATHWAY_ANTIGENS) {
+    cat("## ", A, " pathway\n\n", sep = "")
+    for (m in cfg$maternal_arms) {
+      nodes <- c(chain_feats(A), OUTCOME)
+      d <- arm_data(m) %>% dplyr::select(dplyr::all_of(nodes)) %>% tidyr::drop_na()
+      nt_log(nt, "Pathway", paste0("Step1 net: ", A), paste0(A, " @ ", CONC_VISIT), m, nodes, arm_data(m))
+      cat("### ", m, " mothers (n = ", nrow(d), ")\n\n", sep = "")
+      .info("step1 %s %s network n=%d", A, m, nrow(d))
+      if (nrow(d) < NETWORK_MIN) { cat(sprintf("*n < %d; skipped.*\n\n", NETWORK_MIN)); next }
+      net <- tryCatch(bootnet::estimateNetwork(d, default = "EBICglasso", threshold = TRUE),
+                      error = function(e) NULL)
+      if (is.null(net)) { cat("*Estimation failed.*\n\n"); next }
+      short <- sub(paste0("^", A, "_"), "", nodes); short[nodes == OUTCOME] <- "OUTCOME"
+      grp <- list(IgG  = which(nodes %in% paste0(A, c("_IgG1", "_IgG3"))),
+                  FcgR = which(nodes %in% paste0(A, c("_FcgR2a", "_FcgR3b"))),
+                  ADCD = which(nodes == paste0(A, "_ADCD")),
+                  OUT  = which(nodes == OUTCOME))
+      qgraph::qgraph(net$graph, groups = grp, color = c("steelblue", "darkorange", "purple", "gold"),
+                     labels = short, layout = "spring", vsize = 11, legend = TRUE,
+                     legend.cex = 0.35, title = paste0(A, " — ", m))
+      print(knitr::kable(chain_edges_tbl(net$graph, nodes, A),
+                         caption = paste0("Chain-adjacent partial correlations — ", A, ", ", m,
+                                          " (0 = no edge after conditioning)."),
+                         col.names = c("Link", "Partial r"))); cat("\n")
+    }
+  }
+}
+```
+
+**How to read this.** A non-zero `IgG1 — FcgR3b` edge is direct evidence of co-regulation; a
+non-zero `FcgR3b — ADCD` edge is evidence for the activation step; a non-zero `ADCD — OUTCOME`
+edge places ADCD adjacent to killing. If a chain edge is 0 while a "shortcut" edge (e.g.
+`IgG1 — OUTCOME`) is large, the pathway is *not* mediating and the logic needs revisiting.
+Compare the two arms row by row: similar signs/positions = intact in both; a link present in one
+arm only = arm-specific pathway.

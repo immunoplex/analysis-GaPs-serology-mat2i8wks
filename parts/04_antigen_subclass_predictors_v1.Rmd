@@ -1,0 +1,551 @@
+# Antigen-Specific IgG Subclass & FcG Predictors at INFMon2 {#antigen-subclass}
+
+*🧭 Maps to summary: §8 (IgG subclass profiles), §9 (FcG secondary binding),
+§10 (cord blood pre-INFMon2 predictor — WT_IgG only)*
+
+This part asks whether **antigen identity** (PT / PRN / FHA / DT / TT / FIM),
+**IgG subclass balance** (IGG1–IGG4), and **Fc-receptor binding profile**
+(FCGR2A / FCGR3B) carry information about the endpoint outcome beyond the bulk
+quantities examined in Part 1. All features are measured concurrently at INFMon2
+and are already on the log scale (`log_assay_value`). For **WT_IgG only**,
+Block 10 adds the cord blood level as a genuine temporal predictor.
+
+---
+
+```{r p4-setup, include=FALSE}
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2)
+  library(purrr); library(tibble); library(forcats)
+})
+
+# ── Standalone bootstrap ──────────────────────────────────────────────────────
+# When called via child= the parent already has cfg/data/nt/make_wide in scope
+# and this entire block is skipped. When knitted standalone it sources the
+# pipeline so the rest of the chunk can run.
+if (!exists("cfg")) {
+  .find <- function(rel) {
+    cand <- character(0)
+    if (requireNamespace("here", quietly = TRUE))
+      cand <- c(here::here(rel), here::here("analysis", rel))
+    rmd_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                        error = function(e) NA_character_)
+    if (!is.na(rmd_dir))
+      cand <- c(cand, file.path(rmd_dir, rel), file.path(dirname(rmd_dir), rel))
+    cand <- unique(c(cand, file.path(getwd(), rel), rel))
+    hit  <- cand[file.exists(cand)]
+    if (length(hit)) return(normalizePath(hit[1], winslash="/", mustWork=FALSE))
+    stop("Cannot locate '", rel, "'. Run from project root.", call.=FALSE)
+  }
+  source(.find("config/endpoints.R"),           local=FALSE, encoding="UTF-8")
+  tryCatch(
+    source(.find("config/endpoints_additions.R"), local=FALSE, encoding="UTF-8"),
+    error = function(e) NULL
+  )
+  source(.find("R/serology_helpers.R"),          local=FALSE, encoding="UTF-8")
+  cfg  <- get_endpoint_config("SBA")  # <- change to "WT_IgG" or "PTNA" to test
+  data <- load_serology_data(.find("data/c_set.RData"))
+  nt   <- new_ntracker()
+}
+if (!exists("nt_add"))   nt_add   <- function(...) invisible(NULL)
+if (!exists("nt"))       nt       <- list()
+if (!exists("make_wide")) {
+  make_wide <- function(data_long, visit_label, features=NULL,
+                        visit_col="visit_name", feature_col="feature",
+                        value_col="log_assay_value",
+                        id_cols=c("subject_accession","maternal_arm","infant_arm")) {
+    if (is.null(visit_label)||length(visit_label)==0L||!nzchar(visit_label))
+      stop("visit_label is NULL/empty — check cfg$infmon2_visit.", call.=FALSE)
+    df <- dplyr::filter(data_long, .data[[visit_col]] == visit_label)
+    if (!is.null(features))
+      df <- dplyr::filter(df, .data[[feature_col]] %in% features)
+    tidyr::pivot_wider(df,
+      id_cols=dplyr::all_of(id_cols),
+      names_from=dplyr::all_of(feature_col),
+      values_from=dplyr::all_of(value_col),
+      values_fn=mean)
+  }
+}
+
+# ── Variable-name bridge ──────────────────────────────────────────────────────
+# The parent .Rmd loads data as 'data_raw'; child parts use 'data'.
+# When called via child= the bootstrap is skipped (cfg already exists), so
+# 'data' may not have been created. Alias data_raw → data when needed.
+if (!exists("data") || !is.data.frame(data)) {
+  if (exists("data_raw") && is.data.frame(data_raw)) {
+    data <- data_raw
+  }
+}
+
+# ── Feature groups (from config/endpoints_additions.R) -----------------------
+# Inline fallbacks used if config hasn't been updated yet.
+if (!exists("ANTIGENS"))
+  ANTIGENS <- c("PT", "PRN", "FHA", "DT", "TT", "FIM")
+if (!exists("SUBCLASSES"))
+  SUBCLASSES <- c("IGG1", "IGG2", "IGG3", "IGG4")
+if (!exists("ANTIGEN_SUBCLASS_FEATS"))
+  ANTIGEN_SUBCLASS_FEATS <- as.vector(outer(ANTIGENS, SUBCLASSES, paste, sep = "_"))
+if (!exists("FCG_RECEPTORS"))
+  FCG_RECEPTORS <- c("FCGR2A", "FCGR3B")
+if (!exists("FCG_FEATS"))
+  FCG_FEATS <- as.vector(outer(ANTIGENS, FCG_RECEPTORS, paste, sep = "_"))
+
+# ── Endpoint config -----------------------------------------------------------
+# Fields marked ** are new additions from endpoints_additions.R.
+# Until config/endpoints.R is updated, the fallbacks below auto-derive the
+# visit labels from VISIT_RECODE and emit an explanatory message.
+OUTCOME_COL <- cfg$outcome_feature        # e.g. "WHOLE_SBA"
+CORD_COL    <- cfg$cord_predictor         # "WHOLE_WT_IgG" or NULL  **
+CORD_LABEL  <- cfg$cord_predictor_label   # display string or NULL   **
+
+# ** INFMON2_VISIT: prefer cfg$infmon2_visit; fall back to VISIT_RECODE["P02"].
+.derive_visit <- function(cfg_val, raw_code, field_name) {
+  # 1. Explicit config value wins
+  if (!is.null(cfg_val) && length(cfg_val) > 0L && nzchar(cfg_val)) return(cfg_val)
+
+  # 2. Inspect actual visit labels in the data.
+  #    Guard with is.data.frame() — base R also has a data() *function* so
+  #    exists("data") alone is not sufficient to detect the data frame.
+  visits_in_data <- if (exists("data") && is.data.frame(data) &&
+                        "visit_name" %in% names(data))
+                      as.character(unique(data$visit_name))
+                    else character(0)
+
+  # 3. Prefer raw code if it is directly in the data (no VISIT_RECODE needed)
+  if (raw_code %in% visits_in_data) {
+    message("[Part 4] cfg$", field_name, " not set — using raw code '",
+            raw_code, "' (found in data$visit_name).\n",
+            "  Add ", field_name, " = \"", raw_code,
+            "\" to config/endpoints.R to suppress this.")
+    return(raw_code)
+  }
+
+  # 4. Try VISIT_RECODE only when the raw code is NOT directly in the data
+  if (exists("VISIT_RECODE") && !is.na(VISIT_RECODE[raw_code])) {
+    recoded <- unname(VISIT_RECODE[raw_code])
+    if (length(visits_in_data) == 0L || recoded %in% visits_in_data) {
+      message("[Part 4] cfg$", field_name, " not set — using VISIT_RECODE label '",
+              recoded, "'.\n",
+              "  Add ", field_name, " = \"", recoded,
+              "\" to config/endpoints.R to suppress this.")
+      return(recoded)
+    }
+    warning("[Part 4] VISIT_RECODE[\"", raw_code, "\"] = \"", recoded,
+            "\" is not in data$visit_name either. Falling back to raw code.")
+  }
+
+  message("[Part 4] cfg$", field_name, " not set — using raw code '", raw_code,
+          "' as last-resort fallback.")
+  raw_code
+}
+INFMON2_VISIT  <- .derive_visit(cfg$infmon2_visit,       "P02", "infmon2_visit")
+CORD_VISIT     <- .derive_visit(cfg$cord_visit,          "M09", "cord_visit")
+MATERNAL_VISIT <- .derive_visit(cfg$maternal_pred_visit, "M09", "maternal_pred_visit")
+# ↑ FCGR2A/FCGR3B and all effectors are only measured at maternal visits;
+#   M09 is a near-term ante-partum default.  Set cfg$maternal_pred_visit
+#   (and cfg$cord_visit) to the correct visit code in config/endpoints.R.
+
+# ── Two wide frames ───────────────────────────────────────────────────────────
+# (a) P02 — IgG subclasses (IGG1-4) + outcome: concurrent analysis.
+#     FIM_IGG1-4 are zero at P02 so will be auto-excluded by intersect().
+data_infmon2 <- make_wide(data, visit_label = INFMON2_VISIT)
+
+# (b) Maternal visit — FcG + effectors: longitudinal maternal→infant analysis.
+#     FCGR2A/FCGR3B/ADCD/ADCP/ADNP are only measured at maternal visits.
+data_maternal <- make_wide(data, visit_label = MATERNAL_VISIT)
+
+# Join maternal predictors with the P02 outcome for Blocks 9, 11-14.
+if (isTRUE(OUTCOME_COL %in% names(data_infmon2))) {
+  .p02_out <- dplyr::select(data_infmon2, subject_accession,
+                             dplyr::all_of(OUTCOME_COL))
+  data_mat_p02 <- dplyr::inner_join(data_maternal, .p02_out,
+                                    by = "subject_accession")
+} else {
+  warning("[Part 4] Outcome column '", OUTCOME_COL, "' not found at visit '",
+          INFMON2_VISIT, "'. Blocks 9/10 and Part 5 will be skipped.\n",
+          "  Check cfg$outcome_feature in config/endpoints.R.")
+  data_mat_p02 <- data.frame()
+}
+
+# ── Availability guards ───────────────────────────────────────────────────────
+# IgG subclasses from P02; FcG from maternal visit
+avail_ant_sub <- intersect(ANTIGEN_SUBCLASS_FEATS, names(data_infmon2))
+avail_fcg     <- intersect(FCG_FEATS,              names(data_maternal))
+avail_cord    <- if (!is.null(CORD_COL)) CORD_COL else NULL
+
+.warn_missing <- function(req, avail, lbl) {
+  miss <- setdiff(req, avail)
+  if (length(miss))
+    message("[Part 4 | ", lbl, "] Missing from data: ",
+            paste(miss[seq_len(min(8L, length(miss)))], collapse = ", "),
+            if (length(miss) > 8L) " ...")
+}
+.warn_missing(ANTIGEN_SUBCLASS_FEATS, avail_ant_sub, "IgG subclass (P02)")
+.warn_missing(FCG_FEATS,              avail_fcg,     "FcG binding (maternal)")
+
+nt_add(nt, "Part 4 — P02 participants (wide)",       nrow(data_infmon2))
+nt_add(nt, "Part 4 — maternal participants (wide)",  nrow(data_maternal))
+nt_add(nt, "Part 4 — maternal+P02 joined",           nrow(data_mat_p02))
+```
+
+## Feature Inventory {#p4-inventory}
+
+```{r p4-inventory-tbl, results='asis'}
+tibble::tibble(
+  `Predictor group`        = c("Antigen × IgG subclass (Blocks 7–8)",
+                               "FcG binding (Block 9)",
+                               "Cord blood pre-predictor (Block 10)"),
+  `Requested`              = c(length(ANTIGEN_SUBCLASS_FEATS),
+                                length(FCG_FEATS),
+                                as.integer(!is.null(CORD_COL))),
+  `Found in data`          = c(length(avail_ant_sub),
+                                length(avail_fcg),
+                                as.integer(!is.null(avail_cord))),
+  `Endpoint applicability` = c("SBA / WT_IgG / PTNA",
+                                "SBA / WT_IgG / PTNA",
+                                ifelse(!is.null(CORD_COL),
+                                       cfg$outcome_label,
+                                       "WT_IgG only — N/A here"))
+) |>
+  knitr::kable(caption = paste("Part 4 predictor availability for",
+                               cfg$outcome_label, "at INFMon2."))
+```
+
+---
+
+## Block 7: Antigen-Specific IgG Subclass Associations {#block7}
+
+*🧭 Maps to summary §8a — IgG subclass quantity by antigen*
+
+Spearman ρ between each antigen × IgG subclass feature and `r cfg$outcome_label`
+at INFMon2. Values are on the log scale from `log_assay_value`; no further
+transformation applied. Stratified by maternal vaccination arm.
+
+```{r block7-heatmap, fig.width=10, fig.height=6, fig.cap="Block 7 — IgG subclass Spearman ρ. Rows = antigens, columns = subclasses, panels = maternal arm."}
+if (length(avail_ant_sub) == 0L) {
+  message("Block 7 skipped: no antigen-subclass features in data.")
+} else {
+
+  cor7 <- data_infmon2 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(avail_ant_sub),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      n = n(), .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(dplyr::all_of(avail_ant_sub),
+                 names_to = "feature", values_to = "rho") |>
+    dplyr::mutate(
+      antigen  = factor(sub("_IGG[0-9]$", "", feature), levels = ANTIGENS),
+      subclass = factor(sub(".*_(IGG[0-9])$", "\\1", feature), levels = SUBCLASSES)
+    )
+
+  nt_add(nt, "Block 7 — n per maternal arm",
+         paste(cor7 |> dplyr::distinct(maternal_arm, n) |> dplyr::pull(n), collapse = " / "))
+
+  ggplot(cor7, aes(x = subclass, y = fct_rev(antigen), fill = rho)) +
+    geom_tile(colour = "white", linewidth = 0.6) +
+    geom_text(aes(label = sprintf("%.2f", rho)), size = 3.2) +
+    scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#d6604d",
+                         midpoint = 0, limits = c(-1, 1),
+                         name = expression(rho[s])) +
+    facet_wrap(~ maternal_arm, labeller = label_both) +
+    labs(
+      title    = paste("Block 7 —", cfg$outcome_label,
+                       "vs. antigen-specific IgG subclasses at INFMon2"),
+      subtitle = "Spearman ρ on log_assay_value; by maternal arm",
+      x = "IgG subclass", y = "Antigen"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(panel.grid = element_blank())
+}
+```
+
+### Block 7b: Stratified by infant priming arm {#block7b}
+
+```{r block7b-heatmap, fig.width=12, fig.height=7, fig.cap="Block 7b — IgG subclass ρ by maternal AND infant priming arm."}
+if (length(avail_ant_sub) > 0L) {
+  cor7b <- data_infmon2 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm, infant_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(avail_ant_sub),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(dplyr::all_of(avail_ant_sub),
+                 names_to = "feature", values_to = "rho") |>
+    dplyr::mutate(
+      antigen  = factor(sub("_IGG[0-9]$", "", feature), levels = ANTIGENS),
+      subclass = factor(sub(".*_(IGG[0-9])$", "\\1", feature), levels = SUBCLASSES),
+      arm_lbl  = paste0(maternal_arm, " / ", infant_arm)
+    )
+
+  ggplot(cor7b, aes(x = subclass, y = fct_rev(antigen), fill = rho)) +
+    geom_tile(colour = "white", linewidth = 0.5) +
+    geom_text(aes(label = sprintf("%.2f", rho)), size = 2.7) +
+    scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#d6604d",
+                         midpoint = 0, limits = c(-1, 1),
+                         name = expression(rho[s])) +
+    facet_wrap(~ arm_lbl, nrow = 2) +
+    labs(
+      title    = paste("Block 7b —", cfg$outcome_label, "vs. IgG subclasses"),
+      subtitle = "Stratified by maternal arm (TdaP/TT) × infant priming (aP/wP)",
+      x = "IgG subclass", y = "Antigen"
+    ) +
+    theme_minimal(base_size = 10) +
+    theme(panel.grid = element_blank())
+}
+```
+
+---
+
+## Block 8: IgG Subclass Ratio (Complement-Activating Class Bias) {#block8}
+
+*🧭 Maps to summary §8b — qualitative subclass layer independent of quantity*
+
+The ratio IGG1 / (IGG1 + IGG3) per antigen captures complement-activating subclass
+bias. Because `log_assay_value` is on the log scale, we back-transform to linear
+before computing the proportion; the resulting ratio (0–1) is not re-logged.
+
+```{r block8-ratio, fig.width=9, fig.height=5, fig.cap="Block 8 — IGG1/(IGG1+IGG3) per antigen vs. outcome; Spearman ρ by maternal arm."}
+antigens_with_13 <- ANTIGENS[
+  paste0(ANTIGENS, "_IGG1") %in% avail_ant_sub &
+  paste0(ANTIGENS, "_IGG3") %in% avail_ant_sub
+]
+
+if (length(antigens_with_13) == 0L) {
+  message("Block 8 skipped: IGG1 and/or IGG3 absent for all antigens.")
+} else {
+
+  # Back-transform log values → linear, compute ratio, store as new columns
+  for (ag in antigens_with_13) {
+    v1 <- 10 ^ data_infmon2[[paste0(ag, "_IGG1")]]
+    v3 <- 10 ^ data_infmon2[[paste0(ag, "_IGG3")]]
+    denom <- v1 + v3
+    data_infmon2[[paste0(ag, "_RATIO13")]] <-
+      ifelse(is.finite(denom) & denom > 0, v1 / denom, NA_real_)
+  }
+
+  ratio_cols <- paste0(antigens_with_13, "_RATIO13")
+
+  cor8 <- data_infmon2 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(ratio_cols),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(-maternal_arm, names_to = "feature", values_to = "rho") |>
+    dplyr::mutate(antigen = factor(sub("_RATIO13$", "", feature),
+                            levels = antigens_with_13))
+
+  ggplot(cor8, aes(x = fct_reorder(antigen, abs(rho)), y = rho,
+                   fill = maternal_arm)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey40") +
+    scale_fill_manual(values = c("TdaP" = "#e08214", "TT" = "#542788"),
+                      name = "Maternal arm") +
+    coord_flip() +
+    labs(
+      title    = paste("Block 8 — IGG1/(IGG1+IGG3) ratio vs.", cfg$outcome_label),
+      subtitle = "Spearman ρ at INFMon2 by maternal arm (exploratory, uncorrected)",
+      x = "Antigen", y = expression(rho[s])
+    ) +
+    theme_minimal(base_size = 11)
+}
+```
+
+---
+
+## Block 9: FcG Receptor Binding Associations {#block9}
+
+*🧭 Maps to summary §9 — Fc-receptor quality layer*
+
+Two Fc-receptor binding features are measured in this dataset: **FCGR2A** and
+**FCGR3B**. These capture Fc-mediated effector recruitment capacity beyond
+IgG subclass quantity.
+
+```{r block9-heatmap, fig.width=8, fig.height=5, fig.cap="Block 9 — FcG binding Spearman ρ. Rows = antigens, columns = receptors, panels = maternal arm."}
+if (length(avail_fcg) == 0L) {
+  message("Block 9 skipped: no FcG features in data_maternal.")
+} else if (nrow(data_mat_p02) == 0L) {
+  message("Block 9 skipped: data_mat_p02 is empty — outcome not found at P02.")
+} else {
+
+  cor9 <- data_mat_p02 |>
+    dplyr::filter(!is.na(.data[[OUTCOME_COL]])) |>
+    dplyr::group_by(maternal_arm) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::all_of(avail_fcg),
+             ~ cor(.x, .data[[OUTCOME_COL]],
+                   method = "spearman", use = "pairwise.complete.obs"),
+             .names = "{.col}"),
+      .groups = "drop"
+    ) |>
+    tidyr::pivot_longer(-maternal_arm, names_to = "feature", values_to = "rho") |>
+    dplyr::mutate(
+      antigen  = factor(sub("_(FCGR2A|FCGR3B)$", "", feature), levels = ANTIGENS),
+      receptor = sub(".*_(FCGR2A|FCGR3B)$", "\\1", feature)
+    )
+
+  ggplot(cor9, aes(x = receptor, y = fct_rev(antigen), fill = rho)) +
+    geom_tile(colour = "white", linewidth = 0.7) +
+    geom_text(aes(label = sprintf("%.2f", rho)), size = 3.4) +
+    scale_fill_gradient2(low = "#2166ac", mid = "white", high = "#d6604d",
+                         midpoint = 0, limits = c(-1, 1),
+                         name = expression(rho[s])) +
+    facet_wrap(~ maternal_arm, labeller = label_both) +
+    labs(
+      title    = paste("Block 9 — FcG binding vs.", cfg$outcome_label, "at INFMon2"),
+      subtitle = "Spearman ρ on log_assay_value; by maternal arm",
+      x = "FcG receptor", y = "Antigen"
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(panel.grid = element_blank())
+}
+```
+
+---
+
+## Block 10: Cord Blood Pre-INFMon2 Predictor (WT_IgG only) {#block10}
+
+```{r block10-header, results='asis', echo=FALSE}
+if (is.null(avail_cord)) {
+  cat("> **Block 10 not applicable for", cfg$outcome_label, ".**",
+      "No cord-blood predictor is defined for this endpoint.",
+      "Block 10 is active only for **WT_IgG**, where cord blood",
+      "provides a genuine temporal predictor of the INFMon2 outcome.\n\n")
+}
+```
+
+```{r block10-scatter, eval=!is.null(avail_cord) && !is.null(CORD_VISIT), fig.width=8.5, fig.height=5, fig.cap="Block 10 — Cord blood WHOLE_WT_IgG → INFMon2 WT_IgG; linear smoother per maternal arm."}
+# Pivot cord blood visit to wide; extract the single cord predictor column.
+cord_wide <- make_wide(data, visit_label = CORD_VISIT,
+                       features = avail_cord)
+
+cord_df <- cord_wide |>
+  dplyr::select(subject_accession, maternal_arm, infant_arm,
+         cord_val = dplyr::all_of(avail_cord)) |>
+  dplyr::inner_join(
+    data_infmon2 |>
+      dplyr::select(subject_accession, outcome_val = dplyr::all_of(OUTCOME_COL)),
+    by = "subject_accession"
+  ) |>
+  dplyr::filter(!is.na(cord_val), !is.na(outcome_val))
+
+nt_add(nt, "Block 10 — cord × INFMon2 paired N", nrow(cord_df))
+
+ggplot(cord_df,
+       aes(x = cord_val, y = outcome_val, colour = maternal_arm)) +
+  geom_point(alpha = 0.55, size = 1.9) +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linewidth = 0.9) +
+  scale_colour_manual(values = c("TdaP" = "#e08214", "TT" = "#542788"),
+                      name = "Maternal arm") +
+  facet_wrap(~ infant_arm, labeller = label_both) +
+  labs(
+    title    = paste0("Block 10 — Cord blood ", CORD_LABEL,
+                      " → INFMon2 ", cfg$outcome_label),
+    subtitle = "log_assay_value scale; one point per participant; smoother ± SE",
+    x        = paste0(CORD_LABEL, " [cord blood, log scale]"),
+    y        = paste0(cfg$outcome_label, " [INFMon2, log scale]")
+  ) +
+  theme_minimal(base_size = 11)
+```
+
+```{r block10-partial-cor, eval=!is.null(avail_cord) && !is.null(CORD_VISIT), results='asis'}
+if (requireNamespace("ppcor", quietly = TRUE)) {
+  pcor_df <- cord_df |>
+    dplyr::transmute(cord_val, outcome_val,
+              arm_num = as.numeric(factor(maternal_arm))) |>
+    tidyr::drop_na()
+
+  pc <- ppcor::pcor.test(pcor_df$cord_val, pcor_df$outcome_val,
+                         pcor_df$arm_num, method = "spearman")
+  cat(sprintf(
+    "\n**Partial Spearman ρ** (cord vs INFMon2, adjusting for maternal arm): ",
+    "ρ = %.3f, *p* = %.4f, *n* = %d\n\n",
+    pc$estimate, pc$p.value, nrow(pcor_df)
+  ))
+} else {
+  cat("> Install package **ppcor** for partial correlation in Block 10.\n\n")
+}
+```
+
+---
+
+## Blocks 7–9 Cross-Feature Importance {#p4-importance}
+
+*🧭 Maps to summary §8c — which antigen / subclass / FcG feature dominates?*
+
+Elastic-net regression (α = 0.5, 5-fold CV at λ.1se) across all available
+antigen-subclass features (concurrent, P02) and FcG features (longitudinal,
+from the maternal visit). Since they come from different data frames, only
+subjects present in both `data_infmon2` and `data_mat_p02` are included.
+
+```{r p4-elasticnet, fig.width=10, fig.height=6, fig.cap="Blocks 7-9 elastic-net — top 20 non-zero coefficients vs. outcome."}
+all_p4 <- c(avail_ant_sub, avail_fcg)
+
+if (length(all_p4) < 4L) {
+  message("Blocks 7-9 importance: fewer than 4 features available — skipped.")
+} else if (!requireNamespace("glmnet", quietly = TRUE)) {
+  message("Install package 'glmnet' for elastic-net importance.")
+} else {
+  library(glmnet)
+
+  # Combine concurrent (P02) and longitudinal (maternal) features
+  p02_cols <- intersect(all_p4, names(data_infmon2))
+  mat_cols <- intersect(all_p4, names(data_mat_p02))
+  mod_df <- dplyr::inner_join(
+    dplyr::select(data_infmon2,  subject_accession,
+                  dplyr::all_of(c(OUTCOME_COL, p02_cols))),
+    dplyr::select(data_mat_p02, subject_accession,
+                  dplyr::any_of(mat_cols)),
+    by = "subject_accession"
+  ) |>
+    dplyr::select(-subject_accession) |>
+    tidyr::drop_na()
+
+  nt_add(nt, "Blocks 7-9 importance — complete cases", nrow(mod_df))
+
+  X      <- as.matrix(mod_df[, all_p4])
+  y      <- mod_df[[OUTCOME_COL]]
+
+  set.seed(20240101)
+  cv_fit  <- glmnet::cv.glmnet(X, y, alpha = 0.5, nfolds = 5)
+  coef_df <- as.matrix(coef(cv_fit, s = "lambda.1se")) |>
+    as.data.frame() |>
+    tibble::rownames_to_column("feature") |>
+    setNames(c("feature", "coef")) |>
+    dplyr::filter(feature != "(Intercept)", coef != 0) |>
+    dplyr::arrange(desc(abs(coef))) |>
+    head(20)
+
+  if (nrow(coef_df) == 0L) {
+    message("Elastic net: all features shrunk to zero at lambda.1se.")
+  } else {
+    ggplot(coef_df,
+           aes(x = fct_reorder(feature, abs(coef)), y = coef,
+               fill = coef > 0)) +
+      geom_col() +
+      coord_flip() +
+      scale_fill_manual(values = c("TRUE" = "#d6604d", "FALSE" = "#2166ac"),
+                        labels = c("TRUE" = "Positive", "FALSE" = "Negative"),
+                        name = "Direction") +
+      labs(
+        title    = paste("Blocks 7-9 elastic-net vs.", cfg$outcome_label),
+        subtitle = paste0("λ.1se; top ", nrow(coef_df), " non-zero features",
+                          "; N = ", nrow(mod_df)),
+        x = NULL, y = "Coefficient"
+      ) +
+      theme_minimal(base_size = 11)
+  }
+}
+```

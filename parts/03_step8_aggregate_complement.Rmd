@@ -1,0 +1,56 @@
+# Step 8 — Aggregate Complement vs Whole-Cell Outcome {#step8}
+
+`r cfg$outcome_label` is a whole-organism readout, whereas ADCD is antigen-specific — a single
+antigen's ADCD may under-represent the complement activity relevant to whole-cell killing. This step
+builds an **aggregate complement score** (mean antigen-specific ADCD across all available antigens)
+and tests it against the outcome, alongside the **focal `r FOCAL_ANTIGEN`-ADCD** alone, per arm and
+per mode. In `igg_std` mode the ADCD inputs are quantity-removed, so a surviving association is
+evidence for a complement contribution *beyond* antibody amount.
+
+```{r step8-run, results='asis'}
+.stage(8, "aggregate complement vs whole-cell outcome")
+if (!RUN_AGG_ADCD) {
+  cat("*Step 8 skipped (run_aggregate_adcd = FALSE).*\n\n")
+} else {
+  fit_one <- function(d, pred) {
+    dd <- d[stats::complete.cases(d[, c(OUTCOME, pred)]), ]
+    if (nrow(dd) < 20) return(NULL)
+    f <- lm(reformulate(pred, response = OUTCOME), data = dd)
+    co <- summary(f)$coefficients[pred, ]
+    data.frame(n = nrow(dd), R2 = round(summary(f)$r.squared, 3),
+               beta = round(unname(co[1]), 3), p = signif(unname(co[4]), 3),
+               stringsAsFactors = FALSE)
+  }
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    adcd_cols <- intersect(paste0(ALL_ANTIGENS, "_ADCD"), names(wd))
+    if (!length(adcd_cols) || !(OUTCOME %in% names(wd))) { cat("*No ADCD columns / outcome in this mode.*\n\n"); next }
+    focal_adcd <- paste0(FOCAL_ANTIGEN, "_ADCD")
+    rows <- list()
+    for (m in cfg$maternal_arms) {
+      d <- arm_data_m(mode, m)
+      d$ADCD_aggregate <- rowMeans(d[, adcd_cols, drop = FALSE], na.rm = TRUE)
+      agg <- fit_one(d, "ADCD_aggregate")
+      foc <- if (focal_adcd %in% names(d)) fit_one(d, focal_adcd) else NULL
+      if (!is.null(agg)) rows[[length(rows) + 1]] <- cbind(arm = m, predictor = paste0("aggregate ADCD (", length(adcd_cols), " antigens)"), agg)
+      if (!is.null(foc)) rows[[length(rows) + 1]] <- cbind(arm = m, predictor = paste0(FOCAL_ANTIGEN, "_ADCD (focal)"), foc)
+      .info("step8 [%s] %s aggregate+focal done", mode, m)
+    }
+    tb <- do.call(rbind, rows)
+    if (is.null(tb)) { cat("*Too few complete cases.*\n\n"); next }
+    print(knitr::kable(tb, row.names = FALSE,
+      caption = paste0("Univariate association of complement scores with ", cfg$outcome_label,
+                       " [", mode, "]: aggregate (mean ADCD across antigens) vs focal ", FOCAL_ANTIGEN, "-ADCD."))); cat("\n")
+  }
+}
+```
+
+**How to read this.** If the **aggregate** score predicts the whole-cell outcome more strongly than
+focal `r FOCAL_ANTIGEN`-ADCD, whole-cell killing draws on complement activity spread across
+antigens, and a single-antigen ADCD node understated the pathway in earlier steps. In `igg_std`
+mode a significant aggregate association is the cleanest evidence that complement deposition
+contributes to the outcome *independently of antibody quantity*; if it vanishes under
+standardization, the raw ADCD–outcome association was quantity-driven. Compare arms for whether the
+complement contribution is present in both TdaP and TT.

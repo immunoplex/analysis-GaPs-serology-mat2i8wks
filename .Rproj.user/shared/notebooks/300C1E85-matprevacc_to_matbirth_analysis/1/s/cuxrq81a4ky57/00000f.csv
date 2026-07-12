@@ -1,0 +1,8 @@
+"0","arm_sum <- summarise_paired(paired %>% filter(arm_name %in% MATERNAL_ARMS),"
+"0","                            by = ""arm_name"", min_n = MIN_PAIRED) %>%"
+"0","  group_by(arm_name) %>%"
+"0","  summarize(features = n(),"
+"0","            `% feats mostly increasing` = round(100*mean(direction == ""mostly increase""), 1),"
+"0","            `median of feature median-deltas` = round(median(median_delta), 3), .groups = ""drop"")"
+"0","knitr::kable(arm_sum,"
+"0","  caption = ""Table 7. Direction summary by maternal arm. An arm-specific difference points toward vaccine-driven (biological) heterogeneity; an arm-shared pattern points to a shared technical or developmental effect."") %>% print()"

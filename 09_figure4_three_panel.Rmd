@@ -1,0 +1,300 @@
+---
+title: "Figure 4 (revised) — Three-panel determinants of maternal responder status"
+subtitle: |
+  Left: predictor AUC ladder (arm / +pre-vaccination / +all-maternal).
+  Middle (NEW): pre-vaccination (early-pregnancy) serology signature.
+  Right: all-maternal serology signature.
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: readable
+params:
+  responder_features: !r c("PT_IgG", "FHA_IgG", "PRN_IgG")
+  maternal_visits:    !r c("PregEarly", "MatBirth")
+  baseline_visit:     "PregEarly"     # the pre-vaccination draw
+  breadth_thresh:     0.6
+  en_alpha:           0.5
+  en_folds:           10
+  min_coverage:       0.6
+  seed:               1
+  top_n_mid:          12               # pre-vaccination features to show (middle panel)
+  top_n_right:        12               # all-maternal features to show (right panel)
+  # Right panel now defaults to the top `top_n_right` features by AUC (curated =
+  # NULL). To instead pin an exact curated set, list feature@visit strings here
+  # (best first), e.g. c("PRN_IgG1@MatBirth", "PT_IgG1@MatBirth", ...).
+  curated_right: !r NULL
+  fig_out_dir:        "figures"
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here); library(dplyr); library(tidyr); library(ggplot2)
+
+# ---- self-locating resolver (identical contract to the Phase-08 doc) ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE); rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+# ---- shared config + helpers (read-only, exactly as Phase 08) ----
+source(find_proj_file("config/endpoints.R"),             local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),           local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/maternal_responder_helpers.R"), local = FALSE, encoding = "UTF-8")
+
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+has_glmnet <- requireNamespace("glmnet", quietly = TRUE)
+has_cluster <- requireNamespace("cluster", quietly = TRUE)
+```
+
+# Rebuild the responder class, arm, and serology matrices
+
+Everything here re-uses the Phase-08 engine so the figure is guaranteed to be the
+same construct as the rest of the analysis. The only *new* computation is the
+univariate AUC of the **pre-vaccination** (`r params$baseline_visit`) matrix, which
+drives the middle panel.
+
+```{r rebuild}
+RESP_FEATS <- params$responder_features
+MAT_VIS    <- params$maternal_visits
+
+mat_cls <- build_maternal_responder_class(
+  data_raw, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
+
+arm_tbl <- subject_maternal_arm(data_raw)
+
+# never let ACT / PENTAMER in (protocol), and drop the 3 score-defining features
+.excl_anti <- { av <- unique(as.character(data_raw$feature))
+                av[sub("_.*$", "", toupper(av)) %in% c("ACT", "PENTAMER")] }
+.excl <- union(RESP_FEATS, .excl_anti)
+
+W_all  <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = .excl,
+                                         min_coverage = params$min_coverage)
+W_base <- build_maternal_serology_matrix(data_raw, params$baseline_visit,
+                                         exclude_feats = .excl,
+                                         min_coverage = params$min_coverage)
+
+# univariate AUC of every feature against the Low/High class
+su_all  <- serology_univariate_auc(W_all,  mat_cls)   # right panel source
+su_base <- serology_univariate_auc(W_base, mat_cls)   # middle panel source (NEW)
+```
+
+```{r left-panel-aucs, results='asis'}
+# Left panel: the AUC ladder. arm-only is the rank statistic (auc_binary of the
+# arm indicator); the two serology rows are cross-validated elastic-net AUCs.
+data_lr <- merge(mat_cls[, c("subject_accession", "responder")], arm_tbl,
+                 by = "subject_accession")
+data_lr <- data_lr[data_lr$arm_name %in% c("TdaP", "TT"), , drop = FALSE]
+arm_auc <- auc_binary(as.numeric(data_lr$arm_name == "TdaP"), data_lr$responder)
+
+cv_base <- cv_all <- NA_real_
+if (has_glmnet) {
+  en_base <- elastic_net_signature(W_base, mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds,
+                                   seed = params$seed)
+  en_all  <- elastic_net_signature(W_all,  mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds,
+                                   seed = params$seed)
+  if (isTRUE(en_base$ok)) cv_base <- en_base$cv_auc
+  if (isTRUE(en_all$ok))  cv_all  <- en_all$cv_auc
+} else {
+  # fall back to the values reported in Table C2 if glmnet is unavailable
+  cv_base <- 0.883; cv_all <- 0.918
+  cat("> *glmnet not installed — using the Table C2 CV-AUC values (0.88 / 0.92) ",
+      "for the left panel. Install `glmnet` to recompute live.*\n\n")
+}
+
+left_df <- data.frame(
+  label = c("Maternal arm only\n(rank statistic)",
+            "Arm + pre-vaccination\nserology (CV)",
+            "Arm + all maternal\nserology (CV)"),
+  auc   = c(arm_auc, cv_base, cv_all),
+  kind  = c("arm", "base", "all"),
+  stringsAsFactors = FALSE)
+left_df$label <- factor(left_df$label, levels = rev(left_df$label))
+knitr::kable(left_df[, c("label", "auc")], digits = 3,
+             caption = "Left-panel AUC ladder (arm-only = rank statistic; serology rows = CV-AUC).")
+```
+
+# Shared styling helpers
+
+```{r style-helpers}
+# antigen palette. IPV uses the orange from the published figure; FIM/TT get
+# their own distinct hues so they are legible in the signatures.
+ANTIGEN_COL <- c(PRN = "#206090", PT = "#d04050", FHA = "#308040",
+                 FIM = "#0f9b9b", IPV = "#e08000", DT = "#7050a0",
+                 TT = "#8a6d3b", DEFAULT = "#9a9a9a")
+LEFT_COL <- c(arm = "#9a9a9a", base = "#5b8fc0", all = "#206090")
+
+# pretty label: "PRN_IgG1@MatBirth" -> "PRN IgG1 @ birth"
+VISIT_PRETTY <- c(PregEarly = "early", MatBirth = "birth")
+pretty_feature <- function(f) {
+  base  <- sub("@.*$", "", f)
+  visit <- sub("^.*@", "", f)
+  vp <- ifelse(visit %in% names(VISIT_PRETTY), VISIT_PRETTY[visit], visit)
+  paste0(gsub("_", " ", base), " @ ", vp)
+}
+
+# build a plot-ready frame from a univariate-AUC table (adds antigen + prevax flag)
+prep_features <- function(su, keep = NULL, top_n = NULL, baseline_visit = params$baseline_visit) {
+  su$base_feature <- sub("@.*$", "", su$feature)
+  su$visit        <- sub("^.*@", "", su$feature)
+  cls <- classify_feature(unique(su$base_feature))          # -> feature, antigen, ...
+  su  <- dplyr::left_join(su, cls, by = c("base_feature" = "feature"))
+  if (!is.null(keep)) {
+    su <- su[match(keep, su$feature), , drop = FALSE]       # keep + preserve order
+    su <- su[!is.na(su$feature), , drop = FALSE]
+  } else {
+    su <- su[order(-su$auc), , drop = FALSE]
+    if (!is.null(top_n)) su <- utils::head(su, top_n)
+  }
+  # colour poliovirus serotypes (IPV1/IPV2/IPV3) as one IPV family, then fall
+  # back to grey for anything outside the named palette.
+  su$antigen  <- sub("^IPV[0-9]+$", "IPV", su$antigen)
+  su$antigen  <- ifelse(su$antigen %in% names(ANTIGEN_COL), su$antigen, "DEFAULT")
+  su$prevax   <- su$visit == baseline_visit
+  su$plabel   <- pretty_feature(su$feature)
+  su$plabel   <- factor(su$plabel, levels = rev(su$plabel)) # top bar on top
+  su
+}
+
+# is a diagonal-hatch pattern available? (nicer, matches the original)
+use_pattern <- requireNamespace("ggpattern", quietly = TRUE)
+
+# One horizontal-bar signature panel: antigen colour + a pre-vaccination marker
+# (diagonal hatch via ggpattern when available, else a dark outline). Value
+# labels are drawn in a separate geom_text with a fixed colour so they never get
+# recoloured by the fill/outline/pattern scales. Guides are emitted identically
+# in every panel (all antigens, drop = FALSE) so patchwork can collect them into
+# one shared legend at the bottom of the figure.
+signature_panel <- function(df, title, show_legend = FALSE) {
+  ANT_BREAKS <- c("PRN","PT","FHA","FIM","IPV","DT","TT")
+  fill_guide <- if (show_legend) guide_legend(order = 1, ncol = 2) else "none"
+  mark_guide <- if (show_legend) guide_legend(order = 2, ncol = 1) else "none"
+  p <- ggplot(df, aes(auc, plabel, fill = antigen))
+  if (use_pattern) {
+    p <- p + ggpattern::geom_col_pattern(
+      aes(pattern = prevax), width = 0.72, colour = NA,
+      pattern_fill = "white", pattern_angle = 45,
+      pattern_density = 0.12, pattern_spacing = 0.03, pattern_size = 0.05) +
+      ggpattern::scale_pattern_manual(
+        values = c(`TRUE` = "stripe", `FALSE` = "none"),
+        breaks = TRUE, labels = c(`TRUE` = "pre-vaccination"),
+        name = NULL, guide = mark_guide)
+  } else {
+    p <- p + geom_col(aes(colour = prevax), width = 0.72, linewidth = 0.6) +
+      scale_colour_manual(values = c(`TRUE` = "grey15", `FALSE` = NA),
+                          breaks = TRUE, labels = c(`TRUE` = "pre-vaccination"),
+                          name = NULL, guide = mark_guide)
+  }
+  # value labels: inside (white) for long bars, outside (dark) for short bars
+  df$inside <- df$auc >= 0.72
+  p +
+    geom_text(data = df[df$inside, , drop = FALSE],
+              aes(label = sprintf("%.2f", auc)),
+              hjust = 1.15, colour = "white", fontface = "bold", size = 3.1) +
+    geom_text(data = df[!df$inside, , drop = FALSE],
+              aes(label = sprintf("%.2f", auc)),
+              hjust = -0.20, colour = "grey20", fontface = "bold", size = 3.1) +
+    scale_fill_manual(values = ANTIGEN_COL, breaks = ANT_BREAKS, drop = FALSE,
+                      name = NULL, guide = fill_guide) +
+    scale_x_continuous(breaks = seq(0.5, 1.0, 0.1), expand = c(0, 0)) +
+    # zoom the view to 0.5-1.0 WITHOUT censoring the bars (bars are drawn from 0;
+    # scale limits would drop them as out-of-bounds — coord_cartesian just clips).
+    coord_cartesian(xlim = c(0.5, 1.0)) +
+    labs(x = "Univariate AUC (Low vs High responder)", y = NULL, title = title) +
+    theme_minimal(base_size = 11) +
+    theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+          plot.title = element_text(face = "bold", size = 12),
+          axis.ticks = element_blank(),
+          # boxed legend tucked into the bottom-right corner (like the preview)
+          legend.position = if (show_legend) c(0.99, 0.02) else "none",
+          legend.justification = c(1, 0),
+          legend.box = "vertical", legend.box.just = "right",
+          legend.spacing.y = grid::unit(1, "pt"),
+          legend.key.size = grid::unit(11, "pt"),
+          legend.text = element_text(size = 8.5),
+          legend.margin = margin(1, 1, 1, 1),
+          legend.box.margin = margin(2, 3, 2, 3),
+          legend.background = element_blank(),
+          legend.box.background = element_rect(fill = "white", colour = "grey70", linewidth = 0.4))
+}
+```
+
+# Assemble the three panels
+
+```{r build-panels}
+## --- LEFT: predicting responder status ---
+p_left <- ggplot(left_df, aes(auc, label, fill = kind)) +
+  geom_col(width = 0.62) +
+  geom_text(aes(label = sprintf("%.2f", auc)), hjust = 1.2,
+            colour = "white", fontface = "bold", size = 3.6) +
+  scale_fill_manual(values = LEFT_COL, guide = "none") +
+  scale_x_continuous(breaks = seq(0.5, 1.0, 0.1), expand = c(0, 0)) +
+  coord_cartesian(xlim = c(0.5, 1.0)) +
+  labs(x = "AUC (Low vs High responder)", y = NULL, title = "Predicting responder status") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold", size = 12), axis.ticks = element_blank())
+
+## --- MIDDLE: pre-vaccination signature (NEW) — pre-vaccination features only ---
+mid_df <- prep_features(su_base, top_n = params$top_n_mid)
+p_mid  <- signature_panel(mid_df, "Pre-vaccination serology signature", show_legend = FALSE)
+
+## --- RIGHT: all-maternal signature (kept) ---
+right_keep <- params$curated_right
+if (!is.null(right_keep)) right_keep <- right_keep[right_keep %in% su_all$feature]
+right_df <- if (length(right_keep))
+  prep_features(su_all, keep = right_keep) else
+  prep_features(su_all, top_n = params$top_n_right)
+p_right  <- signature_panel(right_df, "Maternal serology signature (all visits)",
+                            show_legend = TRUE)
+```
+
+```{r figure4, fig.width=15.5, fig.height=5.0, fig.cap="Figure 4 (revised). Determinants of maternal responder status. Left: AUC ladder (arm-only rank statistic; +pre-vaccination and +all-maternal serology are cross-validated elastic-net AUCs). Middle: top-12 pre-vaccination (early-pregnancy) serology features by univariate AUC. Right: top-12 all-maternal serology features by univariate AUC; hatched/outlined bars are the pre-vaccination draw. Bars coloured by antigen family (poliovirus serotypes IPV1/IPV2/IPV3 collapsed to IPV); the three score-defining features (PT/FHA/PRN total IgG) are excluded from both signatures."}
+if (requireNamespace("patchwork", quietly = TRUE)) {
+  library(patchwork)
+  fig4 <- p_left + p_mid + p_right + plot_layout(widths = c(1.05, 1.05, 1.25))
+} else {
+  stop("Please install `patchwork` to assemble the three panels: install.packages('patchwork').")
+}
+fig4
+```
+
+```{r save-figure}
+dir.create(params$fig_out_dir, showWarnings = FALSE, recursive = TRUE)
+png_path <- file.path(params$fig_out_dir, "figure4_three_panel.png")
+pdf_path <- file.path(params$fig_out_dir, "figure4_three_panel.pdf")
+ggsave(png_path, fig4, width = 15.5, height = 5.0, dpi = 300, bg = "white")
+ggsave(pdf_path, fig4, width = 15.5, height = 5.0, bg = "white")
+cat("Saved:\n- ", png_path, "\n- ", pdf_path, "\n", sep = "")
+```
+
+---
+
+*Revised Figure 4. Both signature panels now show the top 12 features by
+univariate AUC. Poliovirus serotypes (IPV1/IPV2/IPV3) share one IPV colour, and
+FIM/TT have their own hues, so every antigen family is legible; the boxed legend
+in the right panel carries all seven families plus the pre-vaccination hatch. The
+middle panel is computed on the pre-vaccination (`r params$baseline_visit`) matrix
+`W_base`; the right panel on the all-maternal matrix `W_all`. To pin an exact
+curated set for the right panel instead of the automatic top 12, set
+`params$curated_right` to a vector of feature@visit strings.*

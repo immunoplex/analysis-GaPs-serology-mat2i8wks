@@ -1,0 +1,183 @@
+---
+title: "GaPs — maternal–infant antibody pathway (Supplemental Table S1 summary)"
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+    theme: null
+    mathjax: null
+  pdf_document: default
+subtitle: "Within-subject production, placental transfer, and postnatal decay"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(tidyr)
+library(htmltools)
+```
+
+```{r data}
+## ---------------------------------------------------------------------------
+## Input: the Supplemental Table S1 summary, one row per
+##   transition x antigen x series x arm, with columns:
+##   transition, antigen, series, arm, n, pct_inc, pct_dec,
+##   median_dlog10, p_signedrank, direction
+##
+## Two ways to supply it:
+##   (a) recompute from the paired data object used in results_B
+##       (c_set.RData) and reshape to this long summary, OR
+##   (b) read the bundled CSV (S1_data.csv) that ships with this file.
+## Option (b) is used here so the document knits standalone; swap in
+## your own `s1` data.frame to regenerate from source.
+## ---------------------------------------------------------------------------
+
+s1 <- read.csv("S1_data.csv", stringsAsFactors = FALSE)
+
+## Fixed display order ---------------------------------------------------------
+stage_levels  <- c("Maternal production", "Placental transfer", "Postnatal decay")
+antigen_levels <- c("PT", "FHA", "PRN", "FIM", "TT", "DT")
+series_levels  <- c("Total IgG", "IgG3", "IgG1", "IgG2", "IgG4")   # requested column order
+
+stage_note <- c("Maternal production" = "PregEarly &rarr; delivery",
+                "Placental transfer"  = "delivery &rarr; cord",
+                "Postnatal decay"     = "cord &rarr; 8 weeks")      # 2 months relabelled to 8 weeks
+
+s1 <- s1 %>%
+  mutate(transition = factor(transition, levels = stage_levels),
+         antigen    = factor(antigen,    levels = antigen_levels),
+         series     = factor(series,     levels = series_levels))
+```
+
+```{r bh}
+## Benjamini-Hochberg within each stage x antigen family (across the five
+## series), pooled arm only -- exactly the family used for the grid stars.
+pooled_q <- s1 %>%
+  filter(arm == "Pooled", !is.na(p_signedrank)) %>%
+  group_by(transition, antigen) %>%
+  mutate(q = p.adjust(p_signedrank, method = "BH")) %>%
+  ungroup() %>%
+  select(transition, antigen, series, median_dlog10, q)
+
+stars <- function(q) ifelse(is.na(q), "",
+                     ifelse(q < 0.001, "***",
+                     ifelse(q < 0.01,  "**",
+                     ifelse(q < 0.05,  "*", ""))))
+
+## Arm proportions per cell (Tdap over TT) for the in-cell bars.
+arm_wide <- s1 %>%
+  filter(arm %in% c("TdaP", "TT")) %>%
+  select(transition, antigen, series, arm, pct_inc, pct_dec) %>%
+  pivot_wider(names_from = arm, values_from = c(pct_inc, pct_dec))
+
+cells <- pooled_q %>%
+  left_join(arm_wide, by = c("transition", "antigen", "series")) %>%
+  mutate(star = stars(q))
+```
+
+```{r render, results='asis'}
+## ---- small HTML builders ----------------------------------------------------
+fmt_med  <- function(v) ifelse(is.na(v), "",
+                        ifelse(v >= 0, sprintf("+%.3f", v), sprintf("%.3f", v)))
+med_cls  <- function(v) ifelse(v >= 0, "pos", "neg")
+
+## one arm segment (a horizontal inc|dec split)
+seg <- function(inc, dec) {
+  if (is.na(inc) && is.na(dec)) return('<div class="seg"></div>')
+  inc <- ifelse(is.na(inc), 0, inc); dec <- ifelse(is.na(dec), 0, dec)
+  tot <- ifelse(inc + dec == 0, 100, inc + dec)
+  sprintf('<div class="seg"><span class="inc" style="width:%.1f%%"></span><span class="dec" style="width:%.1f%%"></span></div>',
+          100 * inc / tot, 100 * dec / tot)
+}
+
+## one grid cell: pooled median | Tdap-over-TT bars | pooled star
+cell_html <- function(row) {
+  if (nrow(row) == 0 || is.na(row$median_dlog10))
+    return('<div class="empty">&mdash;</div>')
+  sprintf(
+    '<div class="cellwrap"><span class="med %s">%s</span>
+       <span class="armwrap"><span class="armkeys"><span>Tdap</span><span>TT</span></span>
+       <span class="armstack">%s%s</span></span>
+       <span class="stars">%s</span></div>',
+    med_cls(row$median_dlog10), fmt_med(row$median_dlog10),
+    seg(row$pct_inc_TdaP, row$pct_dec_TdaP),
+    seg(row$pct_inc_TT,   row$pct_dec_TT),
+    row$star)
+}
+
+caption_html <- paste0(
+  '<caption><span class="capkey">',
+  '<span class="sw" style="background:#2f6f8f"></span><b>increase</b> &middot; ',
+  '<span class="sw" style="background:#c05a3e"></span><b>decrease</b> &mdash; ',
+  'each bar is the % of subjects moving each way; the upper bar is the <b>Tdap-IPV</b> arm, ',
+  'the lower bar the <b>TT</b> arm. Number = pooled median &Delta;log<sub>10</sub>. ',
+  'Stars = Benjamini&ndash;Hochberg q within each stage&times;antigen family ',
+  '(across the five series, pooled): <b>*</b> q&lt;.05, <b>**</b> q&lt;.01, <b>***</b> q&lt;.001. ',
+  'PT=pertussis toxin. FHA=filamentous haemagglutinin. PRN=pertactin. ',
+  'FIM=fimbriae 2/3. TT=tetanus toxoid. DT=diphtheria toxoid.</span></caption>')
+
+## ---- assemble the three stage tables ----------------------------------------
+out <- c('<div class="wrap">')
+for (i in seq_along(stage_levels)) {
+  st <- stage_levels[i]
+  out <- c(out, sprintf(
+    '<div class="stagehead"><h2>%s</h2><span class="transnote">%s</span></div>',
+    st, stage_note[st]))
+
+  hdr <- paste0('<th class="series-col">', series_levels, '</th>', collapse = "")
+  body <- ""
+  for (an in antigen_levels) {
+    row_cells <- ""
+    for (se in series_levels) {
+      r <- cells %>% filter(transition == st, antigen == an, series == se)
+      row_cells <- paste0(row_cells, "<td>", cell_html(r), "</td>")
+    }
+    body <- paste0(body, '<tr><td class="antcell">', an, '</td>', row_cells, '</tr>')
+  }
+  out <- c(out, paste0(
+    '<table>',
+    if (i == length(stage_levels)) caption_html else "",
+    '<thead><tr><th style="width:120px">Antigen</th>', hdr, '</tr></thead>',
+    '<tbody>', body, '</tbody></table>'))
+}
+out <- c(out, '</div>')
+cat(paste(out, collapse = "\n"))
+```
+
+```{css, echo=FALSE}
+body{background:#fbfcfd;color:#1b2430;
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;line-height:1.4;}
+.wrap{max-width:1120px;margin:0 auto;}
+.stagehead{display:flex;align-items:baseline;gap:12px;margin:32px 0 10px;}
+.stagehead h2{font-size:18px;font-weight:600;margin:0;}
+.stagehead .transnote{font-size:12.5px;color:#5a6572;font-family:"IBM Plex Mono",monospace;}
+table{border-collapse:collapse;width:100%;background:#fff;}
+thead th{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.05em;color:#1b2430;
+  font-weight:600;text-align:left;padding:9px 12px;border-top:1.5px solid #1b2430;
+  border-bottom:1px solid #1b2430;background:#f4f6f7;}
+thead th.series-col{text-align:center;}
+tbody td{padding:7px 12px;border-bottom:1px solid #e7ebef;vertical-align:middle;}
+tbody tr:last-child td{border-bottom:1.5px solid #1b2430;}
+.antcell{font-weight:600;font-size:14px;white-space:nowrap;}
+.cellwrap{display:flex;align-items:center;gap:8px;min-width:150px;}
+.med{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:600;min-width:46px;
+  text-align:right;font-variant-numeric:tabular-nums;}
+.med.pos{color:#2f6f8f;} .med.neg{color:#c05a3e;}
+.stars{font-family:"IBM Plex Mono",monospace;font-size:12px;color:#8a6d3b;min-width:20px;font-weight:700;}
+.armwrap{flex:1;display:flex;align-items:center;gap:6px;min-width:100px;}
+.armkeys{display:flex;flex-direction:column;}
+.armkeys span{font-family:"IBM Plex Mono",monospace;font-size:8px;line-height:11px;color:#5a6572;}
+.armstack{flex:1;min-width:74px;display:flex;flex-direction:column;
+  border:1px solid #c8ced5;border-radius:3px;overflow:hidden;}
+.armstack .seg{display:flex;height:11px;}
+.armstack .seg + .seg{border-top:1px solid #fff;}
+.armstack .seg .inc{background:#2f6f8f;height:100%;}
+.armstack .seg .dec{background:#c05a3e;height:100%;}
+.empty{color:#c2cad2;font-family:"IBM Plex Mono",monospace;font-size:12px;text-align:center;}
+caption{caption-side:bottom;text-align:left;font-size:11.5px;color:#5a6572;line-height:1.55;
+  padding:10px 2px 0;}
+caption b{color:#1b2430;font-weight:600;}
+caption .sw{display:inline-block;width:20px;height:9px;border-radius:2px;vertical-align:middle;margin:0 3px;}
+caption .capkey{font-family:"IBM Plex Mono",monospace;}
+```

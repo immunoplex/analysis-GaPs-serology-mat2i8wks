@@ -1,5 +1,5 @@
 ---
-title: "GaPs: does the maternal responder score earn a place predicting infant two-month function?"
+title: "GaPs (Part B): predicting infant InfMon2 whole-bacterial function from maternal responder status, in excess of the maternal arm"
 subtitle: |
   An equal-chance test. Brings the Phase-07/08 maternal responder score into the
   infant InfMon2 functional models on the same footing as the matched antigen-specific
@@ -71,7 +71,7 @@ ACCENT <- "#8A1538"; MARM_COL <- c(TdaP = "#1b5aa0", TT = "#c0297a")
 
 # What this tests
 
-The responder score is a function of maternal PT/PRN IgG and IgG1 — the same antibodies that
+The responder score is a function of maternal PT, FHA and PRN IgG — the same antibodies that
 already dominate the Section C–E infant-function models. A fair ("equal-chance") test must therefore
 (1) put the score in the **same** InfMon2 outcome frame and CV protocol as those models, (2) credit
 shared variance by an **order-independent Shapley decomposition** rather than by entry order, (3) isolate
@@ -92,7 +92,8 @@ stopifnot(all(c("subject_accession", "responder", "score") %in% names(mat_cls)))
 arm_tbl <- subject_maternal_arm(data_raw)
 
 # Maternal serology matrix (Blom-standardised; score-defining features excluded) for the breadth index
-W_all <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = RESP_FEATS,
+.excl_anti <- { .av <- unique(as.character(data_raw$feature)); .av[sub("_.*$", "", toupper(.av)) %in% c("ACT", "PENTAMER")] }
+W_all <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = union(RESP_FEATS, .excl_anti),
                                         min_coverage = params$min_coverage)
 feat_cols <- setdiff(names(W_all), "subject_accession")
 ```
@@ -189,6 +190,70 @@ build_df <- function(spec) {
   d
 }
 DFS <- lapply(OUTCOMES, build_df)
+```
+
+# Responder status in excess of the maternal arm
+
+The primary question of Part B: do the maternal responder predictors — the **High vs Low class** and
+the continuous **responder score** — predict each infant InfMon2 whole-bacterial outcome (SBA, whole-cell
+IgG, PTNA) **over and above the maternal arm (Tdap-IPV vs TT)**? The maternal arm is the base block, and
+we report the honest cross-validated gain from adding responder status on top of it. Because the arm
+largely *creates* the High/Low split (Part A), most of the responder signal is expected to be shared with
+the arm; what matters is the part that is *unique* to responder status. All predictors are
+maternal-at-delivery (forward).
+
+```{r excess-of-arm, results='asis'}
+excess_tbl <- function(d) {
+  base <- c("arm", "age_z")
+  models <- list(
+    "Arm only"          = c("arm"),
+    "Arm + age (base)"  = base,
+    "+ responder class" = c(base, "responder"),
+    "+ responder score" = c(base, "score_z"))
+  rows <- lapply(names(models), function(nm) {
+    tr <- models[[nm]]
+    dd <- d[stats::complete.cases(d[, intersect(tr, names(d)), drop = FALSE]), , drop = FALSE]
+    f  <- reformulate(tr, "y"); m <- lm(f, dd)
+    data.frame(Model = nm, n = nrow(dd),
+               R2    = round(summary(m)$r.squared, 3),
+               adjR2 = round(summary(m)$adj.r.squared, 3),
+               CV_R2 = round(cv_r2(f, dd), 3))
+  })
+  tab <- do.call(rbind, rows)
+  base_cv <- tab$CV_R2[tab$Model == "Arm + age (base)"]
+  tab$dCV_vs_arm <- round(tab$CV_R2 - base_cv, 3)
+  tab$dCV_vs_arm[tab$Model %in% c("Arm only", "Arm + age (base)")] <- NA
+  tab
+}
+for (k in names(OUTCOMES)) {
+  d <- DFS[[k]]; if (is.null(d)) next
+  cat(sprintf("\n\n### %s (%s); n = %d\n\n", k, OUTCOMES[[k]]$label, nrow(d)))
+  print(kable(excess_tbl(d), row.names = FALSE,
+        caption = sprintf("Incremental prediction of infant %s by maternal responder status beyond the maternal arm. dCV_vs_arm is the cross-validated R\u00b2 gain over the arm + age base; a positive, stable value is responder information the vaccine label does not already carry.", k)))
+}
+```
+
+## How much of the {arm + responder} signal is unique to the responder?
+
+```{r excess-shapley, results='asis'}
+ex <- lapply(names(OUTCOMES), function(k) {
+  d <- DFS[[k]]; if (is.null(d)) return(NULL)
+  dd <- d[stats::complete.cases(d[, c("arm", "age_z", "score_z")]), ]
+  sh <- shapley("y", "age_z", c("arm", "score_z"), dd)          # order-independent split, beyond age
+  r_arm  <- r2_of("arm", "age_z", "y", dd)               - r2_of(character(0), "age_z", "y", dd)
+  r_scr  <- r2_of("score_z", "age_z", "y", dd)           - r2_of(character(0), "age_z", "y", dd)
+  r_both <- r2_of(c("arm", "score_z"), "age_z", "y", dd) - r2_of(character(0), "age_z", "y", dd)
+  uniq_arm <- r_both - r_scr; uniq_scr <- r_both - r_arm; common <- r_both - uniq_arm - uniq_scr
+  data.frame(Outcome = k,
+             `Shapley arm`   = round(unname(sh["arm"]), 3),
+             `Shapley score` = round(unname(sh["score_z"]), 3),
+             `Unique arm`    = round(uniq_arm, 3),
+             `Unique score`  = round(uniq_scr, 3),
+             `Shared`        = round(common, 3),
+             check.names = FALSE)
+})
+kable(do.call(rbind, ex), row.names = FALSE,
+      caption = "Order-independent (Shapley) and commonality split of the joint {arm, responder-score} explained variance, beyond maternal age. 'Unique score' is the responder signal in excess of the arm; 'Shared' is the variance the arm and the score both carry (expected large, since the arm largely creates the High/Low split).")
 ```
 
 # 1. Nested models — does the score add out-of-sample beyond the matched antibody?

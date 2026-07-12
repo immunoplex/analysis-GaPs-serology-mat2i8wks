@@ -1,0 +1,59 @@
+# Step 10 — FcγR3b vs ADCD for the Outcome {#step10}
+
+The earlier steps produced a puzzle: FcγR3b predicts `r cfg$outcome_label` (in TdaP, quantity-removed),
+yet ADCD does not — even though `r cfg$outcome_label` is complement-mediated killing and ADCD is
+complement deposition. This step adjudicates directly: within one model, does **FcγR3b survive after
+controlling for ADCD**, and does ADCD retain anything after FcγR3b? If FcγR3b's association is
+independent of the measured ADCD, whole-cell killing depends on FcγR3b engagement through a route
+this ADCD assay does not capture. Fit per antigen, per arm, per mode; incremental R² isolates each
+term's unique contribution.
+
+```{r step10-run, results='asis'}
+.stage(10, "FcγR3b vs ADCD for the outcome")
+if (!RUN_FCGR3B_ADCD) {
+  cat("*Step 10 skipped (run_fcgr3b_adcd = FALSE).*\n\n")
+} else {
+  dR2 <- function(d, y, add, base) {
+    b <- lm(reformulate(base, response = y), data = d)
+    f <- lm(reformulate(c(base, add), response = y), data = d)
+    summary(f)$r.squared - summary(b)$r.squared
+  }
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    rows <- list()
+    for (A in PATHWAY_ANTIGENS) {
+      r3b <- paste0(A, "_FcgR3b"); adcd <- paste0(A, "_ADCD")
+      if (!all(c(r3b, adcd, OUTCOME) %in% names(wd))) next
+      for (m in cfg$maternal_arms) {
+        d <- arm_data_m(mode, m) %>% dplyr::select(dplyr::all_of(c(OUTCOME, r3b, adcd))) %>% tidyr::drop_na()
+        if (nrow(d) < 20) next
+        f <- lm(reformulate(c(r3b, adcd), response = OUTCOME), data = d)
+        co <- summary(f)$coefficients
+        rows[[length(rows) + 1]] <- data.frame(
+          antigen = A, arm = m, n = nrow(d), R2_joint = round(summary(f)$r.squared, 3),
+          "β FcγR3b" = round(co[r3b, 1], 3), "p FcγR3b" = signif(co[r3b, 4], 3),
+          "β ADCD"   = round(co[adcd, 1], 3), "p ADCD"   = signif(co[adcd, 4], 3),
+          "ΔR² 3b|ADCD" = round(dR2(d, OUTCOME, r3b, adcd), 3),
+          "ΔR² ADCD|3b" = round(dR2(d, OUTCOME, adcd, r3b), 3),
+          check.names = FALSE, stringsAsFactors = FALSE)
+        .info("step10 [%s] %s %s done (n=%d)", mode, A, m, nrow(d))
+      }
+    }
+    tb <- do.call(rbind, rows)
+    if (is.null(tb)) { cat("*No antigen had FcγR3b + ADCD + outcome complete.*\n\n"); next }
+    print(knitr::kable(tb, row.names = FALSE,
+      caption = paste0("FcγR3b vs ADCD as joint predictors of ", cfg$outcome_label,
+                       " [", mode, "]: coefficients, and each term's incremental R² beyond the other."))); cat("\n")
+  }
+}
+```
+
+**How to read this.** `ΔR² 3b|ADCD` is the variance FcγR3b adds beyond ADCD; `ΔR² ADCD|3b` the reverse.
+A significant FcγR3b coefficient with a clearly larger `ΔR² 3b|ADCD` than `ΔR² ADCD|3b`, alongside a
+non-significant ADCD term, is direct evidence that FcγR3b's link to killing does **not** run through
+the measured ADCD — implicating either a complement route the bead-based ADCD assay misses or a
+non-ADCD FcγR3b function. If instead ADCD dominates, the pathway's complement step is captured as
+intended. Compare arms and modes: the mixed mode (quality mediators, quantity exposure kept upstream)
+is the fairest read of the per-antibody effector step.

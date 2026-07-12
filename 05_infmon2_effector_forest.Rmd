@@ -1,0 +1,126 @@
+```{r inf2-setup, include=FALSE}
+# CHILD document. When included from a master it assumes data_raw, nt, and
+# find_proj_file() already exist and that config/endpoints.R +
+# R/serology_helpers.R are sourced. The guarded block below also lets it
+# knit STANDALONE (mirrors results_B.Rmd / cord_to_infmon2's bootstrap).
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
+
+if (!exists("find_proj_file", mode = "function")) {
+  library(here)
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit)) stop("Cannot locate R/find_proj_file.R.")
+  source(.ff_hit[1], local = FALSE); rm(.ff_cand, .ff_hit)
+}
+if (!exists("data_raw")) {
+  source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+  source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+  data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+  if (exists("verify_predictor_casing", mode = "function")) verify_predictor_casing(data_raw)
+}
+if (!exists("nt")) nt <- new_ntracker()
+
+# This component's own helpers.
+source(find_proj_file("R/infmon2_effector_helpers.R"), local = FALSE, encoding = "UTF-8")
+
+INF2_VISIT <- "InfMon2"   # data value (recoded M02); shown to readers as "8 weeks"
+```
+
+# 8 Weeks: Whole-Bacterium Assays & Effector Functions — Maternal TdaP vs TT {#inf2-effectors}
+
+At the **infant baseline visit (8 weeks, before primary vaccination)** this part tests
+whether **maternal TdaP** shifts the infant's whole-bacterium responses and antibody effector
+functions relative to **maternal TT** (referent). It covers two families:
+
+- **Whole-bacterium assays** — `r paste(gsub("^WHOLE_", "", INFMON2_WHOLE_ASSAYS), collapse = ", ")`
+  (serum bactericidal activity, whole-cell-binding IgG, and pertussis-toxin neutralization).
+- **Effector functions** binding to individual antigens — **ADCD** (all six antigens
+  `r paste(INFMON2_EFFECTOR_ANTIGENS$ADCD, collapse = ", ")`), and **ADCP** / **ADNP**
+  (`r paste(INFMON2_EFFECTOR_ANTIGENS$ADCP, collapse = ", ")` only — no FHA or FIM assays).
+
+Each feature is a **Wilcoxon rank-sum test of TdaP vs TT on log10 assay values — the same test
+used in the response-bubble grid.** Multiplicity is handled by
+**Benjamini–Hochberg within each assay class** (Whole / ADCD / ADCP / ADNP as separate families).
+The forest plot additionally carries the point estimate + interval that natively pair with that
+test: the **Hodges–Lehmann location shift and its Wilcoxon CI**, oriented **TdaP − TT**. With **TT
+as the reference level**, this is the effect of TdaP relative to TT, so a positive value means
+*higher with maternal TdaP*.
+
+```{r inf2-mapnote, echo=FALSE, results='asis'}
+if (exists("mapnote", mode = "function"))
+  mapnote("Infant-baseline (pre-primary-vaccination) read-out of the maternal vaccination effect ",
+          "on functional / whole-bacterium immunity, complementing the antigen\u00d7analyte bubble grid.",
+          feeds = c(
+            "Q3 \u2014 Function vs binding: does the maternal effect reach functional read-outs (SBA/PTNA, ADCD/ADCP/ADNP), not just IgG binding?",
+            "Q2 \u2014 Antigen specificity: within each effector, is the effect concentrated in the vaccine antigens (PT/FHA/PRN) vs the toxoids (TT/DT)?"))
+```
+
+---
+
+## Test Results (8 weeks)
+
+```{r inf2-run, results='asis'}
+inf2_features <- infmon2_effector_features()
+
+# participant accounting (unique subjects per maternal arm at 8 weeks / InfMon2)
+subj <- data_raw %>%
+  dplyr::filter(as.character(visit_name) == INF2_VISIT,
+                as.character(arm_name) %in% MATERNAL_ARMS,
+                as.character(feature) %in% inf2_features) %>%
+  dplyr::distinct(subject_accession, arm_name)
+n_TT <- sum(as.character(subj$arm_name) == "TT")
+n_TdaP <- sum(as.character(subj$arm_name) == "TdaP")
+if (exists("nt_log_manual", mode = "function"))
+  nt_log_manual(nt, "8-weeks effectors", "Whole + effector functions", "Overall (all infants)",
+                "TdaP vs TT (Wilcoxon, per feature)", n_entered = n_TT + n_TdaP,
+                n_used = n_TT + n_TdaP,
+                note = sprintf("TT = %d, TdaP = %d subjects; per-feature n in table", n_TT, n_TdaP))
+
+inf2_stats <- infmon2_arm_effect(data_raw, visit = INF2_VISIT, features = inf2_features)
+
+cat(sprintf("**Subjects at 8 weeks:** TT n = %d, TdaP n = %d. ", n_TT, n_TdaP))
+cat(sprintf("**%d features tested** (%d whole-bacterium assays + %d effector\u00d7antigen cells); BH within each assay class.\n\n",
+            nrow(inf2_stats), sum(inf2_stats$class == "Whole bacterium assays"),
+            sum(inf2_stats$class != "Whole bacterium assays")))
+
+print(infmon2_effect_kable(
+  inf2_stats,
+  caption = "8-week maternal TdaP-vs-TT differences (TT referent). Median = median log10 assay value per arm; HL shift = Hodges\u2013Lehmann location shift (TdaP\u2212TT, log10) with Wilcoxon CI; Fold = 10^(HL) = TdaP/TT ratio on the linear scale; Direction uses the bubble convention; p = Wilcoxon rank-sum (same test as the bubbles); p (BH) = Benjamini\u2013Hochberg within the assay class."))
+```
+
+---
+
+## Forest Plot (8 weeks)
+
+```{r inf2-forest, fig.width=8.5, fig.height=8, fig.cap="Maternal TdaP-vs-TT effect at 8 weeks for whole-bacterium assays (SBA, WT IgG, PTNA) and antibody effector functions (ADCD, ADCP, ADNP). Point = Hodges\u2013Lehmann shift (TdaP\u2212TT, log10); line = 95% CI; dashed line = no difference; positive = higher with maternal TdaP. BH-adjusted p at right; larger dot = BH p < 0.05. Colour differentiates each whole-bacterium assay and each effector function."}
+print(infmon2_forest_plot(inf2_stats, show_p = "adjusted"))
+```
+
+---
+
+## Notes on Method Choices
+
+```{r inf2-notes, echo=FALSE, results='asis'}
+cat(paste0(
+  "- **Same test as the bubbles.** The p-values above come from `wilcox.test()` on log10 assay ",
+  "values, TT vs TdaP, exactly as in `bubble_arm_effect()`. Only the effect *display* differs: the ",
+  "bubbles show a bare difference of medians (no interval), whereas a forest plot needs one, so the ",
+  "point/CI use the Hodges\u2013Lehmann shift and Wilcoxon `conf.int` \u2014 the estimator/interval that ",
+  "belongs to this test. The raw `p` is identical to the bubble p.\n",
+  "- **Orientation.** Everything is oriented **TdaP \u2212 TT** with **TT as the reference level**, so ",
+  "the estimate is the effect of TdaP relative to TT (positive = higher with maternal TdaP), the ",
+  "sign convention of Saso et al. 2026 Figure 2C/D. The `Direction` column reuses the bubble ",
+  "labels (\u201cHigher TdaP\u201d / \u201cLower TdaP\u201d). Magnitudes and p-values are identical to the bubble ",
+  "grid; only the displayed sign convention differs (the bubble reports median(TT) \u2212 median(TdaP)).\n",
+  "- **Multiplicity.** Benjamini\u2013Hochberg is applied **within each assay class** (Whole = ",
+  sum(inf2_stats$class == "Whole bacterium assays"), ", ADCD = ", sum(inf2_stats$class == "ADCD"),
+  ", ADCP = ", sum(inf2_stats$class == "ADCP"), ", ADNP = ", sum(inf2_stats$class == "ADNP"),
+  " tests), so each functional family is corrected on its own. To correct across the whole panel ",
+  "instead, call `infmon2_arm_effect(..., by_class = FALSE)`; to change method, set `p_adjust_method`.\n",
+  "- **Antigen coverage.** ADCP and ADNP have no FHA or FIM assays, so those cells are absent by design ",
+  "(not missing data). ADCD spans all six antigens.\n",
+  "- **Infant arms pooled.** This is the overall maternal effect at baseline. For an aP/wP-stratified ",
+  "version, pass `infant_arm_sel = \"aP\"` / `\"wP\"` to `infmon2_arm_effect()`.\n"))
+```

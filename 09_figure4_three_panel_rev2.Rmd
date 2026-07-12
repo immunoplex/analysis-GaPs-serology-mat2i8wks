@@ -1,0 +1,300 @@
+---
+title: "Figure 4 (rev2) — Three-panel determinants of maternal responder status + interval-robustness companion"
+subtitle: |
+  Main figure (unchanged): Left AUC ladder / Middle pre-vaccination signature /
+  Right all-maternal signature. NEW supplemental companion: the vaccination-to-
+  delivery interval barely moves the delivery titres that build the responder score.
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: readable
+params:
+  responder_features: !r c("PT_IgG", "FHA_IgG", "PRN_IgG")
+  maternal_visits:    !r c("PregEarly", "MatBirth")
+  baseline_visit:     "PregEarly"
+  from_visit:         "PregEarly"
+  to_visit:           "MatBirth"
+  breadth_thresh:     0.6
+  en_alpha:           0.5
+  en_folds:           10
+  min_coverage:       0.6
+  spline_df:          3
+  days_col:           "vaccine_birth_interval_days"
+  seed:               1
+  top_n_mid:          12
+  top_n_right:        12
+  curated_right: !r c(
+    "PRN_IgG1@MatBirth", "PT_IgG1@MatBirth", "FHA_IgG1@MatBirth", "IPV1_IgG1@MatBirth",
+    "PT_IgG3@MatBirth", "FHA_IgG3@MatBirth", "PT_IgG2@MatBirth", "IPV2_IgG1@MatBirth",
+    "PRN_IgG2@MatBirth", "PRN_IgG1@PregEarly", "FHA_IgG1@PregEarly", "PRN_IgG4@MatBirth")
+  fig_out_dir:        "figures"
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here); library(dplyr); library(tidyr); library(ggplot2); library(splines)
+
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE); rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+source(find_proj_file("config/endpoints.R"),             local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),           local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/maternal_responder_helpers.R"), local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/interval_helpers.R"),           local = FALSE, encoding = "UTF-8")  # NEW
+
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")),
+                 error = function(e) NULL)
+if (is.null(clin)) { .e <- new.env(); load(find_proj_file("data/clin_assess.RData"), envir = .e)
+                     clin <- get("clin_assess", envir = .e) }
+clin <- add_w_weeks(clin, days_col = params$days_col)
+
+has_glmnet <- requireNamespace("glmnet", quietly = TRUE)
+has_cluster <- requireNamespace("cluster", quietly = TRUE)
+```
+
+# Main figure (UNCHANGED from rev1)
+
+Everything in this section is identical to `09_figure4_three_panel_rev.Rmd`; it is
+reproduced so the file is self-contained. The interval analysis does **not** change
+these three panels — they are the headline arm/serology result computed by the
+Phase-08 engine.
+
+```{r rebuild}
+RESP_FEATS <- params$responder_features
+MAT_VIS    <- params$maternal_visits
+
+mat_cls <- build_maternal_responder_class(
+  data_raw, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
+arm_tbl <- subject_maternal_arm(data_raw)
+
+.excl_anti <- { av <- unique(as.character(data_raw$feature))
+                av[sub("_.*$", "", toupper(av)) %in% c("ACT", "PENTAMER")] }
+.excl <- union(RESP_FEATS, .excl_anti)
+W_all  <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = .excl,
+                                         min_coverage = params$min_coverage)
+W_base <- build_maternal_serology_matrix(data_raw, params$baseline_visit,
+                                         exclude_feats = .excl, min_coverage = params$min_coverage)
+su_all  <- serology_univariate_auc(W_all,  mat_cls)
+su_base <- serology_univariate_auc(W_base, mat_cls)
+```
+
+```{r left-panel-aucs, results='asis'}
+data_lr <- merge(mat_cls[, c("subject_accession", "responder")], arm_tbl, by = "subject_accession")
+data_lr <- data_lr[data_lr$arm_name %in% c("TdaP", "TT"), , drop = FALSE]
+arm_auc <- auc_binary(as.numeric(data_lr$arm_name == "TdaP"), data_lr$responder)
+
+cv_base <- cv_all <- NA_real_
+if (has_glmnet) {
+  en_base <- elastic_net_signature(W_base, mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds, seed = params$seed)
+  en_all  <- elastic_net_signature(W_all,  mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds, seed = params$seed)
+  if (isTRUE(en_base$ok)) cv_base <- en_base$cv_auc
+  if (isTRUE(en_all$ok))  cv_all  <- en_all$cv_auc
+} else { cv_base <- 0.883; cv_all <- 0.918
+  cat("> *glmnet not installed — using the Table C2 CV-AUC values (0.88 / 0.92).*\n\n") }
+
+left_df <- data.frame(
+  label = c("Maternal arm only\n(rank statistic)",
+            "Arm + pre-vaccination\nserology (CV)",
+            "Arm + all maternal\nserology (CV)"),
+  auc = c(arm_auc, cv_base, cv_all), kind = c("arm", "base", "all"), stringsAsFactors = FALSE)
+left_df$label <- factor(left_df$label, levels = rev(left_df$label))
+```
+
+```{r style-helpers}
+ANTIGEN_COL <- c(PRN = "#206090", PT = "#d04050", FHA = "#308040",
+                 FIM = "#0f9b9b", IPV = "#e08000", DT = "#7050a0",
+                 TT = "#8a6d3b", DEFAULT = "#9a9a9a")
+LEFT_COL <- c(arm = "#9a9a9a", base = "#5b8fc0", all = "#206090")
+VISIT_PRETTY <- c(PregEarly = "early", MatBirth = "birth")
+pretty_feature <- function(f) {
+  base <- sub("@.*$", "", f); visit <- sub("^.*@", "", f)
+  vp <- ifelse(visit %in% names(VISIT_PRETTY), VISIT_PRETTY[visit], visit)
+  paste0(gsub("_", " ", base), " @ ", vp)
+}
+prep_features <- function(su, keep = NULL, top_n = NULL, baseline_visit = params$baseline_visit) {
+  su$base_feature <- sub("@.*$", "", su$feature); su$visit <- sub("^.*@", "", su$feature)
+  cls <- classify_feature(unique(su$base_feature))
+  su <- dplyr::left_join(su, cls, by = c("base_feature" = "feature"))
+  if (!is.null(keep)) { su <- su[match(keep, su$feature), , drop = FALSE]
+    su <- su[!is.na(su$feature), , drop = FALSE]
+  } else { su <- su[order(-su$auc), , drop = FALSE]; if (!is.null(top_n)) su <- utils::head(su, top_n) }
+  su$antigen <- sub("^IPV[0-9]+$", "IPV", su$antigen)
+  su$antigen <- ifelse(su$antigen %in% names(ANTIGEN_COL), su$antigen, "DEFAULT")
+  su$prevax <- su$visit == baseline_visit; su$plabel <- pretty_feature(su$feature)
+  su$plabel <- factor(su$plabel, levels = rev(su$plabel)); su
+}
+use_pattern <- requireNamespace("ggpattern", quietly = TRUE)
+signature_panel <- function(df, title, show_legend = FALSE) {
+  ANT_BREAKS <- c("PRN","PT","FHA","FIM","IPV","DT","TT")
+  fill_guide <- if (show_legend) guide_legend(order = 1, nrow = 1) else "none"
+  mark_guide <- if (show_legend) guide_legend(order = 2, nrow = 1) else "none"
+  p <- ggplot(df, aes(auc, plabel, fill = antigen))
+  if (use_pattern) {
+    p <- p + ggpattern::geom_col_pattern(aes(pattern = prevax), width = 0.72, colour = NA,
+      pattern_fill = "white", pattern_angle = 45, pattern_density = 0.12,
+      pattern_spacing = 0.03, pattern_size = 0.05) +
+      ggpattern::scale_pattern_manual(values = c(`TRUE` = "stripe", `FALSE` = "none"),
+        breaks = TRUE, labels = c(`TRUE` = "pre-vaccination"), name = NULL, guide = mark_guide)
+  } else {
+    p <- p + geom_col(aes(colour = prevax), width = 0.72, linewidth = 0.6) +
+      scale_colour_manual(values = c(`TRUE` = "grey15", `FALSE` = NA),
+        breaks = TRUE, labels = c(`TRUE` = "pre-vaccination"), name = NULL, guide = mark_guide)
+  }
+  df$inside <- df$auc >= 0.72
+  p + geom_text(data = df[df$inside, , drop = FALSE], aes(label = sprintf("%.2f", auc)),
+        hjust = 1.15, colour = "white", fontface = "bold", size = 3.1) +
+    geom_text(data = df[!df$inside, , drop = FALSE], aes(label = sprintf("%.2f", auc)),
+        hjust = -0.20, colour = "grey20", fontface = "bold", size = 3.1) +
+    scale_fill_manual(values = ANTIGEN_COL, limits = ANT_BREAKS, breaks = ANT_BREAKS,
+        na.value = "#9a9a9a", name = NULL, guide = fill_guide) +
+    scale_x_continuous(breaks = seq(0.5, 1.0, 0.1), expand = c(0, 0)) +
+    coord_cartesian(xlim = c(0.5, 1.0)) +
+    labs(x = "Univariate AUC (Low vs High responder)", y = NULL, title = title) +
+    theme_minimal(base_size = 11) +
+    theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+          plot.title = element_text(face = "bold", size = 12), axis.ticks = element_blank(),
+          legend.position = if (show_legend) "bottom" else "none", legend.box = "horizontal",
+          legend.key.size = grid::unit(12, "pt"), legend.text = element_text(size = 9))
+}
+```
+
+```{r build-panels}
+p_left <- ggplot(left_df, aes(auc, label, fill = kind)) +
+  geom_col(width = 0.62) +
+  geom_text(aes(label = sprintf("%.2f", auc)), hjust = 1.2, colour = "white", fontface = "bold", size = 3.6) +
+  scale_fill_manual(values = LEFT_COL, guide = "none") +
+  scale_x_continuous(breaks = seq(0.5, 1.0, 0.1), expand = c(0, 0)) +
+  coord_cartesian(xlim = c(0.5, 1.0)) +
+  labs(x = "AUC (Low vs High responder)", y = NULL, title = "Predicting responder status") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold", size = 12), axis.ticks = element_blank())
+mid_df   <- prep_features(su_base, top_n = params$top_n_mid)
+p_mid    <- signature_panel(mid_df, "Pre-vaccination serology signature", show_legend = FALSE)
+right_keep <- params$curated_right
+if (!is.null(right_keep)) right_keep <- right_keep[right_keep %in% su_all$feature]
+right_df <- if (length(right_keep)) prep_features(su_all, keep = right_keep) else
+                                    prep_features(su_all, top_n = params$top_n_right)
+p_right  <- signature_panel(right_df, "Maternal serology signature (all visits)", show_legend = TRUE)
+```
+
+```{r figure4, fig.width=15.5, fig.height=5.2, fig.cap="Figure 4. Determinants of maternal responder status (unchanged from rev1)."}
+if (requireNamespace("patchwork", quietly = TRUE)) {
+  library(patchwork)
+  fig4 <- p_left + p_mid + p_right +
+    plot_layout(widths = c(1.05, 1.05, 1.25), guides = "collect") &
+    theme(legend.position = "bottom", legend.box = "horizontal", legend.margin = margin(2, 2, 2, 2))
+} else stop("Please install `patchwork`.")
+fig4
+```
+
+---
+
+# NEW — Supplemental companion: interval robustness
+
+This companion figure is the visual answer to the reviewer/coauthor concern that a
+mother's *delivery* titre (half of the responder definition) is set by the
+vaccination-to-delivery interval. For each of the three **score-defining** antigens
+we plot delivery IgG against the interval (weeks), by arm, with the natural-spline
+fit used in Phase 10 (baseline-adjusted). Flat curves = the interval is not moving
+the titres that build the score.
+
+```{r interval-companion-data}
+arm_tbl$arm_name <- factor(as.character(arm_tbl$arm_name), levels = c("TT", "TdaP"))
+interval_tbl <- make_interval_tbl(arm_tbl, clin, maternal_arms = c("TT", "TdaP"))
+it_avail <- interval_tbl[is.finite(interval_tbl$w_weeks), , drop = FALSE]
+
+paired <- paired_change(data_raw, params$from_visit, params$to_visit)
+paired <- paired[paired$arm_name %in% c("TT", "TdaP"), , drop = FALSE]
+paired$arm_name <- factor(as.character(paired$arm_name), levels = c("TT", "TdaP"))
+paired <- merge(paired, it_avail[, c("subject_accession", "w_weeks")], by = "subject_accession")
+
+DEF <- params$responder_features
+ARM_COLS <- c(TdaP = "#8A1538", TT = "#2C7A7B")
+
+# quantitative anchor: within-arm partial R^2 of the interval spline per antigen
+s1 <- boost_spline_table(paired, DEF, spline_df = params$spline_df)
+
+# combined curve + point frames across the three defining antigens
+.cur <- list(); .pts <- list()
+for (ft in DEF) {
+  fit <- fit_boost_spline(paired[paired$feature == ft, , drop = FALSE], spline_df = params$spline_df)
+  if (!isTRUE(fit$ok)) next
+  cd <- spline_curve_df(fit); if (!is.null(cd)) { cd$feature <- ft; .cur[[ft]] <- cd }
+  pt <- spline_points_df(fit); if (!is.null(pt)) { pt$feature <- ft; .pts[[ft]] <- pt }
+}
+curve_df <- do.call(rbind, .cur); point_df <- do.call(rbind, .pts)
+lab_df <- data.frame(
+  feature = s1$feature,
+  lab = sprintf("partial R\u00b2 (w): TdaP %.2f | TT %.2f", s1$pR2_w_TdaP, s1$pR2_w_TT),
+  stringsAsFactors = FALSE)
+ord <- intersect(DEF, unique(curve_df$feature))
+curve_df$feature <- factor(curve_df$feature, levels = ord)
+point_df$feature <- factor(point_df$feature, levels = ord)
+lab_df$feature   <- factor(lab_df$feature,   levels = ord)
+```
+
+```{r figureS-interval, fig.width=12, fig.height=4.2, fig.cap="Figure S (interval robustness). Delivery (MatBirth) IgG for the three score-defining antigens against the vaccination-to-delivery interval (weeks), by maternal arm. Line = natural-spline fit at the median pre-vaccination baseline; band = 95% CI; points = per-mother values adjusted to that baseline (partial residuals). Within-arm partial R-squared of the interval spline is annotated per panel. The near-flat fits show the interval explains little of the delivery-titre variation that builds the responder score."}
+p_iv <- ggplot() +
+  geom_point(data = point_df, aes(w_weeks, adj, colour = arm_name), alpha = 0.30, size = 1.0) +
+  geom_ribbon(data = curve_df, aes(w_weeks, ymin = lwr, ymax = upr, fill = arm_name),
+              alpha = 0.15, colour = NA) +
+  geom_line(data = curve_df, aes(w_weeks, fit, colour = arm_name), linewidth = 0.9) +
+  geom_text(data = lab_df, aes(x = -Inf, y = Inf, label = lab), hjust = -0.05, vjust = 1.4,
+            size = 3.0, colour = "grey25") +
+  facet_wrap(~ feature, nrow = 1, scales = "free_y") +
+  scale_colour_manual(values = ARM_COLS, name = "Arm") +
+  scale_fill_manual(values = ARM_COLS, guide = "none") +
+  labs(x = "weeks: vaccination \u2192 delivery",
+       y = expression(log[10]~"delivery IgG (baseline-adjusted)"),
+       title = "Interval robustness of the score-defining delivery titres") +
+  theme_bw(base_size = 11) +
+  theme(plot.title = element_text(face = "bold", size = 12), legend.position = "bottom",
+        strip.text = element_text(face = "bold"))
+p_iv
+```
+
+```{r save-figures}
+dir.create(params$fig_out_dir, showWarnings = FALSE, recursive = TRUE)
+ggsave(file.path(params$fig_out_dir, "figure4_three_panel.png"), fig4,
+       width = 15.5, height = 5.2, dpi = 300, bg = "white")
+ggsave(file.path(params$fig_out_dir, "figure4_three_panel.pdf"), fig4,
+       width = 15.5, height = 5.2, bg = "white")
+ggsave(file.path(params$fig_out_dir, "figureS_interval_robustness.png"), p_iv,
+       width = 12, height = 4.2, dpi = 300, bg = "white")
+ggsave(file.path(params$fig_out_dir, "figureS_interval_robustness.pdf"), p_iv,
+       width = 12, height = 4.2, bg = "white")
+cat("Saved main Figure 4 and the interval-robustness companion to '", params$fig_out_dir, "/'.\n", sep = "")
+```
+
+---
+
+*rev2 keeps the three main panels identical to rev1 and adds a supplemental
+interval-robustness companion (Figure S) built from `R/interval_helpers.R`. If you
+would rather fold the interval panel into the main figure as a fourth panel,
+assemble `(p_left + p_mid + p_right) / p_iv` with `plot_layout(heights = c(1, 0.9))`
+— but keeping it supplemental leaves the headline figure untouched.*

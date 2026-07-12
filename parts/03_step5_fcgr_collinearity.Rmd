@@ -1,0 +1,64 @@
+# Step 5 — FcγR Collinearity Diagnostics {#step5}
+
+In the earlier partial-correlation networks every FcγR3b node dropped to zero — the signature of
+FcγR2a and FcγR3b being near-collinear, so conditioning on one erases its twin. That is a modelling
+artifact, not evidence FcγR3b is unimportant. This step recovers the **FcγR3b-specific** signal you
+care about by reporting, per antigen and arm: the receptor–receptor correlation, the variance
+inflation, and — crucially — FcγR3b's **zero-order** associations (with the outcome, with IgG1, with
+ADCD) beside its **partial** association after adjusting for FcγR2a.
+
+```{r step5-helpers, include=FALSE}
+pcor_resid <- function(d, x, y, z) {  # partial cor of x,y given z, via residuals
+  rx <- resid(lm(reformulate(z, response = x), data = d))
+  ry <- resid(lm(reformulate(z, response = y), data = d))
+  suppressWarnings(cor(rx, ry))
+}
+vif2 <- function(d, a, b, ctrl) {  # VIF of a given b + ctrl
+  r2 <- summary(lm(reformulate(c(b, ctrl), response = a), data = d))$r.squared
+  1 / (1 - r2)
+}
+```
+
+```{r step5-run, results='asis'}
+.stage(5, "FcγR collinearity diagnostics")
+rows <- list()
+for (A in PATHWAY_ANTIGENS) {
+  r2a <- paste0(A, "_FcgR2a"); r3b <- paste0(A, "_FcgR3b")
+  igg1 <- paste0(A, "_IgG1"); adcd <- paste0(A, "_ADCD")
+  if (!all(c(r2a, r3b, igg1) %in% names(path_wide))) next
+  for (m in cfg$maternal_arms) {
+    need <- keep_present(c(OUTCOME, r2a, r3b, igg1, adcd))
+    d <- arm_data(m) %>% dplyr::select(dplyr::all_of(need)) %>% tidyr::drop_na()
+    if (nrow(d) < 20) next
+    .info("step5 %s %s n=%d", A, m, nrow(d))
+    rows[[length(rows) + 1]] <- data.frame(
+      antigen = A, arm = m, n = nrow(d),
+      cor_2a_3b     = round(cor(d[[r2a]], d[[r3b]]), 3),
+      VIF_3b        = round(vif2(d, r3b, r2a, igg1), 2),
+      r_3b_OUT      = round(cor(d[[r3b]], d[[OUTCOME]]), 3),
+      pr_3b_OUT_2a  = round(pcor_resid(d, r3b, OUTCOME, r2a), 3),
+      r_3b_IgG1     = round(cor(d[[r3b]], d[[igg1]]), 3),
+      r_3b_ADCD     = if (adcd %in% names(d)) round(cor(d[[r3b]], d[[adcd]]), 3) else NA_real_,
+      stringsAsFactors = FALSE)
+  }
+}
+diag_tbl <- do.call(rbind, rows)
+if (is.null(diag_tbl)) {
+  cat("*No antigen had a complete FcγR pair; step 5 skipped.*\n\n")
+} else {
+  print(knitr::kable(diag_tbl, row.names = FALSE,
+    caption = "FcγR collinearity and FcγR3b-specific associations (zero-order r vs partial pr | FcγR2a).",
+    col.names = c("Antigen", "Arm", "n", "r(2a,3b)", "VIF 3b", "r(3b,OUT)",
+                  "pr(3b,OUT|2a)", "r(3b,IgG1)", "r(3b,ADCD)")))
+  cat("\n")
+}
+```
+
+**How to read this.** A high `r(2a,3b)` (say > 0.8) and `VIF 3b` well above ~5 confirm the receptors
+are redundant, explaining why the joint network zeroed FcγR3b. The informative columns are the
+zero-order associations: a solid `r(3b,IgG1)` supports IgG1↔FcγR3b co-regulation, a solid
+`r(3b,ADCD)` supports the FcγR3b→ADCD step, and `r(3b,OUT)` its link to killing — none of which the
+partialled network could show. If `pr(3b,OUT|2a)` collapses toward 0 while `r(3b,OUT)` is large, the
+two receptors are interchangeable carriers of the same signal, and FcγR3b-specific claims should
+rest on the zero-order / single-receptor evidence rather than the joint model. Consistent patterns
+across arms indicate the redundancy (and the underlying signal) is arm-invariant.

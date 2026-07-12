@@ -1,0 +1,72 @@
+# Step 2 — Explicit Link Regressions with Arm Interaction {#step2}
+
+The two intermediate edges are fitted directly, rather than inferred from parallel outcome
+regressions:
+
+* **Link A (co-regulation):** `FcγR ~ IgG1 + IgG3` — does subclass predict receptor binding?
+* **Link B (activation):** `ADCD ~ FcγR2a + FcγR3b` — does receptor binding predict complement deposition?
+
+Each is fit **per arm**, then on the pooled data with a **maternal-arm interaction** so the slope
+difference (TdaP vs TT) is an explicit coefficient and p-value — the "different strengths in the
+two groups" question, tested rather than eyeballed. The reference arm is `r cfg$maternal_arms[1]`.
+
+```{r step2-helpers, include=FALSE}
+tidy_lm <- function(fit) {
+  co <- as.data.frame(summary(fit)$coefficients)
+  data.frame(term = rownames(co), beta = round(co[, 1], 3), se = round(co[, 2], 3),
+             t = round(co[, 3], 2), p = signif(co[, 4], 3),
+             sig = pvalue_to_label(co[, 4]), row.names = NULL, stringsAsFactors = FALSE)
+}
+per_arm_fit <- function(y, xs, arm) {
+  d <- arm_data(arm) %>% dplyr::select(dplyr::all_of(c(y, xs))) %>% tidyr::drop_na()
+  if (nrow(d) < 20) return(NULL)
+  list(n = nrow(d), fit = lm(reformulate(xs, response = y), data = d))
+}
+interaction_fit <- function(y, xs) {
+  d <- path_wide %>% dplyr::select(dplyr::all_of(c(y, xs, "arm_name"))) %>% tidyr::drop_na()
+  d$arm_name <- factor(d$arm_name, levels = cfg$maternal_arms)
+  fml <- stats::as.formula(paste0(y, " ~ (", paste(xs, collapse = " + "), ") * arm_name"))
+  list(n = nrow(d), fit = lm(fml, data = d))
+}
+link_report <- function(y, xs, title) {
+  cat("#### ", title, "\n\n", sep = "")
+  for (m in cfg$maternal_arms) {
+    r <- per_arm_fit(y, xs, m)
+    if (is.null(r)) { cat("*", m, ": n too small.*\n\n", sep = ""); next }
+    g <- summary(r$fit)
+    cat(sprintf("*%s mothers* — n = %d, R² = %.3f, adj-R² = %.3f\n\n",
+                m, r$n, g$r.squared, g$adj.r.squared))
+    print(knitr::kable(tidy_lm(r$fit))); cat("\n")
+    .info("step2 %-28s arm=%-4s n=%d R2=%.3f", title, m, r$n, g$r.squared)
+  }
+  ir <- interaction_fit(y, xs)
+  it <- tidy_lm(ir$fit); it <- it[grepl(":arm_name", it$term), , drop = FALSE]
+  if (nrow(it)) {
+    it$term <- sub(":arm_name", " × ", it$term)
+    cat("*Arm-interaction terms (slope difference vs ", cfg$maternal_arms[1], ", pooled n = ",
+        ir$n, "):*\n\n", sep = "")
+    print(knitr::kable(it, row.names = FALSE)); cat("\n")
+  }
+}
+```
+
+```{r step2-run, results='asis'}
+.stage(2, "explicit link regressions with arm interaction")
+for (A in PATHWAY_ANTIGENS) {
+  cat("## ", A, "\n\n", sep = "")
+  ig  <- keep_present(paste0(A, c("_IgG1", "_IgG3")))
+  fcg <- keep_present(paste0(A, c("_FcgR2a", "_FcgR3b")))
+  # Link A: each receptor on subclasses
+  for (rc in fcg) if (length(ig)) link_report(rc, ig, paste0("Link A — ", rc, " ~ IgG1 + IgG3"))
+  # Link B: ADCD on both receptors
+  adcd <- paste0(A, "_ADCD")
+  if (adcd %in% names(path_wide) && length(fcg))
+    link_report(adcd, fcg, paste0("Link B — ", A, "_ADCD ~ FcγR2a + FcγR3b"))
+}
+```
+
+**How to read this.** A significant positive Link-A slope on `IgG1` (especially for FcγR3b)
+supports IgG1↔FcγR co-regulation; a significant Link-B slope supports FcγR-dependent ADCD. A
+significant `× arm` interaction means that link is genuinely stronger in one arm; a
+non-significant interaction means the link operates at similar strength in both, even if overall
+signal differs — which would argue the *model* is intact in both arms and only the inputs differ.

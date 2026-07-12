@@ -1,0 +1,1050 @@
+---
+title: "Clinical Predictors of Infant M02 SBA"
+subtitle: |
+  Univariate screening, continuous vs tertile form selection, and multivariate
+  model building — stratified by infant arm (aP vs wP) and maternal arm (TdaP vs TT)
+author: "Scot Zens"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 5
+params:
+  outcome_feature: "WHOLE_SBA"
+  outcome_label:   "SBA"
+  outcome_y_label: "Log10 SBA"
+  alpha:           0.05        # significance threshold for univariate screening
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  echo    = TRUE
+)
+```
+
+---
+
+# Analytical Framework
+
+This document asks whether **clinical characteristics of the mother or infant**
+predict infant **`r params$outcome_label` at M02** (pertussis toxin
+neutralization, measured immediately before first vaccination), after
+stratifying by infant vaccination arm (aP vs wP) and by maternal vaccination
+arm (TdaP vs TT).
+
+The analysis runs in four steps within each stratum:
+
+1. **Univariate screen.** Each clinical covariate is tested alone against the
+   outcome at the stratum level. Categorical variables are kept at two
+   levels; continuous variables are tested in both continuous and
+   tertile-categorical forms.
+2. **Form selection.** For any continuous variable significant in both forms,
+   the form with the higher adjusted R² is retained. For variables significant
+   in only one form, that form is retained.
+3. **Multivariate model.** If more than one predictor passes the univariate
+   screen (p~model~ < `r params$alpha`), all selected predictors are entered
+   jointly into a single linear model. If only one passes, the univariate
+   result stands. If none pass, that is reported.
+4. **Cross-stratum summary.** Significant predictors across all strata are
+   tabulated for comparison.
+
+The six antibody-chain predictor blocks in `predict_M02_PTNA_from_maternal_v2.Rmd`
+are not included here; this file focuses exclusively on clinical covariates.
+
+---
+
+# Clinical Covariates
+
+The ten covariates come from the `clin_assess` data object:
+
+```{r covariate-list, echo=FALSE, results='asis'}
+cov_meta <- data.frame(
+  Label       = c("Birth Weight",
+                  "Infant Sex",
+                  "Delivery Mode",
+                  "Parity",
+                  "Gestational Age at Vaccine",
+                  "Interval: Vaccination to Delivery (days)",
+                  "Gestational Age at Delivery",
+                  "Maternal Age at Vaccination",
+                  "Maternal BMI at Vaccination",
+                  "Maternal Haemoglobin"),
+  Variable    = c("birth_weight", "infant_sex", "delivery_mode", "parity",
+                  "gestational_age_vaccination", "vaccine_birth_interval_days",
+                  "gestational_age_birth", "maternal_age",
+                  "maternal_bmi", "maternal_Hb"),
+  Type        = c("Continuous", "Categorical (2 levels)", "Categorical (2 levels)",
+                  "Categorical (2 levels)", "Continuous", "Continuous",
+                  "Continuous", "Continuous", "Continuous", "Continuous"),
+  `Forms tested` = c("continuous + tertile", "factor", "factor (vaginal vs cesarean)",
+                     "factor (nulliparous vs parous)", "continuous + tertile",
+                     "continuous + tertile", "continuous + tertile",
+                     "continuous + tertile", "continuous + tertile",
+                     "continuous + tertile"),
+  stringsAsFactors = FALSE
+)
+knitr::kable(cov_meta,
+  col.names = c("Label", "Variable", "Type", "Forms tested"),
+  caption   = "Table 1. Clinical covariates and testing approach."
+)
+```
+
+---
+
+# Setup
+
+```{r setup}
+library(data.table)
+library(tidyverse)
+library(here)
+library(broom)
+library(knitr)
+
+# ---- Outcome definitions ----------------------------------------
+outcome_feature <- params$outcome_feature
+outcome_label   <- params$outcome_label
+outcome_y_label <- params$outcome_y_label
+outcome_col     <- paste0(outcome_feature, "_M02")
+alpha           <- params$alpha
+
+# ---- Stratification arms ----------------------------------------
+arms        <- c("TdaP", "TT")
+infant_arms <- c("aP", "wP")
+iarm_colors <- c("aP" = "dodgerblue2", "wP" = "forestgreen")
+marm_colors <- c("TdaP" = "skyblue",   "TT" = "salmon")
+
+# ---- Named covariate list (label → variable) --------------------
+covariates_named_list <- list(
+  "Birth Weight"                              = "birth_weight",
+  "Infant Sex"                                = "infant_sex",
+  "Delivery Mode"                             = "delivery_mode",
+  "Parity"                                    = "parity",
+  "Gestational Age at Vaccine"                = "gestational_age_vaccination",
+  "Interval: Vaccination to Delivery (days)"  = "vaccine_birth_interval_days",
+  "Gestational Age at Delivery"               = "gestational_age_birth",
+  "Maternal Age at Vaccination"               = "maternal_age",
+  "Maternal BMI at Vaccination"               = "maternal_bmi",
+  "Maternal Haemoglobin"                      = "maternal_Hb"
+)
+
+# Variables to treat as categorical (2 levels)
+cat_vars <- c("infant_sex", "delivery_mode", "parity")
+
+# Continuous variables (will be tested as continuous + tertile)
+cont_vars <- setdiff(unname(unlist(covariates_named_list)), cat_vars)
+
+# ---- Helper: p-value label -------------------------------------
+pvalue_to_label <- function(p) {
+  dplyr::case_when(
+    p < 0.001 ~ "***",
+    p < 0.01  ~ "**",
+    p < 0.05  ~ "*",
+    TRUE      ~ "ns"
+  )
+}
+
+# ---- Helper: tertile split -------------------------------------
+# Returns an ordered factor T1 (low) / T2 (mid) / T3 (high).
+make_tertile <- function(x) {
+  qs <- quantile(x, probs = c(1/3, 2/3), na.rm = TRUE)
+  cut(x,
+      breaks         = c(-Inf, qs[1], qs[2], Inf),
+      labels         = c("T1 (low)", "T2 (mid)", "T3 (high)"),
+      include.lowest = TRUE,
+      ordered_result = FALSE)
+}
+
+# ---- Helper: run one lm and return a structured list -----------
+run_lm_clin <- function(data, outcome_col, predictor_col, label = "") {
+  f <- reformulate(predictor_col, response = outcome_col)
+  m <- tryCatch(
+    lm(f, data = data, na.action = na.omit),
+    error = function(e) NULL
+  )
+  if (is.null(m)) {
+    return(list(label = label, predictor = predictor_col,
+                R2 = NA, adj_R2 = NA, n_obs = NA, p_model = NA,
+                tidy_coef = NULL, model = NULL))
+  }
+  s <- summary(m)
+  p_mod <- tryCatch(
+    pf(s$fstatistic[1], s$fstatistic[2], s$fstatistic[3], lower.tail = FALSE),
+    error = function(e) NA
+  )
+  tidy_coef <- tidy(m) %>%
+    mutate(
+      sig     = pvalue_to_label(p.value),
+      across(c(estimate, std.error, statistic), ~round(., 4)),
+      p.value = signif(p.value, 3)
+    ) %>%
+    rename(Predictor = term, `β` = estimate, SE = std.error,
+           t = statistic, p = p.value, ` ` = sig)
+  list(
+    label     = label,
+    predictor = predictor_col,
+    R2        = round(s$r.squared,     4),
+    adj_R2    = round(s$adj.r.squared, 4),
+    n_obs     = nobs(m),
+    p_model   = p_mod,
+    tidy_coef = tidy_coef,
+    model     = m
+  )
+}
+
+# ---- Helper: display a stored model result ---------------------
+show_lm_clin <- function(res) {
+  if (is.null(res$tidy_coef)) {
+    cat("*Model could not be estimated.*\n\n")
+    return(invisible(NULL))
+  }
+  cat(sprintf(
+    "\n**n = %d &nbsp;|&nbsp; R² = %.3f &nbsp;|&nbsp; adj-R² = %.3f &nbsp;|&nbsp; p~model~ = %.3g**\n\n",
+    res$n_obs, res$R2, res$adj_R2, res$p_model
+  ))
+  print(knitr::kable(
+    res$tidy_coef,
+    caption = paste0("Coefficients — ", res$label),
+    align   = c("l", rep("r", ncol(res$tidy_coef) - 1))
+  ))
+  cat("\n")
+}
+
+# ---- Helper: run multivariate model ----------------------------
+run_multi <- function(data, outcome_col, predictors, label = "Multivariate") {
+  if (length(predictors) < 2) return(NULL)
+  f <- reformulate(predictors, response = outcome_col)
+  m <- tryCatch(
+    lm(f, data = data, na.action = na.omit),
+    error = function(e) NULL
+  )
+  if (is.null(m)) return(NULL)
+  s <- summary(m)
+  p_mod <- tryCatch(
+    pf(s$fstatistic[1], s$fstatistic[2], s$fstatistic[3], lower.tail = FALSE),
+    error = function(e) NA
+  )
+  tidy_coef <- tidy(m) %>%
+    mutate(
+      sig     = pvalue_to_label(p.value),
+      across(c(estimate, std.error, statistic), ~round(., 4)),
+      p.value = signif(p.value, 3)
+    ) %>%
+    rename(Predictor = term, `β` = estimate, SE = std.error,
+           t = statistic, p = p.value, ` ` = sig)
+  list(
+    label = label, R2 = round(s$r.squared, 4),
+    adj_R2 = round(s$adj.r.squared, 4),
+    n_obs = nobs(m), p_model = p_mod,
+    tidy_coef = tidy_coef, model = m
+  )
+}
+```
+
+---
+
+# Data Preparation
+
+## Load Antibody and Clinical Data
+
+```{r data-load}
+# ---- Antibody data (same source as v2) --------------------------
+load(file = here::here("./data/c_set.RData"))
+data_raw          <- ebaa_extra
+data_raw$arm_name <- data_raw$maternal_arm
+data_raw$arm_name <- fct_recode(data_raw$arm_name, "TT" = "TT", "TdaP" = "TdaP")
+data_raw$feature  <- factor(paste(data_raw$antigen, data_raw$analyte, sep = "_"))
+
+# Pull the outcome at M02 and arm columns (no IgG predictors needed)
+data_outcome <- data_raw %>%
+  dplyr::filter(feature    == outcome_feature,
+                visit_name == "M02",
+                arm_name   %in% arms) %>%
+  dplyr::select(subject_accession, arm_name, infant_arm, log_assay_value) %>%
+  distinct(subject_accession, .keep_all = TRUE) %>%
+  rename(!!outcome_col := log_assay_value)
+
+cat(sprintf("Outcome rows: **%d**  |  `%s` non-missing: **%d**\n",
+            nrow(data_outcome),
+            outcome_col,
+            sum(!is.na(data_outcome[[outcome_col]]))))
+
+# ---- Clinical assessments ---------------------------------------
+load(file = here::here("./data/clin_assess.RData"))
+
+# Merge: left join so every antibody subject is kept
+data <- merge(data_outcome, clin_assess, by = "subject_accession", all.x = TRUE)
+
+cat(sprintf("After merge: **%d subjects × %d columns**\n",
+            nrow(data), ncol(data)))
+```
+
+## Prepare Clinical Covariates
+
+```{r cov-prep}
+# ---- Infant sex: ensure 2-level factor --------------------------
+data$infant_sex <- factor(data$infant_sex)
+
+# ---- Delivery mode: collapse to vaginal vs cesarean -------------
+# Inspect first to confirm actual levels in the data
+cat("delivery_mode levels: ", paste(levels(factor(data$delivery_mode)), collapse = ", "), "\n")
+data$delivery_mode <- fct_collapse(
+  factor(data$delivery_mode),
+  vaginal   = grep("(?i)vag|normal|spontan|SVD",
+                   levels(factor(data$delivery_mode)), value = TRUE, perl = TRUE),
+  cesarean  = grep("(?i)ces|csec|section|C/S",
+                   levels(factor(data$delivery_mode)), value = TRUE, perl = TRUE),
+  other     = grep("(?i)vag|normal|spontan|SVD|ces|csec|section|C/S",
+                   levels(factor(data$delivery_mode)), value = TRUE, perl = TRUE,
+                   invert = TRUE)
+) %>%
+  # Drop "other" if very few, keeping binary structure
+  fct_drop()
+data$delivery_mode <- relevel(data$delivery_mode, ref = "vaginal")
+cat("delivery_mode after collapse: ", paste(levels(data$delivery_mode), collapse = ", "), "\n")
+
+# ---- Parity: 0 (nulliparous) vs 1+ (parous) --------------------
+data$parity <- factor(
+  ifelse(data$parity == 0, "nulliparous", "parous"),
+  levels = c("nulliparous", "parous")
+)
+
+# ---- Tertile columns for every continuous variable -------------
+for (v in cont_vars) {
+  tname <- paste0(v, "_T")
+  if (v %in% names(data)) {
+    data[[tname]] <- make_tertile(data[[v]])
+  }
+}
+
+# Column names for tertile variables
+cont_vars_T <- paste0(cont_vars, "_T")
+
+cat("Tertile columns added:", paste(cont_vars_T, collapse = ", "), "\n")
+```
+
+## Covariate Descriptives by Stratum
+
+```{r cov-descriptives, results='asis'}
+# Continuous variables: median (IQR) by infant_arm and arm_name
+for (strat_col in c("infant_arm", "arm_name")) {
+  cat(sprintf("\n### Descriptives by %s\n\n", strat_col))
+  
+  rows <- lapply(names(covariates_named_list), function(lbl) {
+    v <- covariates_named_list[[lbl]]
+    if (v %in% cat_vars) {
+      # Count table
+      tab <- table(data[[v]], data[[strat_col]], useNA = "no")
+      paste_fn <- function(col) {
+        ns <- tab[, col, drop = FALSE]
+        paste(rownames(tab), ns, sep = "=", collapse = "; ")
+      }
+      lvls <- colnames(tab)
+      row <- c(lbl, "categorical",
+               sapply(lvls, paste_fn),
+               sum(!is.na(data[[v]])))
+    } else {
+      # Median [Q1–Q3]
+      lvls <- sort(unique(data[[strat_col]]))
+      miq <- function(x) {
+        q <- quantile(x, c(.25, .5, .75), na.rm = TRUE)
+        sprintf("%.1f [%.1f–%.1f]", q[2], q[1], q[3])
+      }
+      row <- c(lbl, "continuous",
+               sapply(lvls, function(lv) miq(data[[v]][data[[strat_col]] == lv])),
+               sum(!is.na(data[[v]])))
+    }
+    row
+  })
+  
+  lvl_cols <- sort(unique(data[[strat_col]]))
+  desc_df  <- as.data.frame(do.call(rbind, rows), stringsAsFactors = FALSE)
+  colnames(desc_df) <- c("Covariate", "Type", lvl_cols, "n (non-missing)")
+  print(knitr::kable(desc_df,
+    caption = sprintf("Covariate descriptives by %s. Continuous: median [Q1–Q3].", strat_col)))
+  cat("\n")
+}
+```
+
+---
+
+# Univariate Screening and Model Selection
+
+The core analysis function runs for a single stratum. It:
+
+1. Loops over all covariates and fits univariate models (categorical = 1 model;
+   continuous = 2 models: continuous form and tertile form).
+2. Selects significant predictors at p~model~ < `r params$alpha`.
+3. For continuous variables significant in both forms, retains the form with
+   the higher adjusted R².
+4. Runs a multivariate model if ≥ 2 predictors are selected.
+
+```{r engine-function}
+# ================================================================
+# run_clinical_screen()
+#   d          : data frame for one stratum
+#   outcome_col: string, the outcome column name
+#   cov_list   : named list (label → variable name)
+#   alpha      : significance threshold
+#
+# Returns a list with:
+#   univ_table   : data.frame summarising all univariate results
+#   selected     : named vector (label → selected column name)
+#   form_notes   : explanation of form selection for continuous vars
+#   multi_result : run_multi() output (or NULL)
+# ================================================================
+run_clinical_screen <- function(d, outcome_col, cov_list,
+                                alpha = 0.05) {
+
+  cat_v  <- c("infant_sex", "delivery_mode", "parity")
+  cont_v <- setdiff(unname(unlist(cov_list)), cat_v)
+
+  # ---- 1. Univariate models ------------------------------------
+  univ_rows <- list()
+  univ_res  <- list()   # full result objects for form-selection
+
+  for (lbl in names(cov_list)) {
+    v <- cov_list[[lbl]]
+
+    if (v %in% cat_v) {
+      # Single model: factor as-is
+      r <- run_lm_clin(d, outcome_col, v, label = lbl)
+      univ_rows[[paste0(v, "_cat")]] <- data.frame(
+        Label  = lbl, Variable = v, Form = "categorical",
+        n      = ifelse(is.na(r$n_obs), NA_integer_, r$n_obs),
+        R2     = r$R2, adj_R2 = r$adj_R2,
+        p_model = r$p_model,
+        sig    = ifelse(is.na(r$p_model), "—",
+                        pvalue_to_label(r$p_model)),
+        stringsAsFactors = FALSE
+      )
+      univ_res[[paste0(v, "_cat")]] <- r
+
+    } else {
+      # Two models: continuous and tertile
+      vT <- paste0(v, "_T")
+      r_cont <- run_lm_clin(d, outcome_col, v,  label = paste0(lbl, " (continuous)"))
+      r_tert <- run_lm_clin(d, outcome_col, vT, label = paste0(lbl, " (tertile)"))
+
+      for (tag in c("cont", "tert")) {
+        r   <- if (tag == "cont") r_cont else r_tert
+        frm <- if (tag == "cont") "continuous" else "tertile"
+        var <- if (tag == "cont") v else vT
+        univ_rows[[paste0(v, "_", tag)]] <- data.frame(
+          Label  = lbl, Variable = var, Form = frm,
+          n      = ifelse(is.na(r$n_obs), NA_integer_, r$n_obs),
+          R2     = r$R2, adj_R2 = r$adj_R2,
+          p_model = r$p_model,
+          sig    = ifelse(is.na(r$p_model), "—",
+                          pvalue_to_label(r$p_model)),
+          stringsAsFactors = FALSE
+        )
+      }
+      univ_res[[paste0(v, "_cont")]] <- r_cont
+      univ_res[[paste0(v, "_tert")]] <- r_tert
+    }
+  }
+
+  univ_table <- bind_rows(univ_rows)
+
+  # ---- 2. Form selection for continuous vars -------------------
+  selected   <- list()   # label → chosen column name
+  form_notes <- list()   # label → explanation string
+
+  for (lbl in names(cov_list)) {
+    v <- cov_list[[lbl]]
+
+    if (v %in% cat_v) {
+      r <- univ_res[[paste0(v, "_cat")]]
+      if (!is.na(r$p_model) && r$p_model < alpha) {
+        selected[[lbl]]   <- v
+        form_notes[[lbl]] <- "categorical — significant"
+      }
+    } else {
+      rc <- univ_res[[paste0(v, "_cont")]]
+      rt <- univ_res[[paste0(v, "_tert")]]
+      sc <- !is.na(rc$p_model) && rc$p_model < alpha
+      st <- !is.na(rt$p_model) && rt$p_model < alpha
+
+      if (sc && st) {
+        # Both significant: pick higher adj-R2
+        if (!is.na(rc$adj_R2) && !is.na(rt$adj_R2) &&
+            rc$adj_R2 >= rt$adj_R2) {
+          selected[[lbl]]   <- v
+          form_notes[[lbl]] <- sprintf(
+            "continuous (adj-R²=%.3f) preferred over tertile (adj-R²=%.3f) — both sig",
+            rc$adj_R2, rt$adj_R2)
+        } else {
+          selected[[lbl]]   <- paste0(v, "_T")
+          form_notes[[lbl]] <- sprintf(
+            "tertile (adj-R²=%.3f) preferred over continuous (adj-R²=%.3f) — both sig",
+            rt$adj_R2, rc$adj_R2)
+        }
+      } else if (sc) {
+        selected[[lbl]]   <- v
+        form_notes[[lbl]] <- "continuous — only form significant"
+      } else if (st) {
+        selected[[lbl]]   <- paste0(v, "_T")
+        form_notes[[lbl]] <- "tertile — only form significant"
+      }
+      # else neither significant → not added to selected
+    }
+  }
+
+  # ---- 3. Multivariate model -----------------------------------
+  sel_predictors <- unname(unlist(selected))
+  multi_result   <- NULL
+  if (length(sel_predictors) > 1) {
+    multi_result <- run_multi(d, outcome_col, sel_predictors,
+                              label = "Multivariate (all significant predictors)")
+  }
+
+  list(
+    univ_table   = univ_table,
+    selected     = selected,
+    form_notes   = form_notes,
+    multi_result = multi_result,
+    univ_res     = univ_res
+  )
+}
+```
+
+---
+
+# Run Analysis — Infant Arm (aP vs wP)
+
+```{r run-infant-arm, results='hide'}
+screens_iarm <- list()
+for (iarm in infant_arms) {
+  d_sub <- data %>%
+    dplyr::filter(infant_arm == iarm, !is.na(.data[[outcome_col]]))
+  screens_iarm[[iarm]] <- run_clinical_screen(
+    d_sub, outcome_col, covariates_named_list, alpha = alpha
+  )
+}
+```
+
+---
+
+# Run Analysis — Maternal Arm (TdaP vs TT)
+
+```{r run-maternal-arm, results='hide'}
+screens_marm <- list()
+for (marm in arms) {
+  d_sub <- data %>%
+    dplyr::filter(arm_name == marm, !is.na(.data[[outcome_col]]))
+  screens_marm[[marm]] <- run_clinical_screen(
+    d_sub, outcome_col, covariates_named_list, alpha = alpha
+  )
+}
+```
+
+---
+
+# Results: Infant Arm
+
+## aP Infants
+
+```{r display-ap, results='asis'}
+s <- screens_iarm[["aP"]]
+n_ap <- nrow(data %>% filter(infant_arm == "aP", !is.na(.data[[outcome_col]])))
+cat(sprintf("**Stratum: aP infants** | n with outcome = %d\n\n", n_ap))
+
+# Univariate summary table
+tbl <- s$univ_table %>%
+  mutate(
+    R2      = ifelse(is.na(R2),      "—", sprintf("%.3f", R2)),
+    adj_R2  = ifelse(is.na(adj_R2),  "—", sprintf("%.3f", adj_R2)),
+    p_model = ifelse(is.na(p_model), "—", sprintf("%.3g", p_model))
+  )
+knitr::kable(
+  tbl %>% select(Label, Form, n, R2, adj_R2, p_model, sig),
+  col.names = c("Covariate", "Form", "n", "R²", "adj-R²", "p (model)", ""),
+  caption   = "Table: Univariate screening — aP infants.",
+  align     = c("l","l","r","r","r","r","c")
+) %>% print()
+cat("\n")
+
+# Form selection notes
+if (length(s$selected) == 0) {
+  cat("**No covariates reached p <", alpha, "in the univariate screen.**\n\n")
+} else {
+  cat(sprintf("**%d covariate(s) significant at p < %g:**\n\n",
+              length(s$selected), alpha))
+  
+  # Form-selection detail
+  form_df <- data.frame(
+    Covariate     = names(s$selected),
+    `Selected form` = unname(unlist(s$selected)),
+    Note          = unname(unlist(s$form_notes)),
+    stringsAsFactors = FALSE
+  )
+  knitr::kable(form_df,
+    col.names = c("Covariate", "Selected predictor column", "Form selection rationale"),
+    caption   = "Form selection — aP infants."
+  ) %>% print()
+  cat("\n")
+
+  # Show each selected univariate model
+  cat("### Significant univariate models (aP)\n\n")
+  for (lbl in names(s$selected)) {
+    v   <- cov_list_raw <- covariates_named_list[[lbl]]
+    sel <- s$selected[[lbl]]
+    key <- if (sel == v) paste0(v, "_cat") else {
+             if (endsWith(sel, "_T")) paste0(v, "_tert") else paste0(v, "_cont")
+           }
+    # Correct key for categorical
+    if (v %in% cat_vars) key <- paste0(v, "_cat")
+    res <- s$univ_res[[key]]
+    if (!is.null(res)) show_lm_clin(res)
+  }
+
+  # Multivariate model (if applicable)
+  if (length(s$selected) > 1 && !is.null(s$multi_result)) {
+    cat("### Multivariate model (aP)\n\n")
+    cat(sprintf(
+      "All %d selected predictors entered jointly: %s\n\n",
+      length(s$selected),
+      paste(unlist(s$selected), collapse = ", ")
+    ))
+    show_lm_clin(s$multi_result)
+  } else if (length(s$selected) == 1) {
+    cat("*Only one predictor was significant; no multivariate model fitted.*\n\n")
+  }
+}
+```
+
+## wP Infants
+
+```{r display-wp, results='asis'}
+s <- screens_iarm[["wP"]]
+n_wp <- nrow(data %>% filter(infant_arm == "wP", !is.na(.data[[outcome_col]])))
+cat(sprintf("**Stratum: wP infants** | n with outcome = %d\n\n", n_wp))
+
+tbl <- s$univ_table %>%
+  mutate(
+    R2      = ifelse(is.na(R2),      "—", sprintf("%.3f", R2)),
+    adj_R2  = ifelse(is.na(adj_R2),  "—", sprintf("%.3f", adj_R2)),
+    p_model = ifelse(is.na(p_model), "—", sprintf("%.3g", p_model))
+  )
+knitr::kable(
+  tbl %>% select(Label, Form, n, R2, adj_R2, p_model, sig),
+  col.names = c("Covariate", "Form", "n", "R²", "adj-R²", "p (model)", ""),
+  caption   = "Table: Univariate screening — wP infants.",
+  align     = c("l","l","r","r","r","r","c")
+) %>% print()
+cat("\n")
+
+if (length(s$selected) == 0) {
+  cat("**No covariates reached p <", alpha, "in the univariate screen.**\n\n")
+} else {
+  cat(sprintf("**%d covariate(s) significant at p < %g:**\n\n",
+              length(s$selected), alpha))
+
+  form_df <- data.frame(
+    Covariate     = names(s$selected),
+    `Selected form` = unname(unlist(s$selected)),
+    Note          = unname(unlist(s$form_notes)),
+    stringsAsFactors = FALSE
+  )
+  knitr::kable(form_df,
+    col.names = c("Covariate", "Selected predictor column", "Form selection rationale"),
+    caption   = "Form selection — wP infants."
+  ) %>% print()
+  cat("\n")
+
+  cat("### Significant univariate models (wP)\n\n")
+  for (lbl in names(s$selected)) {
+    v   <- covariates_named_list[[lbl]]
+    sel <- s$selected[[lbl]]
+    key <- if (v %in% cat_vars) paste0(v, "_cat") else {
+             if (endsWith(sel, "_T")) paste0(v, "_tert") else paste0(v, "_cont")
+           }
+    res <- s$univ_res[[key]]
+    if (!is.null(res)) show_lm_clin(res)
+  }
+
+  if (length(s$selected) > 1 && !is.null(s$multi_result)) {
+    cat("### Multivariate model (wP)\n\n")
+    cat(sprintf(
+      "All %d selected predictors entered jointly: %s\n\n",
+      length(s$selected),
+      paste(unlist(s$selected), collapse = ", ")
+    ))
+    show_lm_clin(s$multi_result)
+  } else if (length(s$selected) == 1) {
+    cat("*Only one predictor was significant; no multivariate model fitted.*\n\n")
+  }
+}
+```
+
+---
+
+# Results: Maternal Arm
+
+## TdaP Mothers
+
+```{r display-tdap, results='asis'}
+s <- screens_marm[["TdaP"]]
+n_tdap <- nrow(data %>% filter(arm_name == "TdaP", !is.na(.data[[outcome_col]])))
+cat(sprintf("**Stratum: TdaP mothers** | n with outcome = %d\n\n", n_tdap))
+
+tbl <- s$univ_table %>%
+  mutate(
+    R2      = ifelse(is.na(R2),      "—", sprintf("%.3f", R2)),
+    adj_R2  = ifelse(is.na(adj_R2),  "—", sprintf("%.3f", adj_R2)),
+    p_model = ifelse(is.na(p_model), "—", sprintf("%.3g", p_model))
+  )
+knitr::kable(
+  tbl %>% select(Label, Form, n, R2, adj_R2, p_model, sig),
+  col.names = c("Covariate", "Form", "n", "R²", "adj-R²", "p (model)", ""),
+  caption   = "Table: Univariate screening — TdaP mothers.",
+  align     = c("l","l","r","r","r","r","c")
+) %>% print()
+cat("\n")
+
+if (length(s$selected) == 0) {
+  cat("**No covariates reached p <", alpha, "in the univariate screen.**\n\n")
+} else {
+  cat(sprintf("**%d covariate(s) significant at p < %g:**\n\n",
+              length(s$selected), alpha))
+
+  form_df <- data.frame(
+    Covariate     = names(s$selected),
+    `Selected form` = unname(unlist(s$selected)),
+    Note          = unname(unlist(s$form_notes)),
+    stringsAsFactors = FALSE
+  )
+  knitr::kable(form_df,
+    col.names = c("Covariate", "Selected predictor column", "Form selection rationale"),
+    caption   = "Form selection — TdaP mothers."
+  ) %>% print()
+  cat("\n")
+
+  cat("### Significant univariate models (TdaP)\n\n")
+  for (lbl in names(s$selected)) {
+    v   <- covariates_named_list[[lbl]]
+    sel <- s$selected[[lbl]]
+    key <- if (v %in% cat_vars) paste0(v, "_cat") else {
+             if (endsWith(sel, "_T")) paste0(v, "_tert") else paste0(v, "_cont")
+           }
+    res <- s$univ_res[[key]]
+    if (!is.null(res)) show_lm_clin(res)
+  }
+
+  if (length(s$selected) > 1 && !is.null(s$multi_result)) {
+    cat("### Multivariate model (TdaP)\n\n")
+    cat(sprintf(
+      "All %d selected predictors entered jointly: %s\n\n",
+      length(s$selected),
+      paste(unlist(s$selected), collapse = ", ")
+    ))
+    show_lm_clin(s$multi_result)
+  } else if (length(s$selected) == 1) {
+    cat("*Only one predictor was significant; no multivariate model fitted.*\n\n")
+  }
+}
+```
+
+## TT Mothers
+
+```{r display-tt, results='asis'}
+s <- screens_marm[["TT"]]
+n_tt <- nrow(data %>% filter(arm_name == "TT", !is.na(.data[[outcome_col]])))
+cat(sprintf("**Stratum: TT mothers** | n with outcome = %d\n\n", n_tt))
+
+tbl <- s$univ_table %>%
+  mutate(
+    R2      = ifelse(is.na(R2),      "—", sprintf("%.3f", R2)),
+    adj_R2  = ifelse(is.na(adj_R2),  "—", sprintf("%.3f", adj_R2)),
+    p_model = ifelse(is.na(p_model), "—", sprintf("%.3g", p_model))
+  )
+knitr::kable(
+  tbl %>% select(Label, Form, n, R2, adj_R2, p_model, sig),
+  col.names = c("Covariate", "Form", "n", "R²", "adj-R²", "p (model)", ""),
+  caption   = "Table: Univariate screening — TT mothers.",
+  align     = c("l","l","r","r","r","r","c")
+) %>% print()
+cat("\n")
+
+if (length(s$selected) == 0) {
+  cat("**No covariates reached p <", alpha, "in the univariate screen.**\n\n")
+} else {
+  cat(sprintf("**%d covariate(s) significant at p < %g:**\n\n",
+              length(s$selected), alpha))
+
+  form_df <- data.frame(
+    Covariate     = names(s$selected),
+    `Selected form` = unname(unlist(s$selected)),
+    Note          = unname(unlist(s$form_notes)),
+    stringsAsFactors = FALSE
+  )
+  knitr::kable(form_df,
+    col.names = c("Covariate", "Selected predictor column", "Form selection rationale"),
+    caption   = "Form selection — TT mothers."
+  ) %>% print()
+  cat("\n")
+
+  cat("### Significant univariate models (TT)\n\n")
+  for (lbl in names(s$selected)) {
+    v   <- covariates_named_list[[lbl]]
+    sel <- s$selected[[lbl]]
+    key <- if (v %in% cat_vars) paste0(v, "_cat") else {
+             if (endsWith(sel, "_T")) paste0(v, "_tert") else paste0(v, "_cont")
+           }
+    res <- s$univ_res[[key]]
+    if (!is.null(res)) show_lm_clin(res)
+  }
+
+  if (length(s$selected) > 1 && !is.null(s$multi_result)) {
+    cat("### Multivariate model (TT)\n\n")
+    cat(sprintf(
+      "All %d selected predictors entered jointly: %s\n\n",
+      length(s$selected),
+      paste(unlist(s$selected), collapse = ", ")
+    ))
+    show_lm_clin(s$multi_result)
+  } else if (length(s$selected) == 1) {
+    cat("*Only one predictor was significant; no multivariate model fitted.*\n\n")
+  }
+}
+```
+
+---
+
+# Cross-Stratum Summary
+
+```{r cross-stratum-summary, results='asis'}
+# Build a combined table: for each covariate, show which strata found it significant
+all_strata <- list(
+  "aP (infant)"    = screens_iarm[["aP"]],
+  "wP (infant)"    = screens_iarm[["wP"]],
+  "TdaP (maternal)"= screens_marm[["TdaP"]],
+  "TT (maternal)"  = screens_marm[["TT"]]
+)
+strata_names <- names(all_strata)
+
+# Collect all (covariate label × form) combinations
+all_rows <- bind_rows(lapply(all_strata, function(x) x[["univ_table"]]), .id = "Stratum") %>%
+  mutate(
+    p_fmt   = ifelse(is.na(p_model), "—", sprintf("%.3g", p_model)),
+    sig_chr = ifelse(is.na(p_model), "—", pvalue_to_label(p_model))
+  )
+
+# Wide pivot: one row per (covariate, form), one column per stratum showing sig + p
+summary_wide <- all_rows %>%
+  select(Stratum, Label, Form, R2, adj_R2, p_fmt, sig_chr) %>%
+  pivot_wider(
+    id_cols     = c(Label, Form),
+    names_from  = Stratum,
+    values_from = c(R2, adj_R2, p_fmt, sig_chr),
+    names_sep   = "__"
+  )
+
+# For display, show p_fmt and sig_chr merged per stratum
+cat("## R² and Significance Across All Strata\n\n")
+display_tbl <- all_rows %>%
+  mutate(cell = sprintf("%.3f (%s)", R2, sig_chr)) %>%
+  select(Stratum, Label, Form, cell) %>%
+  pivot_wider(
+    id_cols     = c(Label, Form),
+    names_from  = Stratum,
+    values_from = cell
+  )
+knitr::kable(
+  display_tbl,
+  col.names = c("Covariate", "Form", strata_names),
+  caption   = "Table: R² (significance) across all four strata. * p<0.05  ** p<0.01  *** p<0.001",
+  align     = c("l", "l", rep("r", length(strata_names)))
+) %>% print()
+cat("\n")
+
+# Table of selected predictors per stratum
+cat("## Selected Predictors per Stratum\n\n")
+sel_rows <- lapply(names(all_strata), function(sn) {
+  sc <- all_strata[[sn]]
+  if (length(sc$selected) == 0) {
+    data.frame(Stratum = sn, Covariate = "none", Selected_form = "—",
+               Rationale = "—", stringsAsFactors = FALSE)
+  } else {
+    data.frame(
+      Stratum       = sn,
+      Covariate     = names(sc$selected),
+      Selected_form = unname(unlist(sc$selected)),
+      Rationale     = unname(unlist(sc$form_notes)),
+      stringsAsFactors = FALSE
+    )
+  }
+})
+sel_df <- bind_rows(sel_rows)
+knitr::kable(
+  sel_df,
+  col.names = c("Stratum", "Covariate", "Selected column", "Form selection rationale"),
+  caption   = "Table: Predictors selected for multivariate models in each stratum.",
+  align     = c("l","l","l","l")
+) %>% print()
+cat("\n")
+
+# Multivariate R² summary
+cat("## Multivariate Model Summary\n\n")
+multi_tbl <- lapply(names(all_strata), function(sn) {
+  sc  <- all_strata[[sn]]
+  mr  <- sc$multi_result
+  n_s <- length(sc$selected)
+  data.frame(
+    Stratum          = sn,
+    N_sig_predictors = n_s,
+    Multivariate_R2  = if (!is.null(mr)) sprintf("%.3f", mr$R2)  else
+                       ifelse(n_s > 1, "model failed", "—"),
+    Multivariate_adjR2 = if (!is.null(mr)) sprintf("%.3f", mr$adj_R2) else "—",
+    Multivariate_p   = if (!is.null(mr)) sprintf("%.3g", mr$p_model) else "—",
+    stringsAsFactors = FALSE
+  )
+})
+multi_df <- bind_rows(multi_tbl)
+knitr::kable(
+  multi_df,
+  col.names = c("Stratum", "N significant", "Multi R²", "Multi adj-R²", "Multi p"),
+  caption   = "Table: Multivariate model fit per stratum.",
+  align     = c("l","r","r","r","r")
+) %>% print()
+```
+
+---
+
+# Visualisations
+
+## Forest-Style Plot: Univariate R² by Stratum
+
+```{r forest-plot, fig.cap="Figure 1. Univariate R² for each covariate form across all four strata. Filled = p < 0.05; open = p ≥ 0.05. Both forms shown for continuous variables.", fig.height=7}
+plot_df <- all_rows %>%
+  mutate(
+    sig_fill = !is.na(p_model) & p_model < alpha,
+    strat_type = ifelse(grepl("infant", Stratum, ignore.case = TRUE),
+                        "Infant arm", "Maternal arm"),
+    Covariate_form = paste0(Label, "\n(", Form, ")")
+  )
+
+ggplot(plot_df,
+       aes(x = R2, y = reorder(Covariate_form, R2),
+           color = Stratum, shape = sig_fill)) +
+  geom_point(size = 3, position = position_dodge(0.5)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1),
+                     labels = c(`TRUE` = paste0("p < ", alpha),
+                                `FALSE` = paste0("p ≥ ", alpha))) +
+  scale_color_manual(values = c(
+    "aP (infant)"    = iarm_colors["aP"],
+    "wP (infant)"    = iarm_colors["wP"],
+    "TdaP (maternal)"= marm_colors["TdaP"],
+    "TT (maternal)"  = marm_colors["TT"]
+  )) +
+  labs(x = "R² (univariate)", y = NULL,
+       color = "Stratum", shape = "Significance",
+       title = paste0("Univariate R² — ", outcome_label, " at M02")) +
+  theme_bw(base_size = 11) +
+  theme(axis.text.y = element_text(size = 8))
+```
+
+## Significant Univariate Predictors: Coefficient Plots
+
+```{r coef-plots, fig.cap="Figure 2. Coefficients for significant univariate predictors by stratum. Error bars = 95% CI. Only significant models shown.", fig.height=5}
+# Collect coefficients from all significant univariate models
+sig_coef_rows <- lapply(names(all_strata), function(sn) {
+  sc <- all_strata[[sn]]
+  if (length(sc$selected) == 0) return(NULL)
+  lapply(names(sc$selected), function(lbl) {
+    v   <- covariates_named_list[[lbl]]
+    sel <- sc$selected[[lbl]]
+    key <- if (v %in% cat_vars) paste0(v, "_cat") else {
+             if (endsWith(sel, "_T")) paste0(v, "_tert") else paste0(v, "_cont")
+           }
+    res <- sc$univ_res[[key]]
+    if (is.null(res) || is.null(res$tidy_coef)) return(NULL)
+    res$tidy_coef %>%
+      filter(Predictor != "(Intercept)") %>%
+      mutate(Stratum = sn, Covariate = lbl,
+             lower95 = `β` - 1.96 * SE,
+             upper95 = `β` + 1.96 * SE)
+  }) %>% bind_rows()
+}) %>% bind_rows()
+
+if (!is.null(sig_coef_rows) && nrow(sig_coef_rows) > 0) {
+  ggplot(sig_coef_rows,
+         aes(x = `β`, y = Predictor, color = Stratum,
+             xmin = lower95, xmax = upper95)) +
+    geom_point(size = 2.5, position = position_dodge(0.5)) +
+    geom_errorbarh(height = 0.2, position = position_dodge(0.5)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    facet_wrap(~Covariate, scales = "free", ncol = 2) +
+    scale_color_manual(values = c(
+      "aP (infant)"    = iarm_colors["aP"],
+      "wP (infant)"    = iarm_colors["wP"],
+      "TdaP (maternal)"= marm_colors["TdaP"],
+      "TT (maternal)"  = marm_colors["TT"]
+    )) +
+    labs(x = paste0("β (→ ", outcome_label, " M02)"),
+         y = NULL, color = "Stratum",
+         title = paste0("Significant predictor coefficients — ", outcome_label)) +
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(size = 8))
+} else {
+  cat("*No significant univariate predictors found in any stratum.*\n")
+}
+```
+
+---
+
+# Synthesis and Interpretation
+
+*Complete after reviewing the results above.*
+
+## 1. Which Clinical Factors Predict PTNA, and in Which Strata?
+
+> **[To complete]** Summarise which covariates passed the p < `r params$alpha`
+> threshold. Are any significant across all four strata? Are any stratum-specific
+> (e.g., maternal-arm-only, or infant-arm-only)? Note that the maternal-arm
+> stratification (TdaP vs TT) splits by the maternal vaccine and thus by
+> pertussis-antigen exposure, so predictors that differ between TdaP and TT
+> may reflect confounding with the vaccine effect rather than independent biology.
+
+## 2. Continuous vs Tertile: Which Form Best Captures the Relationship?
+
+> **[To complete]** For each significant continuous variable, report which form
+> was selected and by how much adj-R² differed between forms. A large difference
+> in favour of tertiles suggests a non-linear or threshold relationship; a small
+> difference suggests linearity is adequate.
+
+## 3. Multivariate Models: Do the Clinical Factors Explain Independent Variance?
+
+> **[To complete]** For strata where ≥ 2 predictors were significant, report the
+> multivariate adj-R² and compare it to the univariate adj-R² values. Substantial
+> drop in individual predictors' coefficients in the joint model relative to their
+> univariate estimates suggests collinearity. A large joint R² compared to the
+> individual R² values suggests additive/independent contributions.
+
+## 4. Clinical vs Antibody Predictors: Relative Contribution?
+
+> **[To complete]** The antibody-chain analysis
+> (`predict_M02_PTNA_from_maternal_v2.Rmd`) showed that maternal PT-IgG at P09
+> explains ~43–48% of infant PTNA variance in the infant arms. Compare the best
+> clinical-predictor R² from this analysis to that benchmark. Are the clinical
+> covariates weaker, comparable, or (unexpectedly) stronger predictors?
+
+## 5. Implications for Confounder Adjustment?
+
+> **[To complete]** If clinical covariates are significant predictors of PTNA,
+> they are potential confounders (or effect modifiers) of the maternal-antibody
+> → infant-PTNA relationship. Identify which, if any, should be considered as
+> adjustment variables in the antibody models. Strong candidates are covariates
+> that: (a) are significant here, and (b) are plausibly related to maternal IgG
+> levels (e.g., gestational age at vaccine, maternal BMI, parity).
+
+---
+
+*Document generated by `predict_M02_PTNA_clinical_covariates_v1.Rmd`.*  
+*Adapt `params$outcome_feature` to run for `WHOLE_SBA` or `WHOLE_WT_IgG`.*  
+*Adapt `params$alpha` to change the screening threshold (default 0.05).*

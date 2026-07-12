@@ -1,0 +1,518 @@
+---
+title: "Phase 10 — The Vaccination-to-Delivery Interval and the Maternal Responder Split"
+subtitle: |
+  Does the interval between vaccination and delivery (in WEEKS, modelled
+  non-linearly and interacted with arm) drive the MatBirth titres that build the
+  responder score — and does adjusting for it attenuate the arm effect or sharpen
+  the pre-vaccination breadth signal? Stratifier: maternal arm (TdaP vs TT) only.
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 6
+params:
+  responder_features: !r c("PT_IgG", "FHA_IgG", "PRN_IgG")
+  stage1_features:    !r c("PT_IgG", "FHA_IgG", "PRN_IgG", "PT_IgG1", "FHA_IgG1", "PRN_IgG1")
+  maternal_visits:    !r c("PregEarly", "MatBirth")
+  baseline_visit:     "PregEarly"
+  from_visit:         "PregEarly"
+  to_visit:           "MatBirth"
+  breadth_thresh:     0.6
+  spline_df:          3               # primary natural-spline df (2 internal knots)
+  spline_df_sens:     4               # sensitivity df
+  days_col:           "vaccine_birth_interval_days"
+  clean_window:       !r c(2, 12)     # "clean" interval window (weeks) for Stage 4
+  preterm_ga:         37              # gestational age (weeks) threshold for preterm
+  en_alpha:           0.5
+  en_folds:           10
+  min_coverage:       0.6
+  alpha:              0.05
+  seed:               1
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here); library(dplyr); library(tidyr); library(ggplot2); library(splines)
+
+# ---- shared path resolver: single definition in R/find_proj_file.R ----------
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+# ---- shared config + helper libraries (Phase 07/08 sourced READ-ONLY) --------
+source(find_proj_file("config/endpoints.R"),             local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),           local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/maternal_responder_helpers.R"), local = FALSE, encoding = "UTF-8")
+# ---- NEW Phase 10 engine (self-contained; does not modify anything above) ----
+source(find_proj_file("R/interval_helpers.R"),           local = FALSE, encoding = "UTF-8")
+
+# ---- data ----
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")),
+                 error = function(e) NULL)
+if (is.null(clin)) {
+  .e <- new.env(); load(find_proj_file("data/clin_assess.RData"), envir = .e)
+  clin <- get("clin_assess", envir = .e)
+}
+clin <- add_w_weeks(clin, days_col = params$days_col)
+
+has_glmnet <- requireNamespace("glmnet", quietly = TRUE)
+has_clust  <- requireNamespace("cluster", quietly = TRUE)
+nt <- if (exists("new_ntracker", mode = "function")) new_ntracker() else NULL
+
+ARM_COLS   <- c(TdaP = "#8A1538", TT = "#2C7A7B")   # matches the boost analysis
+MAT_ARMS   <- if (exists("MATERNAL_ARMS")) MATERNAL_ARMS else c("TdaP", "TT")
+RESP_FEATS <- params$responder_features
+MAT_VIS    <- params$maternal_visits
+```
+
+---
+
+# Framing
+
+Delivery-time (`MatBirth`) antibody in a vaccinated mother is **not a fixed quantity**:
+it is a point on a rise-then-decay curve whose height depends on the number of
+**weeks between vaccination and delivery**, `w`. Two mothers with identical
+intrinsic responses can land at very different `MatBirth` titres purely because one
+delivered near peak and the other well into decay. Because the responder score is
+built from `PregEarly + MatBirth` binding across `r paste(RESP_FEATS, collapse = ", ")`,
+anything correlated with `w` could masquerade as a "predictor" of responder status
+when it is really proxying for interval.
+
+This document evaluates that concern in five stages, each isolating one question so
+we know exactly where any change to a conclusion comes from:
+
+- **Stage 0** — describe `w_weeks` (overall, by arm, versus the clinical covariates that alias it).
+- **Stage 1** — does `w_weeks` drive `MatBirth` titres, per antigen and *per arm*? (Expect yes in TdaP, ~0 in TT.)
+- **Stage 2** — build an interval-adjusted responder class (`score_adj`) and see who moves.
+- **Stage 3** — re-run the Section C predictor stack with the interval forced in (arm OR; the three CV-AUCs, forced vs unforced).
+- **Stage 4** — sensitivity: `score_adj` classes, a clean interval window, and preterm mothers.
+
+`w` is measured in **weeks** (`w_weeks = r params$days_col / 7`) throughout — the
+natural unit for IgG kinetics — and is modelled with a **natural cubic spline**
+(df = `r params$spline_df`) **interacted with arm**, never as a single linear day term.
+
+```{r build-class-and-interval}
+# Original Phase 07/08 Low/High class (full sample) via the existing engine.
+mat_cls <- build_maternal_responder_class(
+  data_raw, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_clust)
+
+arm_tbl <- subject_maternal_arm(data_raw)
+arm_tbl$arm_name <- factor(as.character(arm_tbl$arm_name), levels = c("TT", "TdaP"))
+
+# Per-subject interval table (subject, arm, w_weeks). Not yet filtered on w.
+interval_tbl <- make_interval_tbl(arm_tbl, clin, maternal_arms = c("TT", "TdaP"))
+
+# Interval-available analysis set: arm in {TT,TdaP} AND non-missing w_weeks.
+it_avail <- interval_tbl[is.finite(interval_tbl$w_weeks), , drop = FALSE]
+
+cat(sprintf(paste0("Mothers with a Low/High class: **%d**. With arm in {TT,TdaP}: **%d**. ",
+                   "With arm AND a non-missing interval (Stage 2/3 analysis set): **%d**.\n\n"),
+            nrow(mat_cls), nrow(interval_tbl), nrow(it_avail)))
+```
+
+---
+
+# Stage 0 — Describe the interval `w_weeks`
+
+```{r stage0-dist, results='asis'}
+w0 <- merge(it_avail, mat_cls[, c("subject_accession", "responder")],
+            by = "subject_accession", all.x = TRUE)
+
+desc <- w0 %>%
+  dplyr::group_by(arm_name) %>%
+  dplyr::summarise(n = dplyr::n(),
+                   median_w = round(stats::median(w_weeks), 2),
+                   IQR_lo   = round(stats::quantile(w_weeks, .25), 2),
+                   IQR_hi   = round(stats::quantile(w_weeks, .75), 2),
+                   min_w    = round(min(w_weeks), 2),
+                   max_w    = round(max(w_weeks), 2), .groups = "drop")
+overall <- with(w0, data.frame(arm_name = "Overall", n = nrow(w0),
+                 median_w = round(stats::median(w_weeks), 2),
+                 IQR_lo = round(stats::quantile(w_weeks, .25), 2),
+                 IQR_hi = round(stats::quantile(w_weeks, .75), 2),
+                 min_w = round(min(w_weeks), 2), max_w = round(max(w_weeks), 2)))
+print(knitr::kable(rbind(overall, desc),
+  caption = "Table S10.0a. Vaccination-to-delivery interval (weeks), overall and by maternal arm."))
+
+wtest <- tryCatch(stats::wilcox.test(w_weeks ~ arm_name, data = w0), error = function(e) NULL)
+cat(sprintf("\nArm imbalance in the interval: %s. %s\n\n",
+    if (!is.null(wtest)) sprintf("Wilcoxon W = %.0f, p = %.3g", wtest$statistic, wtest$p.value) else "n/a",
+    "If TdaP and TT mothers deliver at systematically different w, that imbalance alone would matter."))
+```
+
+```{r stage0-fig, fig.height=3.2, fig.cap="Figure S10.0. Distribution of the vaccination-to-delivery interval (weeks) by maternal arm."}
+ggplot(w0, aes(w_weeks, fill = arm_name)) +
+  geom_histogram(alpha = .6, position = "identity", bins = 24, colour = "white") +
+  scale_fill_manual(values = ARM_COLS, name = "Arm") +
+  labs(x = "weeks: vaccination \u2192 delivery", y = "mothers") +
+  theme_bw(base_size = 11)
+```
+
+```{r stage0-alias, results='asis'}
+# Which clinical covariates are essentially aliases of w?
+alias_vars <- intersect(c("gestational_age_vaccination", "gestational_age_birth",
+                          "maternal_age", "maternal_bmi", "birth_weight"),
+                        names(clin))
+# Merge only the alias columns; clin also carries w_weeks/w_days, so merging the
+# whole frame would collide with it_avail$w_weeks (renamed to w_weeks.x/.y).
+wc <- merge(it_avail, clin[, c("subject_accession", alias_vars), drop = FALSE],
+            by = "subject_accession", all.x = TRUE)
+al <- do.call(rbind, lapply(alias_vars, function(v) {
+  x <- suppressWarnings(as.numeric(wc[[v]]))
+  ok <- is.finite(x) & is.finite(wc$w_weeks)
+  r  <- if (sum(ok) >= 3) round(stats::cor(x[ok], wc$w_weeks[ok]), 3) else NA_real_
+  data.frame(covariate = v, n = sum(ok), pearson_r = r)
+}))
+al <- al[order(-abs(al$pearson_r)), , drop = FALSE]
+print(knitr::kable(al, row.names = FALSE,
+  caption = "Table S10.0b. Correlation of each clinical covariate with the interval (weeks). High |r| flags a covariate that is essentially an alias of w (gestational age at vaccination / at delivery are expected to be)."))
+```
+
+---
+
+# Stage 1 — Does `w_weeks` drive MatBirth titres? (per antigen, per arm)
+
+For each Stage-1 feature we fit, on the paired PregEarly→MatBirth data,
+`MatBirth ~ ns(w_weeks, df) * arm + PregEarly` (baseline-adjusted, so we model the
+*boost*), and report the fraction of residual variance explained by `w` **within
+each arm** plus the arm × interval interaction test.
+
+```{r stage1-paired}
+# paired_change() supplies v_from (PregEarly log10), v_to (MatBirth log10), delta,
+# arm_name and subject_accession per feature — the same object the boost analysis uses.
+paired <- paired_change(data_raw, params$from_visit, params$to_visit)
+paired <- paired[paired$arm_name %in% c("TT", "TdaP"), , drop = FALSE]
+paired$arm_name <- factor(as.character(paired$arm_name), levels = c("TT", "TdaP"))
+paired <- merge(paired, it_avail[, c("subject_accession", "w_weeks")],
+                by = "subject_accession", all.x = FALSE)   # interval-available only
+```
+
+```{r stage1-table, results='asis'}
+s1 <- boost_spline_table(paired, params$stage1_features, spline_df = params$spline_df)
+print(knitr::kable(s1, row.names = FALSE,
+  caption = paste0("Table S10.1. Interval effect on the MatBirth boost, per feature. ",
+    "pR2_w_* = partial R2 of the ns(w) spline within each arm (variance explained ",
+    "AFTER the PregEarly baseline). p_w = overall test of the whole w block; ",
+    "p_interaction = arm x interval interaction. Expectation: substantial pR2_w in ",
+    "TdaP, near-zero in TT, and a significant interaction for pertussis antigens.")))
+
+# Plain-language verdict computed from the table.
+tdap_big <- s1$feature[which(s1$pR2_w_TdaP >= 0.05 & !is.na(s1$pR2_w_TdaP))]
+cat(sprintf("\nWithin **TdaP**, the interval explains \u2265 5%% of residual MatBirth variance for: %s. ",
+    if (length(tdap_big)) paste(tdap_big, collapse = ", ") else "none"))
+cat(sprintf("Median within-arm partial R2 for w: TdaP = %.3f, TT = %.3f.\n\n",
+    stats::median(s1$pR2_w_TdaP, na.rm = TRUE), stats::median(s1$pR2_w_TT, na.rm = TRUE)))
+```
+
+```{r stage1-panel, fig.width=11, fig.height=7, fig.cap="Figure S10.1 (SUPPLEMENTAL). Fitted rise-and-decay of MatBirth titre against the vaccination-to-delivery interval (weeks), per feature and arm. Solid line = ns(w_weeks) fit at the median PregEarly baseline; band = 95% CI; points = per-mother values adjusted to that reference baseline (partial residuals). TdaP curves that rise-then-fall while TT stays flat is the signature that validates the coauthor's concern for pertussis antigens."}
+p_panel <- spline_fit_panel(paired, params$stage1_features,
+                            spline_df = params$spline_df, arm_cols = ARM_COLS, ncol = 3L)
+if (!is.null(p_panel)) p_panel else cat("Insufficient paired data to render the spline panel.\n")
+```
+
+---
+
+# Stage 2 — Interval-adjusted responder class (`score_adj`)
+
+We residualise each of the three **score-defining** MatBirth features
+(`r paste(RESP_FEATS, collapse = ", ")`) on `ns(w_weeks, df) * arm`, leave every
+PregEarly value untouched (it is pre-vaccination and cannot depend on `w`), and
+rebuild the class exactly as in Phase 07. To isolate the *effect of residualisation*
+from any change of sample, both the original and adjusted classes are rebuilt on the
+**same interval-available subset**.
+
+```{r stage2-build}
+keep_ids <- it_avail$subject_accession
+data_sub <- data_raw[data_raw$subject_accession %in% keep_ids, , drop = FALSE]
+
+# Original class rebuilt on the subset (fair baseline for the comparison).
+mat_cls_sub <- build_maternal_responder_class(
+  data_sub, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_clust)
+
+# Interval-adjusted long object, then rebuild the class the same way.
+data_adj <- residualise_matbirth(data_sub, RESP_FEATS, params$to_visit,
+                                 interval_tbl = it_avail, spline_df = params$spline_df)
+mat_cls_adj <- build_maternal_responder_class(
+  data_adj, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_clust)
+```
+
+```{r stage2-concord, results='asis'}
+cmp <- merge(mat_cls_sub[, c("subject_accession", "responder", "score")],
+             mat_cls_adj[, c("subject_accession", "responder", "score")],
+             by = "subject_accession", suffixes = c("_orig", "_adj"))
+tab <- table(original = cmp$responder_orig, adjusted = cmp$responder_adj)
+print(knitr::kable(as.data.frame.matrix(tab),
+  caption = "Table S10.2a. Original vs interval-adjusted Low/High class (same mothers)."))
+
+# Cohen's kappa (use irr if present, else compute directly).
+po <- sum(diag(tab)) / sum(tab)
+pe <- sum(rowSums(tab) * colSums(tab)) / sum(tab)^2
+kappa <- (po - pe) / (1 - pe)
+r_score <- stats::cor(cmp$score_orig, cmp$score_adj, use = "complete.obs")
+movers <- cmp[cmp$responder_orig != cmp$responder_adj, , drop = FALSE]
+cat(sprintf("\nClass agreement: **%.1f%%** (Cohen's \u03ba = **%.3f**); score correlation r = **%.3f**. ",
+            100 * po, kappa, r_score))
+cat(sprintf("**%d** mothers change class after interval adjustment.\n\n", nrow(movers)))
+
+# Does the arm-only class definition survive? (Phase 08 arm-only AUC was ~0.78.)
+arm_of <- merge(mat_cls_sub[, c("subject_accession","responder")],
+                it_avail[, c("subject_accession","arm_name")], by = "subject_accession")
+arm_oa <- merge(mat_cls_adj[, c("subject_accession","responder")],
+                it_avail[, c("subject_accession","arm_name")], by = "subject_accession")
+auc_arm_orig <- auc_binary(as.numeric(arm_of$arm_name == "TdaP"), arm_of$responder)
+auc_arm_adj  <- auc_binary(as.numeric(arm_oa$arm_name == "TdaP"), arm_oa$responder)
+cat(sprintf("Arm-only AUC for the class: original = **%.3f**, interval-adjusted = **%.3f**. ",
+            auc_arm_orig, auc_arm_adj))
+cat("A stable value means the Low/High definition is robust to interval; a large drop would mean much of the arm signal was interval-mediated.\n\n")
+```
+
+```{r stage2-movers, results='asis'}
+if (nrow(movers)) {
+  mv <- merge(movers, it_avail[, c("subject_accession","arm_name","w_weeks")],
+              by = "subject_accession")
+  mv <- mv[, c("subject_accession","arm_name","w_weeks","responder_orig","responder_adj")]
+  mv$w_weeks <- round(mv$w_weeks, 1)
+  print(knitr::kable(mv, row.names = FALSE,
+    caption = "Table S10.2b. Mothers who change responder class after interval adjustment (with their arm and interval)."))
+}
+```
+
+---
+
+# Stage 3 — Predictor stack with the interval forced in
+
+## Arm-adjusted logistic with a non-linear interval block
+
+```{r stage3-logit, results='asis'}
+d3 <- merge(mat_cls[, c("subject_accession","responder")],
+            it_avail[, c("subject_accession","arm_name","w_weeks")],
+            by = "subject_accession")
+d3$arm_name <- factor(as.character(d3$arm_name), levels = c("TT","TdaP"))
+dfw <- .safe_df(d3$w_weeks, params$spline_df)
+
+m_arm  <- stats::glm(responder ~ arm_name, data = d3, family = binomial())
+m_add  <- stats::glm(reformulate(c("arm_name",
+             sprintf("ns(w_weeks, df = %d)", dfw)), "responder"),
+             data = d3, family = binomial())          # additive: clean adjusted arm OR
+m_full <- stats::glm(reformulate(c("arm_name",
+             sprintf("ns(w_weeks, df = %d)", dfw),
+             sprintf("ns(w_weeks, df = %d):arm_name", dfw)), "responder"),
+             data = d3, family = binomial())           # + arm x interval interaction
+
+print(knitr::kable(.tidy_fit(m_add, logit = TRUE),
+  caption = "Table S10.3a. Arm-adjusted logistic for High responder with an additive non-linear interval term (ns(w)). This additive model gives an interpretable adjusted arm OR; the interaction model below is used only to test whether the interval effect differs by arm."))
+
+or_arm_only <- exp(stats::coef(m_arm)["arm_nameTdaP"])
+or_arm_add  <- exp(stats::coef(m_add)["arm_nameTdaP"])
+ci_add <- tryCatch(exp(suppressMessages(stats::confint(m_add)))["arm_nameTdaP", ],
+                   error = function(e) c(NA, NA))
+lr_block <- stats::anova(m_arm, m_full, test = "LRT")   # whole interval block
+lr_int   <- stats::anova(m_add, m_full, test = "LRT")   # arm x interval interaction only
+
+cat(sprintf(paste0("\nAdjusted arm OR for High responder: **%.2f** (95%% CI %.2f\u2013%.2f) after an ",
+    "additive interval spline, vs **%.2f** unadjusted \u2014 essentially unchanged. ",
+    "Likelihood-ratio test for the whole interval block: %s; for the arm \u00d7 interval ",
+    "interaction alone: %s. ",
+    "(NB: the arm main-effect OR from the interaction model is NOT interpretable as an ",
+    "adjusted OR \u2014 with arm interacting with the spline it is an extrapolation to the ",
+    "spline boundary and is unstable, so it is not quoted.)\n\n"),
+    or_arm_add, ci_add[1], ci_add[2], or_arm_only,
+    if (!is.null(lr_block$`Pr(>Chi)`[2])) sprintf("chi2 = %.2f, p = %.3g",
+        lr_block$Deviance[2], lr_block$`Pr(>Chi)`[2]) else "n/a",
+    if (!is.null(lr_int$`Pr(>Chi)`[2])) sprintf("chi2 = %.2f, p = %.3g",
+        lr_int$Deviance[2], lr_int$`Pr(>Chi)`[2]) else "n/a"))
+```
+
+## Elastic-net signatures: does forcing the interval change the CV-AUCs?
+
+The arm (always) and the `ns(w) x arm` interval block (in the forced columns) are
+entered **unpenalised**; serology competes for the rest. We compute each model's
+CV-AUC **with and without** the interval block on the same interval-available
+mothers, so the two columns are directly comparable — and comparable to the
+Section C numbers (arm-only ≈ 0.78, arm + pre-vax breadth ≈ 0.88).
+
+```{r stage3-en, results='asis'}
+if (!has_glmnet) {
+  cat("> **glmnet not installed** — the penalised models are skipped. Install `glmnet` to run the CV-AUC comparison.\n\n")
+} else {
+  .excl_anti <- { av <- unique(as.character(data_raw$feature))
+                  av[sub("_.*$", "", toupper(av)) %in% c("ACT","PENTAMER")] }
+  .excl <- union(RESP_FEATS, .excl_anti)
+  W_all  <- build_maternal_serology_matrix(data_raw, MAT_VIS,
+              exclude_feats = .excl, min_coverage = params$min_coverage)
+  W_base <- build_maternal_serology_matrix(data_raw, params$baseline_visit,
+              exclude_feats = .excl, min_coverage = params$min_coverage)
+
+  # No-serology reference rows via k-fold CV of a plain glm.
+  auc_arm      <- cv_auc_glm(responder ~ arm_name, d3, nfolds = params$en_folds, seed = params$seed)
+  auc_arm_w    <- cv_auc_glm(reformulate(c("arm_name",
+                     sprintf("ns(w_weeks, df = %d)", dfw),
+                     sprintf("ns(w_weeks, df = %d):arm_name", dfw)), "responder"),
+                     d3, nfolds = params$en_folds, seed = params$seed)
+
+  en_base_off <- en_forced(W_base, mat_cls, it_avail, force_interval = FALSE,
+                   spline_df = params$spline_df, alpha = params$en_alpha,
+                   nfolds = params$en_folds, seed = params$seed)
+  en_base_on  <- en_forced(W_base, mat_cls, it_avail, force_interval = TRUE,
+                   spline_df = params$spline_df, alpha = params$en_alpha,
+                   nfolds = params$en_folds, seed = params$seed)
+  en_all_off  <- en_forced(W_all,  mat_cls, it_avail, force_interval = FALSE,
+                   spline_df = params$spline_df, alpha = params$en_alpha,
+                   nfolds = params$en_folds, seed = params$seed)
+  en_all_on   <- en_forced(W_all,  mat_cls, it_avail, force_interval = TRUE,
+                   spline_df = params$spline_df, alpha = params$en_alpha,
+                   nfolds = params$en_folds, seed = params$seed)
+
+  g <- function(x) if (isTRUE(x$ok)) round(x$cv_auc, 3) else NA_real_
+  cmp3 <- data.frame(
+    model = c("arm only",
+              "arm + ns(w) x arm",
+              sprintf("arm + baseline serology (%s)", params$baseline_visit),
+              "arm + all maternal serology"),
+    cv_auc_no_interval = c(round(auc_arm, 3), NA, g(en_base_off), g(en_all_off)),
+    cv_auc_with_interval = c(round(auc_arm, 3), round(auc_arm_w, 3), g(en_base_on), g(en_all_on)),
+    n_serology_selected = c(NA, NA,
+              if (isTRUE(en_base_on$ok)) en_base_on$n_serology_selected else NA,
+              if (isTRUE(en_all_on$ok))  en_all_on$n_serology_selected  else NA),
+    stringsAsFactors = FALSE)
+  print(knitr::kable(cmp3,
+    caption = paste0("Table S10.3b. Cross-validated AUC for the responder class, WITHOUT vs WITH the ",
+      "interval block forced in. The pre-vaccination (", params$baseline_visit,
+      ") row is the clean test: PregEarly breadth cannot be confounded by interval, so if forcing the ",
+      "interval RAISES its CV-AUC, the interval was adding nuisance variance the breadth signal was fighting.")))
+
+  d_base <- g(en_base_on) - g(en_base_off)
+  cat(sprintf(paste0("\nPre-vaccination breadth CV-AUC: %.3f without interval \u2192 %.3f with interval ",
+      "(\u0394 = %+.3f). %s\n\n"),
+      g(en_base_off), g(en_base_on), d_base,
+      if (is.finite(d_base) && d_base > 0)
+        "The interval was a source of nuisance variance rather than a confounder of the breadth phenotype."
+      else "Interpret alongside Stage 1 and Stage 4."))
+
+  if (isTRUE(en_all_on$ok) && !is.null(en_all_on$coefs) && nrow(en_all_on$coefs)) {
+    co <- en_all_on$coefs[order(-abs(en_all_on$coefs$coef)), , drop = FALSE]
+    co$coef <- round(co$coef, 3)
+    print(knitr::kable(utils::head(co, 25), row.names = FALSE,
+      caption = "Table S10.3c. Non-zero elastic-net terms (arm + interval forced in; serology penalised, standardised)."))
+  }
+}
+```
+
+---
+
+# Stage 4 — Sensitivity checks
+
+## 4a. Use the interval-adjusted (`score_adj`) classes
+
+```{r stage4-adjclass, results='asis'}
+if (has_glmnet) {
+  en_base_adj <- en_forced(W_base, mat_cls_adj, it_avail, force_interval = TRUE,
+                   spline_df = params$spline_df, alpha = params$en_alpha,
+                   nfolds = params$en_folds, seed = params$seed)
+  en_all_adj  <- en_forced(W_all,  mat_cls_adj, it_avail, force_interval = TRUE,
+                   spline_df = params$spline_df, alpha = params$en_alpha,
+                   nfolds = params$en_folds, seed = params$seed)
+  s4 <- data.frame(
+    model = c(sprintf("arm + interval + baseline serology (%s)", params$baseline_visit),
+              "arm + interval + all maternal serology"),
+    cv_auc_score_adj = c(if (isTRUE(en_base_adj$ok)) round(en_base_adj$cv_auc, 3) else NA,
+                         if (isTRUE(en_all_adj$ok))  round(en_all_adj$cv_auc, 3)  else NA),
+    stringsAsFactors = FALSE)
+  print(knitr::kable(s4,
+    caption = "Table S10.4a. Stage-3 CV-AUCs recomputed against the interval-ADJUSTED responder classes. Conclusions should not hinge on which class definition is used."))
+} else cat("*glmnet not installed — Stage 4a skipped.*\n\n")
+```
+
+## 4b. Clean interval window
+
+```{r stage4-window, results='asis'}
+lo <- params$clean_window[1]; hi <- params$clean_window[2]
+d3c <- d3[d3$w_weeks >= lo & d3$w_weeks <= hi, , drop = FALSE]
+cat(sprintf("Restricting to w_weeks \u2208 [%g, %g]: **%d** mothers (of %d).\n\n",
+            lo, hi, nrow(d3c), nrow(d3)))
+if (has_glmnet && nrow(d3c) > (params$en_folds + 15L)) {
+  itc <- it_avail[it_avail$w_weeks >= lo & it_avail$w_weeks <= hi, , drop = FALSE]
+  en_base_win <- en_forced(W_base, mat_cls, itc, force_interval = TRUE,
+                   spline_df = params$spline_df, alpha = params$en_alpha,
+                   nfolds = params$en_folds, seed = params$seed)
+  cat(sprintf("Pre-vaccination breadth CV-AUC within the clean window: **%s**. ",
+      if (isTRUE(en_base_win$ok)) sprintf("%.3f", en_base_win$cv_auc) else "n/a"))
+  cat("The pre-vax breadth signal should survive if it is a genuine pre-existing trait.\n\n")
+} else cat("*Insufficient N in the clean window (or glmnet missing) for the penalised check.*\n\n")
+```
+
+## 4c. Preterm mothers
+
+```{r stage4-preterm, results='asis'}
+if ("gestational_age_birth" %in% names(clin)) {
+  pt <- merge(it_avail, clin[, c("subject_accession","gestational_age_birth")],
+              by = "subject_accession")
+  pt$gestational_age_birth <- suppressWarnings(as.numeric(pt$gestational_age_birth))
+  pt$preterm <- ifelse(pt$gestational_age_birth < params$preterm_ga, "preterm (<37w)", "term")
+  ptt <- pt %>% dplyr::filter(!is.na(preterm)) %>%
+    dplyr::group_by(preterm) %>%
+    dplyr::summarise(n = dplyr::n(), median_w = round(stats::median(w_weeks), 2),
+                     .groups = "drop")
+  print(knitr::kable(ptt,
+    caption = "Table S10.4b. Interval by preterm status. Preterm mothers mechanically have a shorter vaccination-to-delivery interval, so they are a natural check on interval-driven artefacts."))
+} else cat("*gestational_age_birth not available — preterm check skipped.*\n\n")
+```
+
+---
+
+# Synthesis
+
+```{r synth, results='asis'}
+cat("Read Stages 0\u20134 together to answer the three framing questions:\n\n")
+cat("1. **Is the interval a real driver of MatBirth pertussis titres?** \u2014 Table S10.1 / Figure S10.1 (expect yes in TdaP, ~0 in TT).\n")
+cat("2. **Does adjusting for interval attenuate the responder signal?** \u2014 Stage 2 (\u03ba, movers, arm-only AUC) and Table S10.3a (arm OR before/after).\n")
+cat("3. **Does adjusting for interval sharpen the pre-existing breadth phenotype?** \u2014 the pre-vaccination row of Table S10.3b (does the ~0.88 CV-AUC rise when interval is forced in?).\n\n")
+```
+
+```{r naccount, results='asis'}
+cat(sprintf("Interval-available analysis set: **%d** mothers (TdaP = %d, TT = %d).\n\n",
+    nrow(it_avail), sum(it_avail$arm_name == "TdaP"), sum(it_avail$arm_name == "TT")))
+if (!is.null(nt) && exists("nt_render", mode = "function"))
+  tryCatch(nt_render(nt, caption = "Participant accounting for Phase 10."),
+           error = function(e) invisible(NULL))
+```
+
+---
+
+*Phase 10 branch. Interval modelled in WEEKS with a natural cubic spline
+(df = `r params$spline_df`; df = `r params$spline_df_sens` available as a
+sensitivity via `params$spline_df_sens`) interacted with arm. The Phase 07/08
+engines are sourced read-only; all new logic lives in `R/interval_helpers.R`.
+Knit both formats with*
+`rmarkdown::render("10_interval_adjusted_responder.Rmd", output_format = "all")`.

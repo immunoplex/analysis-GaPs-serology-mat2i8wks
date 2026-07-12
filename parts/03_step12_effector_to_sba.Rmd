@@ -1,0 +1,65 @@
+# Step 12 — Each Effector on the Path to the Outcome {#step12}
+
+For ADCD we found no independent contribution to `r cfg$outcome_label` once FcγR3b was accounted for.
+Here we apply the same test to ADCP and ADNP: for each effector, antigen, arm and mode, does it add
+variance in `r cfg$outcome_label` **beyond antibody quantity (IgG1)** and **beyond IgG1 + FcγR**, and
+does it survive **jointly with FcγR3b**? An effector that adds nothing beyond FcγR, or that drops out
+against FcγR3b, is not independently on the path.
+
+```{r step12-run, results='asis'}
+.stage(12, "each effector on the path to the outcome (ADCD / ADCP / ADNP)")
+if (!RUN_EFF_SBA) {
+  cat("*Step 12 skipped (run_effector_to_sba = FALSE).*\n\n")
+} else {
+  dR2 <- function(d, y, add, base) {
+    b <- lm(reformulate(base, response = y), data = d)
+    f <- lm(reformulate(c(base, add), response = y), data = d)
+    ff <- summary(f)$fstatistic
+    p <- tryCatch(anova(b, f)$`Pr(>F)`[2], error = function(e) NA)
+    list(dR2 = summary(f)$r.squared - summary(b)$r.squared, p = p)
+  }
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    rows <- list()
+    for (fn in EFFECTORS) {
+      for (A in PATHWAY_ANTIGENS) {
+        eff <- paste0(A, "_", fn); igg1 <- paste0(A, "_IgG1")
+        r2a <- paste0(A, "_FcgR2a"); r3b <- paste0(A, "_FcgR3b")
+        if (!all(c(eff, igg1, r3b, OUTCOME) %in% names(wd))) next
+        fcg <- intersect(c(r2a, r3b), names(wd))
+        for (m in cfg$maternal_arms) {
+          d <- arm_data_m(mode, m) %>%
+            dplyr::select(dplyr::all_of(unique(c(OUTCOME, eff, igg1, fcg)))) %>% tidyr::drop_na()
+          if (nrow(d) < NETWORK_MIN) next
+          inc_q  <- dR2(d, OUTCOME, eff, igg1)              # beyond IgG1 (quantity)
+          inc_f  <- dR2(d, OUTCOME, eff, c(igg1, fcg))      # beyond IgG1 + FcγR
+          fj <- lm(reformulate(c(r3b, eff), response = OUTCOME), data = d)  # joint with FcγR3b
+          cj <- summary(fj)$coefficients
+          rows[[length(rows)+1]] <- data.frame(
+            effector = fn, antigen = A, arm = m, n = nrow(d),
+            "ΔR² eff|IgG1" = round(inc_q$dR2, 3), "p(|IgG1)" = signif(inc_q$p, 3),
+            "ΔR² eff|IgG1+FcγR" = round(inc_f$dR2, 3), "p(|IgG1+FcγR)" = signif(inc_f$p, 3),
+            "β eff (joint w/3b)" = round(cj[eff,1], 3), "p eff" = signif(cj[eff,4], 3),
+            "β FcγR3b" = round(cj[r3b,1], 3), "p 3b" = signif(cj[r3b,4], 3),
+            check.names = FALSE, stringsAsFactors = FALSE)
+          .info("step12 [%s] %s %s %s done", mode, fn, A, m)
+        }
+      }
+    }
+    tb <- do.call(rbind, rows)
+    if (is.null(tb)) { cat("*No complete effector chain in this mode.*\n\n"); next }
+    print(knitr::kable(tb, row.names = FALSE,
+      caption = paste0("Each effector on the path to ", cfg$outcome_label, " [", mode,
+      "]: incremental R² beyond IgG1 and beyond IgG1+FcγR, and coefficients in a joint model with FcγR3b."))); cat("\n")
+  }
+}
+```
+
+**How to read this.** `ΔR² eff|IgG1` asks whether the effector tracks `r cfg$outcome_label` at all once
+quantity is set; `ΔR² eff|IgG1+FcγR` is the stricter test of an *independent* effector contribution
+beyond receptor engagement. In the joint column, an effector that keeps a significant coefficient while
+FcγR3b weakens would be genuinely on the path; the ADCD pattern (effector drops, FcγR3b survives) means
+the function is a correlate of FcγR3b rather than an independent step. Compare ADCP and ADNP against
+ADCD, and TdaP against TT, in the quantity-removed (`igg_std`/`mixed`) modes.

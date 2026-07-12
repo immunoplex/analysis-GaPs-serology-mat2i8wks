@@ -1,0 +1,314 @@
+<!--
+=====================================================================
+parts/04_antigen_subclass_predictors.Rmd   (REFACTORED — Result #1 only)
+TITLE: Result #1 — Cord-blood whole-cell IgG as a temporal predictor of infant SBA
+---------------------------------------------------------------------
+FOCUSED REFACTOR of the original Part 4. The original surveyed antigen /
+subclass / FcR predictors at InfMon2 and carried a disabled "Block 10"
+cord slot. This version keeps ONLY Block 10, turned ON for SBA, and adds
+the mediation/attenuation check the original never ran.
+
+WHAT IT PRODUCES (Result #1):
+  cord-blood `cord_predictor` (WHOLE_WT_IgG)  ->  infant `outcome` (SBA)
+  at InfMon2, adjusted for maternal arm, PLUS a formal test of whether the
+  cord level MEDIATES the upstream Block-1 maternal signal
+  (same feature measured at MatBirth).
+
+It works two ways:
+  * as a CHILD (preferred): the master run_SBA_cord_and_ratios.Rmd has
+    already created cfg / data_raw / nt / roles — this file just runs.
+  * STANDALONE for testing: the bootstrap chunk below sources the
+    pipeline and builds cfg / data_raw / nt itself.
+
+Uses only the shared helpers (run_lm, show_model, nt_log_manual) and the
+mixed-case, visit-recoded long frame produced by load_serology_data().
+=====================================================================
+-->
+
+```{r cordpred-setup, include=FALSE}
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2); library(broom)
+})
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# ---- standalone bootstrap (skipped when run as a child) --------------------
+if (!exists("cfg") || !exists("data_raw")) {
+  .stub <- function(rel, optional = FALSE) {
+    cand <- character(0)
+    if (requireNamespace("here", quietly = TRUE))
+      cand <- c(cand, here::here(rel), here::here("analysis", rel))
+    rmd_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                        error = function(e) NA_character_)
+    if (!is.na(rmd_dir)) cand <- c(cand, file.path(rmd_dir, rel),
+                                   file.path(dirname(rmd_dir), rel))
+    cand <- unique(c(cand, file.path(getwd(), rel), rel))
+    hit  <- cand[file.exists(cand)]
+    if (length(hit)) return(normalizePath(hit[1], winslash = "/", mustWork = FALSE))
+    if (optional) return(NULL)
+    stop("Cannot locate '", rel, "'. Run from project root.", call. = FALSE)
+  }
+  if (!exists("find_proj_file")) source(.stub("R/find_proj_file.R"))
+  source(find_proj_file("config/endpoints.R"),  encoding = "UTF-8")
+  source(find_proj_file("R/serology_helpers.R"), encoding = "UTF-8")
+  cfg      <- get_endpoint_config("SBA")
+  data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+  nt       <- new_ntracker()
+}
+if (!exists("roles")) roles <- chain_visit_roles(cfg)
+
+`%or%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
+```
+
+# Cord-blood `r cfg$cord_predictor_label %or% "predictor"` → infant `r cfg$outcome_label` at `r roles$infant` {#cord-predictor}
+
+This part tests whether the **cord-blood level of
+`r cfg$cord_predictor_label %or% cfg$cord_predictor`**
+(`r cfg$cord_col`) predicts the infant **`r cfg$outcome_label`** at
+`r roles$infant` (`r cfg$outcome_col`), over and above the maternal
+vaccine arm. Because cord blood is measured *before* the infant outcome,
+this is a genuine temporal predictor rather than a concurrent correlation.
+
+It then asks the mechanistic follow-up: the same measurand at delivery —
+maternal `r cfg$cord_predictor_label %or% cfg$cord_predictor` at
+`r cfg$chain_signal_visit` (`r cfg$signal_col %or% "n/a"`) — is the
+**Block-1 maternal chain signal**. Does the cord level *mediate* that
+maternal signal (maternal delivery antibody → cord antibody → infant
+function), and does cord retain independent predictive value once the
+maternal signal is included?
+
+```{r cordpred-guard, results='asis'}
+cord_active <- !is.null(cfg$cord_predictor) && !is.null(cfg$cord_col)
+if (!cord_active) {
+  cat("> **Not applicable for ", cfg$outcome_label, ".** No `cord_predictor` ",
+      "is configured for this endpoint, so the cord-blood temporal predictor ",
+      "block is disabled. Set `cord_predictor` on the ", cfg$outcome_label,
+      " entry in `config/endpoints.R` to enable it.\n\n", sep = "")
+}
+```
+
+```{r cordpred-data, eval=cord_active, results='asis'}
+oc   <- cfg$outcome_col          # WHOLE_SBA_InfMon2
+cordc <- cfg$cord_col            # WHOLE_WT_IgG_CordBlood
+sigc  <- cfg$signal_col          # WHOLE_WT_IgG_MatBirth  (Block-1 signal)
+
+pull_feats   <- unique(c(cfg$outcome_feature, cfg$cord_predictor))
+pull_visits  <- unique(c(cfg$cord_visit, cfg$chain_signal_visit, cfg$infant_visit))
+
+wide1 <- data_raw %>%
+  dplyr::filter(feature    %in% pull_feats,
+                visit_name %in% pull_visits,
+                arm_name   %in% cfg$maternal_arms) %>%
+  dplyr::select(subject_accession, arm_name, infant_arm,
+                feature, visit_name, log_assay_value) %>%
+  dplyr::distinct(subject_accession, feature, visit_name, .keep_all = TRUE) %>%
+  tidyr::pivot_wider(id_cols     = c(subject_accession, arm_name, infant_arm),
+                     names_from  = c(feature, visit_name),
+                     values_from = log_assay_value,
+                     names_sep   = "_") %>%
+  dplyr::mutate(arm_name = factor(arm_name, levels = cfg$maternal_arms))
+
+need_cols <- c(oc, cordc, sigc)
+have_cols <- need_cols %in% names(wide1)
+if (!all(have_cols)) {
+  cat("> **Missing expected columns after pivot:** ",
+      paste(need_cols[!have_cols], collapse = ", "),
+      ". Check `outcome_feature`, `cord_predictor`, and the visit codes in ",
+      "`config/endpoints.R`.\n\n", sep = "")
+}
+cat(sprintf("Wide predictor frame: **%d subjects**. Non-missing: `%s` = %d, `%s` = %d, `%s` = %d.\n\n",
+            nrow(wide1),
+            oc,   sum(!is.na(wide1[[oc]])),
+            cordc, if (cordc %in% names(wide1)) sum(!is.na(wide1[[cordc]])) else 0L,
+            sigc,  if (sigc  %in% names(wide1)) sum(!is.na(wide1[[sigc]]))  else 0L))
+```
+
+## 1 · Adjusted association: cord `r cfg$cord_predictor_label %or% ""` → `r cfg$outcome_label`
+
+Linear model of infant `r cfg$outcome_label` on the cord level plus maternal
+arm, and the arm-adjusted partial Spearman correlation.
+
+```{r cordpred-adjusted, eval=cord_active, results='asis'}
+m_cord <- run_lm(oc, c(cordc, "arm_name"), wide1,
+                 label = paste0("Cord ", cfg$cord_predictor_label, " + maternal arm"),
+                 show_relimp_calc = FALSE,
+                 tracker = nt, part = "Cord predictor",
+                 section = "Adjusted association", stratum = "TdaP+TT pooled")
+show_model(m_cord, show_relimp = FALSE)
+
+# Arm-adjusted partial Spearman (cord vs outcome | arm)
+if (requireNamespace("ppcor", quietly = TRUE)) {
+  pc_df <- wide1 %>%
+    dplyr::transmute(cord = .data[[cordc]], out = .data[[oc]],
+                     arm  = as.numeric(arm_name)) %>%
+    tidyr::drop_na()
+  pc <- tryCatch(ppcor::pcor.test(pc_df$cord, pc_df$out, pc_df$arm, method = "spearman"),
+                 error = function(e) NULL)
+  if (!is.null(pc))
+    cat(sprintf("\n**Partial Spearman** (cord vs %s, adjusting for maternal arm): rho = %.3f, p = %.4g, n = %d.\n\n",
+                cfg$outcome_label, pc$estimate, pc$p.value, nrow(pc_df)))
+} else {
+  cat("\n*Install package `ppcor` for the arm-adjusted partial correlation.*\n\n")
+}
+```
+
+```{r cordpred-scatter, eval=cord_active, fig.width=8, fig.height=4.6, fig.cap=paste0("Cord-blood ", cfg$cord_predictor_label, " vs infant ", cfg$outcome_label, " at ", roles$infant, "; linear smoother per maternal arm.")}
+plot_df <- wide1 %>%
+  dplyr::select(dplyr::all_of(c(cordc, oc)), arm_name) %>%
+  stats::setNames(c("cord_val", "outcome_val", "arm_name")) %>%
+  tidyr::drop_na()
+
+ggplot(plot_df, aes(cord_val, outcome_val, colour = arm_name)) +
+  geom_point(alpha = 0.55, size = 1.9) +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linewidth = 0.9) +
+  scale_colour_manual(values = cfg$marm_colors, name = "Maternal arm") +
+  labs(x = paste0(cfg$cord_predictor_label, " — cord blood (log10)"),
+       y = paste0(cfg$outcome_y_label, " — ", roles$infant),
+       title = paste0("Cord ", cfg$cord_predictor_label, " -> ",
+                      cfg$outcome_label, " at ", roles$infant)) +
+  theme_bw(base_size = 11)
+```
+
+## 2 · Mediation of the Block-1 maternal signal
+
+All three models below are fitted on the **same complete-case sample**
+(subjects with non-missing outcome, cord and maternal-delivery values) so
+their coefficients are directly comparable. The question is whether the
+maternal-delivery coefficient (Block-1 signal) shrinks once the cord level
+is included — the signature of mediation through cord.
+
+```{r cordpred-nested, eval=cord_active, results='asis'}
+have_sig <- sigc %in% names(wide1) && any(!is.na(wide1[[sigc]]))
+
+if (!have_sig) {
+  cat("> Maternal Block-1 signal column `", sigc, "` is unavailable, so the ",
+      "mediation comparison is skipped. The adjusted association above still ",
+      "stands.\n\n", sep = "")
+} else {
+  cc <- wide1 %>%
+    dplyr::select(subject_accession, arm_name,
+                  dplyr::all_of(c(oc, cordc, sigc))) %>%
+    tidyr::drop_na()
+
+  nt_log_manual(nt, part = "Cord predictor", section = "Mediation",
+                stratum = "TdaP+TT pooled",
+                label = "Common complete-case sample (outcome + cord + maternal)",
+                n_entered = nrow(wide1), n_used = nrow(cc))
+
+  # Nested models on the common sample
+  f_sig  <- reformulate(c(sigc, "arm_name"),         oc)
+  f_cord <- reformulate(c(cordc, "arm_name"),        oc)
+  f_both <- reformulate(c(cordc, sigc, "arm_name"),  oc)
+  lm_sig  <- lm(f_sig,  cc)
+  lm_cord <- lm(f_cord, cc)
+  lm_both <- lm(f_both, cc)
+
+  grab <- function(model, term) {
+    s <- summary(model)$coefficients
+    if (!term %in% rownames(s)) return(c(beta = NA, se = NA, p = NA))
+    c(beta = unname(s[term, 1]), se = unname(s[term, 2]), p = unname(s[term, 4]))
+  }
+  b_sig_alone <- grab(lm_sig,  sigc)
+  b_sig_adj   <- grab(lm_both, sigc)
+  b_cord_alone<- grab(lm_cord, cordc)
+  b_cord_adj  <- grab(lm_both, cordc)
+
+  atten_sig  <- 100 * (b_sig_alone["beta"]  - b_sig_adj["beta"])  / b_sig_alone["beta"]
+  atten_cord <- 100 * (b_cord_alone["beta"] - b_cord_adj["beta"]) / b_cord_alone["beta"]
+
+  tab <- data.frame(
+    Predictor = c(paste0("Maternal ", cfg$chain_signal_visit, " (Block-1 signal)"),
+                  paste0("Cord ", cfg$cord_visit)),
+    `beta alone`       = c(b_sig_alone["beta"],  b_cord_alone["beta"]),
+    `beta adjusted`    = c(b_sig_adj["beta"],    b_cord_adj["beta"]),
+    `p adjusted`       = c(b_sig_adj["p"],       b_cord_adj["p"]),
+    `attenuation (%)`  = c(atten_sig,            atten_cord),
+    check.names = FALSE, row.names = NULL)
+  tab[ , 2:5] <- lapply(tab[ , 2:5], function(x) round(as.numeric(x), 3))
+
+  print(knitr::kable(
+    tab, row.names = FALSE,
+    caption = paste0("Nested models on the common sample (n = ", nrow(cc),
+                     "). 'alone' = predictor + arm; 'adjusted' = both predictors + arm. ",
+                     "A large positive attenuation of the maternal (Block-1) coefficient ",
+                     "indicates mediation through cord."),
+    align = c("l", "r", "r", "r", "r")))
+  cat("\n")
+
+  # ---- Formal mediation: X = maternal signal, M = cord, Y = outcome, cov = arm ----
+  boot_mediation <- function(df, X, M, Y, cov = "arm_name", R = 2000, seed = 20240101) {
+    f_m <- reformulate(c(X, cov),    M)
+    f_y <- reformulate(c(X, M, cov), Y)
+    est <- function(d) {
+      a      <- coef(lm(f_m, d))[[X]]
+      cy     <- coef(lm(f_y, d))
+      b      <- cy[[M]]
+      cprime <- cy[[X]]
+      c(indirect = a * b, direct = cprime, total = a * b + cprime)
+    }
+    point <- est(df)
+    set.seed(seed)
+    bs <- replicate(R, {
+      d <- df[sample(nrow(df), replace = TRUE), , drop = FALSE]
+      tryCatch(est(d), error = function(e) c(indirect = NA, direct = NA, total = NA))
+    })
+    ci <- apply(bs, 1, stats::quantile, c(0.025, 0.975), na.rm = TRUE)
+    list(point = point, ci = ci,
+         prop_mediated = unname(point["indirect"] / point["total"]))
+  }
+
+  used_mediation_pkg <- FALSE
+  if (requireNamespace("mediation", quietly = TRUE)) {
+    med <- tryCatch({
+      mm <- lm(reformulate(c(sigc, "arm_name"),        cordc), cc)  # M ~ X + cov
+      my <- lm(reformulate(c(sigc, cordc, "arm_name"), oc),    cc)  # Y ~ X + M + cov
+      set.seed(20240101)
+      mediation::mediate(mm, my, treat = sigc, mediator = cordc,
+                         sims = 1000)
+    }, error = function(e) NULL)
+    if (!is.null(med)) {
+      used_mediation_pkg <- TRUE
+      sm <- summary(med)
+      cat(sprintf(
+        "\n**Formal mediation** (package `mediation`; treat = maternal %s, mediator = cord %s, outcome = %s, adjusted for arm; N = %d):\n\n",
+        cfg$chain_signal_visit, cfg$cord_visit, cfg$outcome_label, nrow(cc)))
+      cat(sprintf("- Indirect effect (ACME, via cord): %.3f (95%% CI %.3f, %.3f)\n",
+                  med$d0, med$d0.ci[1], med$d0.ci[2]))
+      cat(sprintf("- Direct effect (ADE): %.3f (95%% CI %.3f, %.3f)\n",
+                  med$z0, med$z0.ci[1], med$z0.ci[2]))
+      cat(sprintf("- Total effect: %.3f (95%% CI %.3f, %.3f)\n",
+                  med$tau.coef, med$tau.ci[1], med$tau.ci[2]))
+      cat(sprintf("- Proportion mediated: %.1f%% (95%% CI %.1f%%, %.1f%%)\n\n",
+                  100 * med$n0, 100 * med$n0.ci[1], 100 * med$n0.ci[2]))
+    }
+  }
+  if (!used_mediation_pkg) {
+    bm <- boot_mediation(cc, X = sigc, M = cordc, Y = oc)
+    cat(sprintf(
+      "\n**Mediation (product-of-coefficients, nonparametric bootstrap, 2000 reps; treat = maternal %s, mediator = cord %s, outcome = %s, adjusted for arm; N = %d):**\n\n",
+      cfg$chain_signal_visit, cfg$cord_visit, cfg$outcome_label, nrow(cc)))
+    cat(sprintf("- Indirect effect (via cord): %.3f (95%% CI %.3f, %.3f)\n",
+                bm$point["indirect"], bm$ci[1, "indirect"], bm$ci[2, "indirect"]))
+    cat(sprintf("- Direct effect: %.3f (95%% CI %.3f, %.3f)\n",
+                bm$point["direct"], bm$ci[1, "direct"], bm$ci[2, "direct"]))
+    cat(sprintf("- Total effect: %.3f (95%% CI %.3f, %.3f)\n",
+                bm$point["total"], bm$ci[1, "total"], bm$ci[2, "total"]))
+    cat(sprintf("- Proportion mediated: %.1f%%\n\n", 100 * bm$prop_mediated))
+    cat("*(Install package `mediation` for a fully model-based ACME/ADE decomposition;",
+        "the bootstrap product-of-coefficients estimate above is the fallback.)*\n\n")
+  }
+}
+```
+
+## 3 · Interpretation aid
+
+```{r cordpred-interpret, eval=cord_active, results='asis'}
+mapnote(
+  "Reading this block: a significant cord coefficient in \u00a71 establishes ",
+  "that cord ", cfg$cord_predictor_label, " predicts infant ", cfg$outcome_label,
+  " independent of arm. In \u00a72, if the maternal ", cfg$chain_signal_visit,
+  " (Block-1) coefficient attenuates towards zero once cord is added while cord ",
+  "stays significant, the maternal supply acts on infant function *through* the ",
+  "cord level (transfer as the intermediate); a large proportion mediated is the ",
+  "same message on the effect-decomposition scale.",
+  feeds = "Result #1 of the cord-predictor request")
+```

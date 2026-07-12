@@ -1,0 +1,126 @@
+---
+title: "SBA at InfMon2 — cord-blood predictor & upstream subclass ratios"
+subtitle: "Focused re-run: Result #1 (cord WT_IgG -> SBA, with mediation) + Result #2 (absolute subclass ratios at every upstream stage -> SBA)"
+date: "`r format(Sys.Date())`"
+params:
+  endpoint: "SBA"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    df_print: kable
+  word_document:
+    toc: true
+    toc_depth: 3
+---
+
+<!--
+=====================================================================
+run_SBA_cord_and_ratios.Rmd  —  NEW CALLING CODE
+---------------------------------------------------------------------
+Produces ONLY the two results requested, for the SBA endpoint:
+
+  Result #1  Cord-blood whole-cell IgG (WHOLE_WT_IgG @ CordBlood)
+             -> infant SBA (WHOLE_SBA @ InfMon2), adjusted for maternal
+             arm, plus a mediation test of the Block-1 maternal signal
+             (maternal WHOLE_WT_IgG @ MatBirth).      [parts/04_...Rmd]
+
+  Result #2  Absolute pro-/tolerogenic subclass ratios (PT/FHA/PRN) at
+             PregEarly, MatBirth and CordBlood -> infant SBA at InfMon2,
+             consolidated in one place.               [parts/01_...Rmd]
+
+Expected project layout (same as the full pipeline):
+  ./config/endpoints.R                 (refactored — cord + ratio config)
+  ./R/find_proj_file.R                 (unchanged)
+  ./R/serology_helpers.R               (unchanged)
+  ./parts/04_antigen_subclass_predictors.Rmd   (refactored — Result #1)
+  ./parts/01_maternal_chain.Rmd                (refactored — Result #2)
+  ./data/c_set.RData                   (your data)
+
+Render:
+  rmarkdown::render("run_SBA_cord_and_ratios.Rmd", output_format = "all")
+Switch endpoint (e.g. WT_IgG) by editing params$endpoint above, or:
+  rmarkdown::render("run_SBA_cord_and_ratios.Rmd",
+                    params = list(endpoint = "WT_IgG"), output_format = "all")
+=====================================================================
+-->
+
+```{r master-setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2); library(broom)
+})
+
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
+
+# ---- shared path resolver ---------------------------------------------------
+.stub <- function(rel, optional = FALSE) {
+  cand <- character(0)
+  if (requireNamespace("here", quietly = TRUE))
+    cand <- c(cand, here::here(rel), here::here("analysis", rel))
+  rmd_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(rmd_dir)) cand <- c(cand, file.path(rmd_dir, rel),
+                                 file.path(dirname(rmd_dir), rel))
+  cand <- unique(c(cand, file.path(getwd(), rel), rel))
+  hit  <- cand[file.exists(cand)]
+  if (length(hit)) return(normalizePath(hit[1], winslash = "/", mustWork = FALSE))
+  if (optional) return(NULL)
+  stop("Cannot locate '", rel, "'. Run from the project root.", call. = FALSE)
+}
+source(.stub("R/find_proj_file.R"))
+
+# ---- config + helpers -------------------------------------------------------
+source(find_proj_file("config/endpoints.R"),  encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"), encoding = "UTF-8")
+
+# ---- endpoint config, data, tracker ----------------------------------------
+cfg      <- get_endpoint_config(params$endpoint)
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))  # calls verify_predictor_casing()
+verify_predictor_casing(data_raw)          # explicit second call: errors loudly on any casing drift
+nt       <- new_ntracker()
+roles    <- chain_visit_roles(cfg)
+```
+
+# Overview
+
+This report re-runs **two** specific analyses for the **`r cfg$outcome_label`**
+endpoint (`r cfg$outcome_long`), and nothing else.
+
+Outcome column: `` `r cfg$outcome_col` ``.
+Cord predictor: `` `r cfg$cord_col %||% "none"` `` &nbsp;|&nbsp;
+Block-1 maternal signal: `` `r cfg$signal_col %||% "none"` ``.
+Ratio stages: `r paste(cfg$ratio_stages, collapse = ", ")`.
+
+---
+
+# Result #1 — Cord-blood predictor (with mediation)
+
+```{r child-cord, child = find_proj_file("parts/04_antigen_subclass_predictors.Rmd")}
+```
+
+---
+
+# Result #2 — Absolute subclass ratios at every upstream stage
+
+```{r child-ratio, child = find_proj_file("parts/01_maternal_chain.Rmd")}
+```
+
+---
+
+# Participant accounting
+
+Every model fitted above, with subjects entered, used after listwise
+deletion, and the missingness driver behind any drop.
+
+```{r master-naccount, results='asis'}
+nt_render(nt, caption = "Participant accounting for the cord-predictor and ratio-stage models.")
+```
+
+---
+
+```{r master-sessioninfo}
+sessionInfo()
+```

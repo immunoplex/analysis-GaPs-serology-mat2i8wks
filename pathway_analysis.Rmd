@@ -1,0 +1,321 @@
+---
+title: "Systems Serology — PTNA Effector Pathway Assessment"
+subtitle: "IgG1 → FcγR → ADCD → PTNA · six-step logic check · maternal-arm stratified · 8-week visit"
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+params:
+  endpoint: "PTNA"                 # "SBA" | "WT_IgG" | "PTNA"
+  data_file: "data/d_set.RData"
+  data_object: "ebaa_extra2"
+  pathway_antigens: "PT,FHA,PRN"  # antigens carried through every step
+  focal_antigen: "PRN"            # a-priori focal chain for SBA
+  nct_it: 1000                    # step 6 permutations (lower for a fast pass)
+  run_nct: true                   # step 6 on/off (most expensive)
+  run_mediation: true             # step 3 (needs lavaan) on/off
+  run_std_reruns: true            # component 1: steps 3-4 on IgG-standardized data
+  run_fcgr3b: true                # component 2: step 7 (FcγR3b unique role)
+  run_aggregate_adcd: true        # component 3: step 8 (aggregate complement vs whole-cell)
+  run_arm_tests: true             # step 9  (arm × FcγR interaction on outcome)
+  run_fcgr3b_adcd: true           # step 10 (FcγR3b vs ADCD for the outcome)
+  run_effector_activation: true   # step 11 (are ADCD/ADCP/ADNP activated by FcγR)
+  run_effector_to_sba: true       # step 12 (is each effector on the path to SBA)
+  run_effector_aggregate: true    # step 13 (antigen-specific vs aggregate; multi-effector model)
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+
+# ---- shared path resolver ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)), error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit)) stop("Cannot locate R/find_proj_file.R.")
+  source(.ff_hit[1], local = FALSE); rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+# ---- config + helper library (single source of truth) ----
+source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+
+cfg      <- get_endpoint_config(params$endpoint)
+data_raw <- load_serology_data(find_proj_file(params$data_file), object_name = params$data_object)
+
+# ---- control knobs shared by the six step children ----
+CONC_VISIT       <- "InfMon2"
+PATHWAY_ANTIGENS <- toupper(trimws(strsplit(params$pathway_antigens, "[,]+")[[1]]))
+FOCAL_ANTIGEN    <- toupper(trimws(params$focal_antigen))
+NCT_IT           <- as.integer(params$nct_it)
+RUN_NCT          <- isTRUE(params$run_nct)
+RUN_MEDIATION    <- isTRUE(params$run_mediation)
+RUN_STD_RERUNS   <- isTRUE(params$run_std_reruns)
+RUN_FCGR3B       <- isTRUE(params$run_fcgr3b)
+RUN_AGG_ADCD     <- isTRUE(params$run_aggregate_adcd)
+RUN_ARM_TESTS    <- isTRUE(params$run_arm_tests)
+RUN_FCGR3B_ADCD  <- isTRUE(params$run_fcgr3b_adcd)
+RUN_EFF_ACT      <- isTRUE(params$run_effector_activation)
+RUN_EFF_SBA      <- isTRUE(params$run_effector_to_sba)
+RUN_EFF_AGG      <- isTRUE(params$run_effector_aggregate)
+OUTCOME          <- cfg$outcome_feature
+
+have_net <- all(vapply(c("bootnet", "qgraph", "networktools", "NetworkComparisonTest"),
+                       requireNamespace, logical(1), quietly = TRUE))
+have_lavaan <- requireNamespace("lavaan", quietly = TRUE)
+have_car    <- requireNamespace("car",    quietly = TRUE)
+have_relimp <- requireNamespace("relaimpo", quietly = TRUE)
+
+# ---- console logging (streams to terminal during knit) ----
+.RUNLOG <- new.env(parent = emptyenv()); .RUNLOG$t0 <- Sys.time()
+.hms <- function() format(Sys.time(), "%H:%M:%S")
+.el  <- function() as.numeric(difftime(Sys.time(), .RUNLOG$t0, units = "secs"))
+.stage <- function(k, msg) message(sprintf("\n[%s | +%5.1fs] === STEP %d — %s ===", .hms(), .el(), k, msg))
+.info  <- function(...) message(sprintf("[%s | +%5.1fs]     %s", .hms(), .el(), sprintf(...)))
+
+# ---- shared feature vocabulary (data casing) + presence filter ----
+present_feats <- as.character(unique(data_raw$feature))
+keep_present  <- function(v) v[v %in% present_feats]
+ALL_ANTIGENS  <- c("PT", "FHA", "PRN", "DT", "TT", "FIM")
+
+# chain nodes for one antigen: IgG1 & IgG3 (FcγR/complement-fixing subclasses),
+# both FcγR receptors, and ADCD — plus the shared whole-cell outcome.
+chain_feats <- function(A) keep_present(paste0(A, c("_IgG1", "_IgG3", "_FcgR2a", "_FcgR3b", "_ADCD")))
+FCG_ALL  <- keep_present(as.vector(t(outer(ALL_ANTIGENS, c("FcgR2a", "FcgR3b"), paste, sep = "_"))))
+ADCD_ALL <- keep_present(paste0(ALL_ANTIGENS, "_ADCD"))
+
+# effector functions swept in steps 11-13. ADCD spans all six antigens; ADCP/ADNP
+# are present only for a subset (typically PT/PRN/DT/TT), so every effector×antigen
+# reference is presence-filtered and any absent cell is skipped and logged.
+EFFECTORS <- c("ADCD", "ADCP", "ADNP")
+eff_feat  <- function(A, fn) keep_present(paste0(A, "_", fn))          # 0- or 1-length
+eff_all   <- function(fn) keep_present(paste0(ALL_ANTIGENS, "_", fn))  # aggregate columns
+EFF_ALL   <- keep_present(as.vector(t(outer(ALL_ANTIGENS, EFFECTORS, paste, sep = "_"))))
+# antigens carrying each effector (for antigen-specific vs aggregate reporting)
+eff_antigens <- function(fn) ALL_ANTIGENS[paste0(ALL_ANTIGENS, "_", fn) %in% present_feats]
+
+# ---- ONE wide matrix at the 8-week visit, shared by all steps ----
+.super <- keep_present(c(OUTCOME,
+                         as.vector(t(outer(PATHWAY_ANTIGENS, paste0("IgG", 1:4), paste, sep = "_"))),
+                         FCG_ALL, EFF_ALL))
+path_wide <- data_raw %>%
+  dplyr::filter(feature %in% .super, visit_name == CONC_VISIT, arm_name %in% cfg$maternal_arms) %>%
+  dplyr::select(subject_accession, arm_name, infant_arm, feature, log_assay_value) %>%
+  dplyr::distinct(subject_accession, feature, .keep_all = TRUE) %>%
+  tidyr::pivot_wider(id_cols = c(subject_accession, arm_name, infant_arm),
+                     names_from = feature, values_from = log_assay_value)
+
+strata_by_arm <- setNames(lapply(cfg$maternal_arms, function(m)
+  list(label = paste0(m, " mothers"),
+       data  = dplyr::filter(path_wide, arm_name == m))), cfg$maternal_arms)
+
+arm_data <- function(arm) strata_by_arm[[arm]]$data
+
+# =============================================================================
+# IgG-STANDARDIZED matrix — built with the project's own bubble-plot transform
+# -----------------------------------------------------------------------------
+# connection_transform.R::standardized_set() replaces each antigen-specific
+# feature's log_assay_value with its residual-on-total-IgG (selected model),
+# loaded per infant arm from the BUBBLE_RESIDUAL_{AP,WP} files. Predictors
+# (IgG1/IgG3, FcγR, ADCD) therefore become quantity-removed; the whole-cell
+# OUTCOME has no antigen total and is kept RAW from data_raw.
+# =============================================================================
+source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8")
+have_dt  <- requireNamespace("data.table", quietly = TRUE)
+.res_ap  <- find_proj_file(BUBBLE_RESIDUAL_AP, optional = TRUE)
+.res_wp  <- find_proj_file(BUBBLE_RESIDUAL_WP, optional = TRUE)
+have_std <- have_dt && !is.null(.res_ap) && !is.null(.res_wp)
+
+std_wide <- NULL; strata_by_arm_std <- NULL
+mixed_wide <- NULL; strata_by_arm_mixed <- NULL
+if (have_std) {
+  .conn <- data_raw %>%
+    dplyr::filter(feature %in% BUBBLE_INCLUDE_FEATURE,
+                  arm_name %in% cfg$maternal_arms, visit_name == CONC_VISIT) %>%
+    dplyr::select(subject_accession, visit_name, arm_name, infant_arm,
+                  antigen, analyte, feature, value_reported, log_assay_value) %>%
+    dplyr::distinct(subject_accession, visit_name, feature, .keep_all = TRUE) %>%
+    dplyr::mutate(dplyr::across(c(antigen, analyte, feature, arm_name, infant_arm), as.character))
+  .std <- dplyr::bind_rows(
+    standardized_set("IgG", .conn[.conn$infant_arm == "wP", ], .res_wp),
+    standardized_set("IgG", .conn[.conn$infant_arm == "aP", ], .res_ap))
+  # predictors (standardized residuals) -> wide
+  std_pred <- .std %>%
+    dplyr::distinct(subject_accession, feature, .keep_all = TRUE) %>%
+    tidyr::pivot_wider(id_cols = c(subject_accession, arm_name, infant_arm),
+                       names_from = feature, values_from = log_assay_value)
+  # whole-cell OUTCOME stays RAW, joined on
+  out_raw <- data_raw %>%
+    dplyr::filter(feature == OUTCOME, visit_name == CONC_VISIT) %>%
+    dplyr::distinct(subject_accession, .keep_all = TRUE) %>%
+    dplyr::select(subject_accession, !!OUTCOME := log_assay_value)
+  std_wide <- dplyr::left_join(std_pred, out_raw, by = "subject_accession")
+  strata_by_arm_std <- setNames(lapply(cfg$maternal_arms, function(m)
+    list(label = paste0(m, " mothers"),
+         data  = dplyr::filter(std_wide, arm_name == m))), cfg$maternal_arms)
+
+  # ---- MIXED matrix: raw IgG1/IgG3 (quantity exposure) + standardized FcγR/ADCD
+  #      (quality mediators) + raw whole-cell OUTCOME. This is the specification
+  #      that matches the causal story "antibody amount flows through per-antibody
+  #      engagement efficiency to killing."
+  .sub_raw <- as.vector(t(outer(PATHWAY_ANTIGENS, paste0("IgG", 1:4), paste, sep = "_")))
+  raw_part <- path_wide %>%
+    dplyr::select(subject_accession, arm_name, infant_arm,
+                  dplyr::any_of(c(OUTCOME, .sub_raw)))
+  std_eff  <- std_wide %>% dplyr::select(subject_accession, dplyr::any_of(c(FCG_ALL, EFF_ALL)))
+  mixed_wide <- dplyr::left_join(raw_part, std_eff, by = "subject_accession")
+  strata_by_arm_mixed <- setNames(lapply(cfg$maternal_arms, function(m)
+    list(label = paste0(m, " mothers"),
+         data  = dplyr::filter(mixed_wide, arm_name == m))), cfg$maternal_arms)
+}
+
+# ---- mode-aware accessors used by steps 3, 4, 7, 8, 9, 10 -------------------
+# raw    = log10 MFI (quantity-dominated)
+# igg_std = every predictor residualized on total IgG (quality)
+# mixed  = IgG1/IgG3 raw (quantity exposure) + FcγR/ADCD residualized (quality mediators)
+# In all modes the whole-cell OUTCOME is kept raw.
+MODES     <- c("raw", if (have_std) c("igg_std", "mixed"))
+wide_for  <- function(mode) switch(mode, igg_std = std_wide, mixed = mixed_wide, path_wide)
+arm_data_m <- function(mode, arm) {
+  s <- switch(mode, igg_std = strata_by_arm_std, mixed = strata_by_arm_mixed, strata_by_arm)
+  s[[arm]]$data
+}
+mode_desc <- function(mode) switch(mode,
+  igg_std = " \u2014 predictors residualized on total IgG (quality); outcome raw",
+  mixed   = " \u2014 IgG1/IgG3 raw (quantity exposure); Fc\u03b3R & ADCD residualized (quality mediators); outcome raw",
+  " \u2014 untransformed log10 (quantity)")
+
+nt <- new_ntracker()
+
+message(sprintf("[%s] pathway assessment START — endpoint=%s outcome=%s antigens=%s focal=%s",
+                .hms(), cfg$endpoint, OUTCOME, paste(PATHWAY_ANTIGENS, collapse = "/"), FOCAL_ANTIGEN))
+.info("path_wide = %d subjects x %d cols | net=%s lavaan=%s car=%s relaimpo=%s",
+      nrow(path_wide), ncol(path_wide), have_net, have_lavaan, have_car, have_relimp)
+.info("igg_std available=%s (data.table=%s, res_ap=%s, res_wp=%s) | MODES=%s",
+      have_std, have_dt, !is.null(.res_ap), !is.null(.res_wp), paste(MODES, collapse = "+"))
+if (have_std) .info("std_wide = %d subjects x %d cols", nrow(std_wide), ncol(std_wide))
+for (fn in EFFECTORS) .info("effector %-4s antigens: %s", fn, paste(eff_antigens(fn), collapse = "/"))
+for (m in cfg$maternal_arms) .info("arm %-4s n=%d", m, nrow(arm_data(m)))
+```
+
+# `r cfg$outcome_label` Effector-Pathway Assessment {-}
+
+This document tests, link by link, whether the hypothesised effector pathway
+
+$$\text{antigen IgG1/IgG3} \;\rightarrow\; \text{Fc}\gamma\text{R binding (Fc}\gamma\text{R2a, Fc}\gamma\text{R3b)} \;\rightarrow\; \text{ADCD} \;\rightarrow\; \textbf{`r cfg$outcome_label`}$$
+
+is **structurally supported** at the infant **8-week timepoint (`r CONC_VISIT`)**, and whether
+support **holds in both maternal arms (TdaP vs TT)**. The original concurrent analysis regressed
+each feature class on the outcome *in parallel*; these six steps instead probe the **edges between
+the intermediate nodes** that a competing-predictor design cannot see.
+
+Antigens carried through every step: **`r paste(PATHWAY_ANTIGENS, collapse = ", ")`**
+(focal chain: **`r FOCAL_ANTIGEN`**). Each step is a self-contained child; run them in order.
+
+1. **Full pathway network by arm** — one GGM per antigen containing IgG1/IgG3, both FcγRs, ADCD and the outcome, so the chain-adjacent edges become visible.
+2. **Explicit link regressions with an arm interaction** — the two intermediate edges (IgG→FcγR; FcγR→ADCD) fitted directly, with a maternal-arm interaction to test whether link *strength* differs by arm.
+3. **Serial mediation by arm** — a path model quantifying the IgG1 → FcγR → ADCD → outcome indirect effect.
+4. **Variance decomposition by arm** — does ADCD (and FcγR) add *unique* variance beyond IgG1, or is it downstream?
+5. **FcγR collinearity diagnostics** — recover the FcγR3b-specific signal that partial-correlation networks zero out.
+6. **Pathway-network NCT by arm** — the arm comparison run on the FcγR+ADCD and joint-pathway networks that step-5 of the prior analysis skipped.
+7. **FcγR3b unique role** — separate the two collinear receptors (residual-of-3b-on-2a, and the 2a/3b ratio) and test whether FcγR3b independently predicts ADCD and the outcome.
+8. **Aggregate complement vs whole-cell outcome** — a summed antigen-specific ADCD score against the whole-cell `r cfg$outcome_label`, and PRN-ADCD with quantity removed.
+9. **Arm × FcγR interaction tests** — a formal test of whether the FcγR→outcome mapping differs by maternal arm (different wiring) rather than only in strength (different forcing).
+10. **FcγR3b vs ADCD for the outcome** — whether FcγR3b's link to killing survives adjustment for ADCD, adjudicating the ADCD/outcome discordance.
+11. **Effector activation by FcγR** — whether each effector function (ADCD, ADCP, ADNP) is engaged by FcγR2a/FcγR3b, per antigen and arm, with the FcγR3b-specific contribution and an arm interaction.
+12. **Each effector on the path to the outcome** — whether ADCP and ADNP (like ADCD) add to `r cfg$outcome_label` beyond antibody quantity and beyond FcγR, and whether each survives jointly with FcγR3b.
+13. **Antigen-specificity and multi-effector model** — focal `r FOCAL_ANTIGEN` vs aggregate (mean-across-antigens) effector scores, and a joint ADCD+ADCP+ADNP model, to see whether any effector is independently on the path and whether the association is antigen-specific or broad.
+
+Steps 3, 4, 7, 8, 9 and 10 run in every available data mode: **raw** (quantity), **igg_std**
+(all predictors residualized on total IgG — quality), and **mixed** (IgG1/IgG3 raw as the quantity
+exposure, FcγR & ADCD residualized as quality mediators, outcome raw). The mixed mode most directly
+tests "antibody amount flowing through per-antibody engagement efficiency to killing." Available
+modes here: **`r paste(MODES, collapse = ", ")`** (`igg_std`/`mixed` require the residual files).
+
+> Interpretation is cross-sectional: these steps establish whether the pathway's *footprint* is
+> present and internally consistent, not causal direction. All models are complete-case; cells
+> below `r NETWORK_MIN` are skipped and logged.
+
+---
+
+```{r step1, child=find_proj_file('parts/03_step1_full_pathway_by_arm.Rmd')}
+```
+
+```{r step2, child=find_proj_file('parts/03_step2_link_regressions_by_arm.Rmd')}
+```
+
+```{r step3, child=find_proj_file('parts/03_step3_mediation_by_arm.Rmd')}
+```
+
+```{r step4, child=find_proj_file('parts/03_step4_variance_decomposition_by_arm.Rmd')}
+```
+
+```{r step5, child=find_proj_file('parts/03_step5_fcgr_collinearity.Rmd')}
+```
+
+```{r step6, child=find_proj_file('parts/03_step6_pathway_nct_by_arm.Rmd')}
+```
+
+```{r step7, child=find_proj_file('parts/03_step7_fcgr3b_unique_role.Rmd')}
+```
+
+```{r step8, child=find_proj_file('parts/03_step8_aggregate_complement.Rmd')}
+```
+
+```{r step9, child=find_proj_file('parts/03_step9_arm_interaction_tests.Rmd')}
+```
+
+```{r step10, child=find_proj_file('parts/03_step10_fcgr3b_vs_adcd.Rmd')}
+```
+
+```{r step11, child=find_proj_file('parts/03_step11_effector_activation.Rmd')}
+```
+
+```{r step12, child=find_proj_file('parts/03_step12_effector_to_sba.Rmd')}
+```
+
+```{r step13, child=find_proj_file('parts/03_step13_effector_aggregate.Rmd')}
+```
+
+---
+
+# Participant Accounting {#naccounting}
+
+```{r naccount, results='asis'}
+message(sprintf("[%s | +%5.1fs] pathway assessment DONE", .hms(), .el()))
+nt_render(nt, caption = "Participant accounting across all pathway steps.")
+```
+
+# Appendix — Reproducibility {#appendix}
+
+```r
+# one endpoint, fast pass (skip the expensive NCT)
+rmarkdown::render("pathway_analysis.Rmd",
+                  params = list(endpoint = "SBA", run_nct = FALSE),
+                  output_file = "pathway_SBA.html")
+
+# full run
+rmarkdown::render("pathway_analysis.Rmd",
+                  params = list(endpoint = "SBA"),
+                  output_file = "pathway_SBA.html")
+```
+
+Step 3 needs `lavaan`; step 5 uses `car` if present (falls back to a manual VIF otherwise);
+step 4 uses `relaimpo` for unique-variance shares; steps 1 & 6 need
+`bootnet`/`qgraph`/`networktools`/`NetworkComparisonTest`. Any missing package skips only its
+step, with an inline note. Place the six `03_step*` children in `parts/` and this file at the
+project root beside `concurrent_analysis.Rmd`.

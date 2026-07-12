@@ -243,8 +243,7 @@ stepdown <- cov_paired %>%
       grepl("_IgG$",    feature) & !grepl("WT", feature) ~ "Total IgG (antigen-specific)",
       grepl("_IgG1$|_IgG4$", feature)                   ~ "IgG1 and IgG4",
       grepl("_IgG3$",   feature)                         ~ "IgG3",
-      grepl("_IgG2$",   feature) & grepl("^(ACT|DT|FHA|PRN|PT|TT)_", feature) ~ "IgG2 — core antigens",
-      grepl("_IgG2$",   feature) & grepl("^PENTAMER_",  feature)               ~ "IgG2 — PENTAMER",
+      grepl("_IgG2$",   feature) & grepl("^(DT|FHA|PRN|PT|TT)_", feature) ~ "IgG2 — core antigens",
       grepl("_IgG2$",   feature) & grepl("^IPV",        feature)               ~ "IgG2 — IPV antigens",
       grepl("WT_IgG",   feature)                         ~ "WHOLE_WT_IgG",
       TRUE                                               ~ "Other"
@@ -497,6 +496,13 @@ cat(sprintf(paste0(
 pct_dec_prop <- n_mostly_dec / max(n_feat, 1)
 pct_inc_prop <- n_mostly_inc / max(n_feat, 1)
 
+# computed (not hardcoded) descriptors for the concentrated-change branch
+inc_analytes_h <- analyte_sum$analyte[grepl("increasing", analyte_sum$dominant)]
+top_inc_ant_h  <- feat_summary %>%
+  dplyr::filter(direction == "mostly increase") %>%
+  dplyr::arrange(dplyr::desc(median_delta)) %>%
+  dplyr::distinct(antigen) %>% utils::head(4) %>% dplyr::pull(antigen)
+
 verdict <- if (pct_inc_prop >= 0.6) {
   sprintf(paste0("Most features **increase** from %s to %s (%.0f%% of features mostly increasing), ",
                  "and %.1f%% of subjects show a net positive shift. See the per-analyte (Table 5) ",
@@ -509,13 +515,13 @@ verdict <- if (pct_inc_prop >= 0.6) {
           FROM_VISIT, TO_VISIT, 100*pct_dec_prop, subj_pct_pos)
 } else {
   sprintf(paste0("The change is **concentrated, not uniform**: %d features increase, %d decrease, ",
-                 "and %d are mixed, but %.1f%% of mothers show a net positive shift. The increases are ",
-                 "concentrated in **total IgG and IgG1 for the *Bordetella pertussis* antigens (PT, FHA, PRN)** ",
-                 "and are **almost entirely confined to the TdaP arm** (Table 7) — the signature of a ",
-                 "vaccine-induced antibody boost between early pregnancy and delivery. The non-vaccine ",
-                 "subclasses (IgG2/IgG3/IgG4) are flat. See the per-analyte (Table 5), per-antigen (Table 6) ",
-                 "breakdowns and the Interpretation section below."),
-          n_mostly_inc, n_mostly_dec, n_mixed, subj_pct_pos)
+                 "and %d are mixed, but %.1f%% of mothers show a net positive shift. The increases ",
+                 "concentrate in %s and in the antigens %s (see Tables 5–6); the per-arm split, and ",
+                 "the tetanus/diphtheria toxoid responses specifically, are in Tables 7–9 and ",
+                 "Figure A1 and discussed in the Interpretation section below."),
+          n_mostly_inc, n_mostly_dec, n_mixed, subj_pct_pos,
+          if (length(inc_analytes_h)) paste(inc_analytes_h, collapse = ", ") else "no single analyte",
+          if (length(top_inc_ant_h))  paste(top_inc_ant_h,  collapse = ", ") else "none")
 }
 cat("> **Verdict:** ", verdict, "\n\n")
 ```
@@ -695,120 +701,263 @@ WHOLE_WT_IgG: a single whole-cell lysate total-IgG measurement integrating broad
 make_analyte_hist("WT_IgG", fill_col = analyte_colours["WT_IgG"])
 ```
 
-# By Maternal Arm
+# Stratified by maternal arm (TdaP vs TT)
 
-```{r by-arm, results='asis'}
-arm_sum <- summarise_paired(paired %>% filter(arm_name %in% MATERNAL_ARMS),
-                            by = "arm_name", min_n = MIN_PAIRED) %>%
-  group_by(arm_name) %>%
-  summarize(features = n(),
+The combined (pooled) results above are retained unchanged. This section ADDS the
+per-arm breakdown of the *same* PregEarly → MatBirth production change, computed
+live from the loaded data. It exists to answer one specific question: **do the
+tetanus (TT) and diphtheria (DT) toxoid antigens — which are vaccine components —
+show a within-arm rise in IgG and IgG1 from early pregnancy to delivery?**
+
+```{r by-arm-setup, include=FALSE}
+paired_m <- paired %>% dplyr::filter(arm_name %in% MATERNAL_ARMS)
+
+# Per (feature) production summary for an arbitrary subject subset, including the
+# PregEarly/MatBirth level medians so a flat delta can be read against its baseline.
+prod_by_arm <- function(pd) {
+  pd %>% dplyr::group_by(feature, antigen, analyte) %>%
+    dplyr::summarize(
+      n_pair    = dplyr::n(),
+      med_from  = round(stats::median(v_from), 3),
+      med_to    = round(stats::median(v_to), 3),
+      med_delta = round(stats::median(delta), 3),
+      pct_inc   = round(100 * mean(delta > 0), 1),
+      p_sr      = tryCatch(signif(stats::wilcox.test(delta, mu = 0, exact = FALSE)$p.value, 3),
+                           error = function(e) NA_real_),
+      .groups = "drop") %>%
+    dplyr::filter(n_pair >= MIN_PAIRED)
+}
+
+prod_all <- dplyr::bind_rows(
+  prod_by_arm(paired_m)                                   %>% dplyr::mutate(arm = "Pooled"),
+  prod_by_arm(dplyr::filter(paired_m, arm_name == "TdaP")) %>% dplyr::mutate(arm = "TdaP"),
+  prod_by_arm(dplyr::filter(paired_m, arm_name == "TT"))   %>% dplyr::mutate(arm = "TT")) %>%
+  dplyr::mutate(arm = factor(arm, levels = c("Pooled", "TdaP", "TT")))
+
+getv <- function(ant, an, a, col) {
+  r <- prod_all[prod_all$antigen == ant & prod_all$analyte == an & prod_all$arm == a, ]
+  if (nrow(r) == 0) NA_real_ else r[[col]][1]
+}
+fmtd <- function(x) ifelse(is.na(x), "n/a", sprintf("%+.3f", x))
+```
+
+## Direction summary by arm
+
+```{r by-arm-direction, results='asis'}
+arm_sum <- summarise_paired(paired_m, by = "arm_name", min_n = MIN_PAIRED) %>%
+  dplyr::group_by(arm_name) %>%
+  dplyr::summarize(features = dplyr::n(),
             `% feats mostly increasing` = round(100*mean(direction == "mostly increase"), 1),
-            `median of feature median-deltas` = round(median(median_delta), 3), .groups = "drop")
+            `median of feature median-deltas` = round(stats::median(median_delta), 3),
+            .groups = "drop")
 knitr::kable(arm_sum,
   caption = "Table 7. Direction summary by maternal arm. An arm-specific difference points toward vaccine-driven (biological) heterogeneity; an arm-shared pattern points to a shared technical or developmental effect.") %>% print()
 ```
 
+## The toxoid check: TT and DT, by arm
+
+```{r by-arm-toxoid, results='asis'}
+tox <- prod_all %>%
+  dplyr::filter(antigen %in% c("TT", "DT"), analyte %in% c("IgG", "IgG1")) %>%
+  dplyr::arrange(antigen, analyte, arm) %>%
+  dplyr::transmute(Antigen = antigen, Analyte = analyte, Arm = arm,
+                   `n pairs` = n_pair,
+                   `median PregEarly` = med_from, `median MatBirth` = med_to,
+                   `median delta` = med_delta, `% increasing` = pct_inc,
+                   `p signed-rank` = p_sr)
+knitr::kable(tox,
+  caption = paste0("Table 8. Tetanus (TT) and diphtheria (DT) antigen-specific total IgG and IgG1 ",
+                   "production change (PregEarly -> MatBirth), pooled and by maternal arm. ",
+                   "A positive median delta with a small p is a genuine within-arm rise; a near-zero ",
+                   "delta sitting on an already-high PregEarly median is a ceiling effect, not an ",
+                   "absent response.")) %>% print()
+```
+
+```{r by-arm-verdict, results='asis'}
+cat("> **Toxoid verdict (computed from the loaded data):**\n\n")
+for (ant in c("TT", "DT")) {
+  nm <- if (ant == "TT") "Tetanus (TT)" else "Diphtheria (DT)"
+  cat(sprintf(paste0("- **%s** \u2014 PregEarly baseline median (pooled, total IgG) %.2f log10. ",
+      "Total-IgG production median delta: TdaP %s, TT %s. ",
+      "IgG1 production median delta: TdaP %s, TT %s.\n"),
+    nm, getv(ant, "IgG", "Pooled", "med_from"),
+    fmtd(getv(ant, "IgG", "TdaP", "med_delta")), fmtd(getv(ant, "IgG", "TT", "med_delta")),
+    fmtd(getv(ant, "IgG1", "TdaP", "med_delta")), fmtd(getv(ant, "IgG1", "TT", "med_delta"))))
+}
+cat(paste0("\nInterpret each delta against its PregEarly baseline. A near-zero delta on top of an ",
+  "already-high baseline is a **ceiling effect** \u2014 mothers were already tetanus/diphtheria-immune ",
+  "from prior vaccination, so a booster moves the log10 value little. A near-zero delta on a **low** ",
+  "baseline would instead be a true non-response, worth checking (assay dynamic range, antigen ",
+  "coating, or which toxoids each arm's vaccine actually contains: tetanus is in both TdaP and TT, ",
+  "whereas diphtheria is expected only where the comparator is Td rather than tetanus-only).\n\n"))
+```
+
+## Full per-antigen production change (IgG and IgG1), by arm
+
+```{r by-arm-full, results='asis'}
+full_ig <- prod_all %>%
+  dplyr::filter(antigen %in% ANTIGEN_ORDER, analyte %in% c("IgG", "IgG1")) %>%
+  dplyr::mutate(antigen = factor(antigen, levels = ANTIGEN_ORDER)) %>%
+  dplyr::arrange(analyte, antigen, arm) %>%
+  dplyr::transmute(Analyte = analyte, Antigen = antigen, Arm = arm, n = n_pair,
+                   `median delta` = med_delta, `% inc` = pct_inc, `p signed-rank` = p_sr)
+knitr::kable(full_ig,
+  caption = "Table 9. Per-antigen production change for total IgG and IgG1, by arm (six vaccine antigens in canonical order PT, FHA, PRN, FIM, TT, DT).") %>% print()
+```
+
+```{r by-arm-fig, fig.width=10, fig.height=6, fig.cap="Figure A1. Production change (median delta log10, MatBirth - PregEarly) for the six vaccine antigens, total IgG and IgG1, by maternal arm. Point size = percent of mothers increasing. Positive = rise from early pregnancy to delivery. The TT and DT rows show whether the toxoid antigens move within each arm."}
+figdf <- prod_all %>%
+  dplyr::filter(antigen %in% ANTIGEN_ORDER, analyte %in% c("IgG", "IgG1"), arm != "Pooled") %>%
+  dplyr::mutate(antigen = factor(antigen, levels = rev(ANTIGEN_ORDER)),
+                arm = forcats::fct_drop(arm))
+ggplot2::ggplot(figdf, ggplot2::aes(x = med_delta, y = antigen, colour = arm)) +
+  ggplot2::geom_vline(xintercept = 0, colour = "grey40", linewidth = 0.4) +
+  ggplot2::geom_segment(ggplot2::aes(x = 0, xend = med_delta, yend = antigen),
+                        position = ggplot2::position_dodge(width = 0.6),
+                        linewidth = 0.6, alpha = 0.4) +
+  ggplot2::geom_point(ggplot2::aes(size = pct_inc),
+                      position = ggplot2::position_dodge(width = 0.6)) +
+  ggplot2::facet_wrap(~ analyte) +
+  ggplot2::scale_colour_manual(values = c(TdaP = "#8A1538", TT = "#2C7A7B")) +
+  ggplot2::scale_size_continuous(name = "% increasing", range = c(2, 6)) +
+  ggplot2::labs(x = expression("median " * Delta * "log"[10] * " (MatBirth - PregEarly)"),
+                y = "Antigen", colour = "Maternal arm",
+                title = "Production change by maternal arm: do the toxoids (TT, DT) rise?") +
+  ggplot2::theme_bw()
+```
+
 # Interpretation
+
+*All quantities in this section are computed from the current data at knit time
+(from `feat_summary`, `analyte_sum`, `prod_all`, the per-arm summaries and the
+headline diagnostics). Nothing here is hardcoded, so the narrative always matches
+the tables and figures above.*
+
+From early pregnancy (`PregEarly`) to delivery (`MatBirth`) the mother receives the
+study vaccine, so the expected signal is a vaccine-induced rise in antibody to the
+vaccine antigens, concentrated in the isotype a protein-antigen booster recruits.
+
+```{r interp-calc, include=FALSE}
+# Helper builders: every narrative figure is derived here from computed objects.
+top_feats <- function(an, k = 4) {
+  d <- feat_summary %>%
+    dplyr::filter(analyte == an, direction == "mostly increase") %>%
+    dplyr::arrange(dplyr::desc(median_delta)) %>% utils::head(k)
+  if (!nrow(d)) return("no features predominantly increasing")
+  paste(sprintf("%s (median %+.2f, %.0f%% up)", d$antigen, d$median_delta, d$pct_inc),
+        collapse = "; ")
+}
+inc_an   <- analyte_sum$analyte[grepl("increasing", analyte_sum$dominant)]
+other_an <- analyte_sum$analyte[!grepl("increasing", analyte_sum$dominant)]
+
+arm_dir <- summarise_paired(paired_m, by = "arm_name", min_n = MIN_PAIRED) %>%
+  dplyr::group_by(arm_name) %>%
+  dplyr::summarize(pct = round(100 * mean(direction == "mostly increase"), 1),
+                   .groups = "drop")
+arm_pct <- function(a) { v <- arm_dir$pct[arm_dir$arm_name == a]
+  if (length(v)) format(v) else "n/a" }
+
+ant_phrase <- function(ant) {
+  g <- function(an, col) { r <- feat_summary[feat_summary$antigen == ant &
+      feat_summary$analyte == an, ]; if (nrow(r)) r[[col]][1] else NA_real_ }
+  parts <- c()
+  if (!is.na(g("IgG",  "median_delta")))
+    parts <- c(parts, sprintf("total IgG %+.2f (%.0f%% up)", g("IgG","median_delta"),  g("IgG","pct_inc")))
+  if (!is.na(g("IgG1", "median_delta")))
+    parts <- c(parts, sprintf("IgG1 %+.2f (%.0f%% up)",       g("IgG1","median_delta"), g("IgG1","pct_inc")))
+  if (!length(parts)) return(NA_character_)
+  sprintf("**%s** — %s", ant, paste(parts, collapse = "; "))
+}
+
+tox_phrase <- function(ant) {
+  gp <- function(an, a, col) { r <- prod_all[prod_all$antigen == ant &
+      prod_all$analyte == an & prod_all$arm == a, ]; if (nrow(r)) r[[col]][1] else NA_real_ }
+  base <- gp("IgG", "Pooled", "med_from")
+  sprintf(paste0("**%s** — total-IgG \u0394: TdaP %s, TT %s (PregEarly baseline median %s); ",
+                 "IgG1 \u0394: TdaP %s, TT %s"),
+    ant, fmtd(gp("IgG","TdaP","med_delta")), fmtd(gp("IgG","TT","med_delta")),
+    ifelse(is.na(base), "n/a", sprintf("%.2f", base)),
+    fmtd(gp("IgG1","TdaP","med_delta")), fmtd(gp("IgG1","TT","med_delta")))
+}
+```
 
 ## Overview
 
-From early pregnancy (`PregEarly`) to delivery (`MatBirth`) the mother received the study
-vaccine, so the expected signal is a **vaccine-induced rise** in antibody to the vaccine
-antigens, concentrated in the isotype that a protein-antigen booster recruits. That is what
-the data show, and the signal is specific in three ways that all point to a genuine vaccine
-response rather than a global drift: it is concentrated in **total IgG and IgG1**, it is
-concentrated in the **vaccine antigens (the *Bordetella pertussis* components plus the other
-TdaP/Td constituents)**, and it is **almost entirely confined to the TdaP arm** (Table 7:
-54.3% of features increasing in TdaP vs only 4.3% in the TT control arm).
-
-Overall, 11 of 46 features are mostly increasing, 7 decreasing, and 28 mixed; the pooled
-median delta is essentially zero (+0.012 log10) but 72.3% of subjects have a net positive
-mean shift. The near-zero pooled median with a strongly positive per-subject mean is the
-fingerprint of a response that is **large in a subset of features (the vaccine targets) and
-flat in the rest** — averaging the two washes out at the feature level but still tilts most
-individual mothers positive.
+```{r interp-overview, results='asis'}
+cat(sprintf(paste0(
+  "Across the **%d** well-covered features, **%d** are mostly increasing, **%d** mostly ",
+  "decreasing, and **%d** mixed. The pooled median change is **%+.3f** log10, while **%.1f%%** ",
+  "of mothers show a net positive mean shift across their features (median per-subject offset ",
+  "**%+.3f** log10). A near-zero pooled median combined with most subjects tilting positive is ",
+  "the signature of a response concentrated in a subset of features (the vaccine targets) and ",
+  "flat elsewhere \u2014 averaging the two washes out at the feature level but still tilts most ",
+  "individual mothers positive.\n\n"),
+  n_feat, n_mostly_inc, n_mostly_dec, n_mixed, pooled_med, subj_pct_pos, subj_med_off))
+```
 
 ## What the data show, by analyte
 
-**Total IgG and IgG1 — the vaccine-response compartment (Figures 5a, 5b).** These are the
-only two analytes that are *predominantly increasing*. Total IgG rises for the three classic
-pertussis antigens — PT (median +0.16, mean +0.48, 70% of mothers up), PRN (+0.14, mean
-+0.65, 72% up) and FHA (+0.14, mean +0.53, 75% up) — and more modestly for FIM (+0.04) and
-DT (+0.04), while TT total IgG is flat (−0.01). IgG1 shows the same pattern even more clearly:
-7 of 10 antigens are mostly increasing, led by FHA_IgG1 (+0.29, 75% up) and PT_IgG1 (+0.15,
-73% up), with PRN, ACT and the IPV antigens also rising. The **mean greatly exceeds the
-median** for the pertussis total-IgG features (e.g. PRN mean +0.65 vs median +0.14),
-indicating a right-skewed response: a substantial subset of mothers mount a large boost
-while others move little, exactly what is expected when baseline immunity and
-vaccine-to-delivery interval vary across women.
-
-**IgG2, IgG3, IgG4 — flat (Figures 5c–5e).** All three are *mixed* overall with medians at
-or within ±0.01 of zero (IgG2 +0.005, IgG3 −0.004, IgG4 0.000) and roughly half of subjects
-increasing. A protein-conjugate/toxoid booster like TdaP preferentially drives **IgG1** (and
-to a lesser degree IgG3) against protein antigens; it does not meaningfully raise IgG2 (the
-anti-polysaccharide subclass) or IgG4, so their flatness is consistent with the immunology
-rather than a missing signal. The very slight negative tilt of a few IgG3/IgG4 features
-(e.g. FHA_IgG4 −0.03, several IPV IgG3/IgG4 mostly decreasing) is small and not the dominant
-story.
+```{r interp-analyte, results='asis'}
+cat(sprintf("Analytes **predominantly increasing**: %s. Flat or mixed overall: %s.\n\n",
+  if (length(inc_an))   paste(inc_an,   collapse = ", ") else "none",
+  if (length(other_an)) paste(other_an, collapse = ", ") else "none"))
+cat(sprintf("- **Total IgG** \u2014 top rises: %s.\n",  top_feats("IgG")))
+cat(sprintf("- **IgG1** \u2014 top rises: %s.\n\n",       top_feats("IgG1")))
+cat(paste0("A protein-antigen booster preferentially recruits IgG1, so a signal concentrated ",
+  "in total IgG and IgG1 with little movement in IgG2/IgG4 is the immunologically expected ",
+  "pattern rather than a missing signal.\n\n"))
+```
 
 ## Focus: *Bordetella pertussis* antigens
 
-The vaccine in the TdaP arm is an acellular pertussis vaccine, and its components map
-directly onto the antigens that move most:
-
-- **PT (pertussis toxin), FHA (filamentous haemagglutinin), PRN (pertactin)** are the core
-  acellular-pertussis antigens, and they are precisely the features with the largest total-IgG
-  and IgG1 increases. FHA and PT lead the IgG1 response; PT, PRN and FHA lead the total-IgG
-  response. This is the canonical maternal-Tdap serology signature.
-- **FIM (fimbriae)** rises only modestly (total IgG +0.04, mostly increasing) — consistent
-  with fimbriae being a variable or absent component of some acellular formulations and a
-  generally weaker antibody target.
-- **PENTAMER and ACT** behave differently from the toxoid/adhesin antigens: PENTAMER is flat
-  across all analytes, and ACT shows only a small IgG1 rise (+0.07). ACT (adenylate cyclase
-  toxin) is **not** an acellular-vaccine component, so the absence of a strong boost is
-  expected; any small movement likely reflects natural exposure rather than vaccination.
-
-The implication for the downstream maternal→infant story is important: by delivery the mother
-has selectively amplified **IgG1 against PT/FHA/PRN**, and IgG1 is the subclass most
-efficiently transferred across the placenta (see the companion `MatBirth → CordBlood`
-analysis). The vaccine therefore loads the compartment that the placenta transfers best,
-which is the mechanistic basis for maternal Tdap protecting the newborn.
+```{r interp-pertussis, results='asis'}
+cat("Mapping the change onto the acellular-pertussis components present in the data:\n\n")
+for (ant in intersect(c("PT", "FHA", "PRN", "FIM"), unique(feat_summary$antigen))) {
+  p <- ant_phrase(ant); if (!is.na(p)) cat("- ", p, "\n")
+}
+cat(paste0("\nIgG1 against the pertussis antigens is the subclass most efficiently transferred ",
+  "across the placenta (see the companion `MatBirth -> CordBlood` analysis), so a vaccine that ",
+  "loads this compartment is loading the one the placenta transfers best \u2014 the mechanistic ",
+  "basis for maternal vaccination protecting the newborn.\n\n"))
+```
 
 ## By maternal arm
 
-Table 7 is the cleanest single piece of evidence that this is a vaccine effect: **54.3% of
-features are mostly increasing in the TdaP arm versus 4.3% in the TT (control) arm.** Because
-the TT arm received tetanus-only vaccine, its pertussis-antigen antibody should not rise from
-early pregnancy to birth, and it does not. The increases seen in the pooled analysis are
-therefore driven by the TdaP mothers, as expected. A useful refinement is to re-render
-Figures 5a–5b stratified by arm to display the pertussis-antigen boost in TdaP mothers
-against the flat TT baseline.
+```{r interp-arm, results='asis'}
+cat(sprintf(paste0("Features mostly increasing by arm: **TdaP %s%%** vs **TT %s%%** (Table 7). ",
+  "An arm-specific increase points to a vaccine-driven (biological) effect rather than a shared ",
+  "technical or developmental drift.\n\n"), arm_pct("TdaP"), arm_pct("TT")))
+cat("Toxoid antigens, by arm (does tetanus/diphtheria IgG rise from PregEarly to MatBirth?):\n\n")
+for (ant in intersect(c("TT", "DT"), unique(prod_all$antigen))) cat("- ", tox_phrase(ant), "\n")
+cat(paste0("\nRead each toxoid \u0394 against its PregEarly baseline: a small \u0394 on an already-high ",
+  "baseline is a ceiling effect (pre-existing tetanus/diphtheria immunity), not an absent ",
+  "response; a small \u0394 on a low baseline would be a genuine non-response worth investigating.\n\n"))
+```
 
 ## Scale and comparability
 
-Both `PregEarly` and `MatBirth` subclass values are the normalized bead-array values
-(maternal samples placed on a common assay scale). Total IgG comes from a separate ELISA path
-and is not affected by that normalization; the fact that the total-IgG and IgG1 vaccine
-signals agree (e.g. PT, FHA, PRN rising in both) is reassuring evidence that the signal is
-biological and not a scaling artifact.
+Both `PregEarly` and `MatBirth` subclass values are normalized bead-array values (maternal
+samples placed on a common assay scale); total IgG comes from a separate ELISA path and is not
+affected by that normalization. Where the total-IgG and IgG1 signals agree for the same
+antigens (compare the per-antigen lines above), the change is more likely biological than a
+scaling artifact of either platform.
 
 ## What would confirm or refine this interpretation
 
-- **Relate the per-mother boost to the vaccine-to-delivery interval.** The right-skewed
-  responses (mean ≫ median for PT/PRN/FHA) predict that mothers vaccinated longer before
-  delivery, or with lower baseline titres, show the largest rises; testing this would
-  directly link the timing caveat raised at the top to the observed spread.
-- **Stratify Figures 5a–5b by maternal arm** to separate the TdaP boost from the flat TT
-  baseline antigen by antigen.
-- **Check the FIM and ACT formulations** against the specific acellular vaccine used, to
-  confirm the muted FIM and ACT responses reflect vaccine composition rather than assay
-  coverage.
+- **Relate the per-mother boost to the vaccine-to-delivery interval** — where the mean exceeds
+  the median for an antigen (a right-skewed response), mothers vaccinated longer before delivery
+  or with lower baseline titres are expected to show the largest rises.
+- **Read Figure A1 and Tables 8–9** to separate the TdaP boost from the TT baseline antigen by
+  antigen and analyte, rather than relying on the pooled medians.
+- **Check the vaccine formulation actually used** against any antigen whose response is muted,
+  to confirm it reflects vaccine composition rather than assay coverage.
+
 
 # Participant Accounting
 
 ```{r naccount, results='asis'}
 nt_render(nt, part = "PreVacc→Birth",
-          caption = "Table 8. Per-feature paired availability (n PregEarly / n MatBirth / n used).")
+          caption = "Table 10. Per-feature paired availability (n PregEarly / n MatBirth / n used).")
 ```
 
 ---

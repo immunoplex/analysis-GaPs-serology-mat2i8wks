@@ -1,0 +1,71 @@
+# Step 4 — Variance Decomposition by Arm {#step4}
+
+For each antigen and arm, `r cfg$outcome_label` is modelled by nested layers of the chain and the
+incremental variance is measured:
+
+* **M1:** outcome ~ IgG1
+* **M2:** + FcγR2a + FcγR3b
+* **M3:** + ADCD
+
+The key question: does **ADCD add unique variance beyond IgG1 + FcγR**, or has the FcγR layer
+already captured it? If ADCD's incremental R² is ~0, ADCD behaves as a **downstream mediator**
+(consistent with the pathway); if it retains unique variance, it is a **partially independent**
+complement arm. `relaimpo` LMG shares (averaged over orderings) show each term's unique portion in
+the full model.
+
+```{r step4-run, results='asis'}
+.stage(4, "variance decomposition by arm")
+delta_row <- function(m0, m1, lab) {
+  a <- anova(m0, m1)
+  data.frame(step = lab,
+             R2 = round(summary(m1)$r.squared, 3),
+             dR2 = round(summary(m1)$r.squared - summary(m0)$r.squared, 3),
+             F = round(a$F[2], 2), df = paste0(a$Df[2], ",", a$Res.Df[2]),
+             p = signif(a$`Pr(>F)`[2], 3), stringsAsFactors = FALSE)
+}
+.modes <- if (RUN_STD_RERUNS) MODES else "raw"
+for (mode in .modes) {
+  cat("# Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+  wd <- wide_for(mode)
+  for (A in PATHWAY_ANTIGENS) {
+    cat("## ", A, "\n\n", sep = "")
+    igg1 <- paste0(A, "_IgG1"); fcg <- intersect(paste0(A, c("_FcgR2a", "_FcgR3b")), names(wd))
+    adcd <- paste0(A, "_ADCD")
+    vars <- intersect(c(igg1, fcg, adcd), names(wd))
+    if (!(igg1 %in% names(wd)) || !length(fcg) || !(adcd %in% names(wd)) || !(OUTCOME %in% names(wd))) {
+      cat("*Incomplete chain; skipped.*\n\n"); next }
+    for (m in cfg$maternal_arms) {
+      d <- arm_data_m(mode, m) %>% dplyr::select(dplyr::all_of(c(OUTCOME, vars))) %>% tidyr::drop_na()
+      cat("### ", m, " mothers (n = ", nrow(d), ")\n\n", sep = "")
+      .info("step4 [%s] %s %s n=%d", mode, A, m, nrow(d))
+      if (nrow(d) < NETWORK_MIN) { cat(sprintf("*n < %d; skipped.*\n\n", NETWORK_MIN)); next }
+      m1 <- lm(reformulate(igg1,          response = OUTCOME), data = d)
+      m2 <- lm(reformulate(c(igg1, fcg),  response = OUTCOME), data = d)
+      m3 <- lm(reformulate(vars,          response = OUTCOME), data = d)
+      tab <- rbind(
+        data.frame(step = "M1: IgG1", R2 = round(summary(m1)$r.squared, 3),
+                   dR2 = round(summary(m1)$r.squared, 3), F = NA, df = "", p = NA),
+        delta_row(m1, m2, "M2: + FcγR2a/3b"),
+        delta_row(m2, m3, "M3: + ADCD"))
+      print(knitr::kable(tab, row.names = FALSE,
+                         caption = paste0("Incremental variance — ", A, ", ", m, " [", mode, "]."))); cat("\n")
+      if (have_relimp && nrow(d) > length(vars) + 2) {
+        ri <- tryCatch(relaimpo::calc.relimp(m3, type = "lmg", rela = FALSE), error = function(e) NULL)
+        if (!is.null(ri)) {
+          lm_tab <- data.frame(term = names(ri@lmg), unique_R2_lmg = round(ri@lmg, 3),
+                               row.names = NULL)
+          lm_tab <- lm_tab[order(-lm_tab$unique_R2_lmg), ]
+          print(knitr::kable(lm_tab, row.names = FALSE,
+                             caption = paste0("LMG unique-variance shares (full M3) — ", A, ", ", m, " [", mode, "]."))); cat("\n")
+        }
+      }
+    }
+  }
+}
+```
+
+**How to read this.** Focus on the `M3: + ADCD` row: a small, non-significant ΔR² means ADCD adds
+little once IgG1+FcγR are present — the expected footprint of a mediator sitting *between* FcγR and
+the outcome. A large significant ΔR² means ADCD carries information the binding measures miss.
+Read the two arms together: the same ordering (IgG1 large, FcγR incremental, ADCD near-zero)
+appearing in both arms is strong evidence the mechanism's *shape* is arm-invariant.

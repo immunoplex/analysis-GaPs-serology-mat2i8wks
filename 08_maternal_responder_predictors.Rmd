@@ -1,5 +1,5 @@
 ---
-title: "Phase 08 — Predictors of Maternal Low vs High Responder Status"
+title: "Phase 08 (Part A) — Decomposition and Predictors of the Maternal Low vs High Responder Categories"
 subtitle: |
   Do clinical covariates or a maternal serological signature predict which
   mothers are LOW vs HIGH responders? Stratified on the maternal arm (TdaP vs TT)
@@ -144,6 +144,67 @@ if (!is.null(nt) && exists("nt_log_manual", mode = "function")) {
       nt_log_manual(nt, "Mothers with Low/High class + arm", nrow(mat)),
       error = function(e2) nt))
 }
+```
+
+---
+
+# Decomposition of the responder score categories
+
+The Low/High split is the mean Blom-standardised maternal response across the **three
+defining features** (`r paste(RESP_FEATS, collapse = ", ")`) at the maternal visits
+(`r paste(MAT_VIS, collapse = ", ")`). All three of PT, FHA and PRN enter the score; no
+ACT or PENTAMER feature does (neither is measured in this dataset, and both are explicitly
+excluded from every serology step below). This section decomposes the categories into the
+contribution of each defining antigen, so the High/Low classes can be read in terms of the
+antibodies that build them.
+
+```{r score-decomp, results='asis'}
+.blom_d <- function(x) { r <- rank(x, na.last = "keep"); n <- sum(!is.na(x)); stats::qnorm((r - 3/8) / (n + 1/4)) }
+dec <- data_raw %>%
+  dplyr::filter(visit_name %in% MAT_VIS, as.character(feature) %in% RESP_FEATS) %>%
+  dplyr::group_by(subject_accession, feature, visit_name) %>%
+  dplyr::summarise(v = mean(log_assay_value, na.rm = TRUE), .groups = "drop") %>%
+  dplyr::mutate(key = paste(feature, visit_name, sep = "@")) %>%
+  dplyr::group_by(key) %>% dplyr::mutate(z = .blom_d(v)) %>% dplyr::ungroup() %>%
+  dplyr::group_by(subject_accession, feature) %>%
+  dplyr::summarise(antigen_z = mean(z, na.rm = TRUE), .groups = "drop")
+decm <- dec %>% dplyr::inner_join(mat_cls[, c("subject_accession", "responder", "score")],
+                                  by = "subject_accession")
+per_ant <- decm %>% dplyr::group_by(feature) %>%
+  dplyr::summarise(
+    n         = sum(is.finite(antigen_z)),
+    mean_Low  = round(mean(antigen_z[responder == "Low"],  na.rm = TRUE), 3),
+    mean_High = round(mean(antigen_z[responder == "High"], na.rm = TRUE), 3),
+    diff      = round(mean(antigen_z[responder == "High"], na.rm = TRUE) -
+                      mean(antigen_z[responder == "Low"],  na.rm = TRUE), 3),
+    AUC       = round(auc_binary(antigen_z, responder), 3),
+    loading   = round(stats::cor(antigen_z, score, use = "complete.obs"), 3),
+    p         = tryCatch(signif(stats::wilcox.test(antigen_z ~ responder)$p.value, 3),
+                         error = function(e) NA_real_),
+    .groups   = "drop") %>%
+  dplyr::arrange(dplyr::desc(diff))
+print(knitr::kable(per_ant,
+  caption = paste0("Table D1. Per-antigen decomposition of the responder categories. Each defining ",
+    "antigen's maternal Blom-z (averaged over the maternal visits) by class, the High-minus-Low ",
+    "difference, the antigen's discrimination of the class (AUC), and its loading (correlation) on the ",
+    "overall score. All three of PT, FHA and PRN contribute positively; the ranking shows which antigen ",
+    "separates the categories most.")))
+top <- per_ant$feature[which.max(per_ant$diff)]
+cat(sprintf(paste0("\nThe categories separate on **all three** defining antigens. The largest ",
+                   "High-vs-Low gap is **%s** (\u0394z = %.3f, AUC = %.3f); every antigen loads ",
+                   "positively on the score (loadings: %s).\n\n"),
+            top, per_ant$diff[per_ant$feature == top], per_ant$AUC[per_ant$feature == top],
+            paste(sprintf("%s %.2f", per_ant$feature, per_ant$loading), collapse = ", ")))
+```
+
+```{r score-decomp-fig, fig.height=3.2, fig.cap="Figure D1. Per-antigen Blom-standardised maternal response (averaged over the maternal visits) by responder class, for each of the three score-defining antigens."}
+ggplot(decm, aes(responder, antigen_z, fill = responder)) +
+  geom_violin(alpha = .5, color = NA) +
+  geom_boxplot(width = .16, outlier.size = .5) +
+  facet_wrap(~ feature, nrow = 1) +
+  scale_fill_manual(values = c(Low = "#c0297a", High = "#1b5aa0"), guide = "none") +
+  labs(x = NULL, y = "antigen Blom-z (maternal)") +
+  theme_bw(base_size = 10)
 ```
 
 ---
@@ -370,10 +431,14 @@ the maternal visits, **excluding the `r length(params$responder_features)` respo
 score. Features are Blom-standardised within each feature@visit.
 
 ```{r build-serology}
-W_all  <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = RESP_FEATS,
+# Explicit guard: never let ACT or PENTAMER features enter the signature (they carry
+# no measured rows in this dataset, but the exclusion is made explicit per protocol).
+.excl_anti <- { .av <- unique(as.character(data_raw$feature)); .av[sub("_.*$", "", toupper(.av)) %in% c("ACT", "PENTAMER")] }
+.excl <- union(RESP_FEATS, .excl_anti)
+W_all  <- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = .excl,
                                          min_coverage = params$min_coverage)
 W_base <- build_maternal_serology_matrix(data_raw, params$baseline_visit,
-                                         exclude_feats = RESP_FEATS,
+                                         exclude_feats = .excl,
                                          min_coverage = params$min_coverage)
 cat(sprintf("Serology predictor matrices: all maternal visits = **%d features**; ",
             ncol(W_all) - 1))

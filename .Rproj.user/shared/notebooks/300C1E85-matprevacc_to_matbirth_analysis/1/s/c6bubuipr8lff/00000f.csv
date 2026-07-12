@@ -1,0 +1,8 @@
+"0","ggplot(paired %>% filter(feature %in% feat_summary$feature),"
+"0","       aes(x = feature_class, y = delta, fill = feature_class)) +"
+"0","  geom_hline(yintercept = 0, linetype = ""dashed"") +"
+"0","  geom_boxplot(outlier.size = 0.5, alpha = 0.7) +"
+"0","  scale_fill_brewer(palette = ""Dark2"", guide = ""none"") +"
+"0","  labs(x = NULL, y = ""delta (log10): later − earlier visit"","
+"0","       title = ""Per-subject change by feature class"") +"
+"0","  theme_bw(base_size = 11) + theme(axis.text.x = element_text(angle = 20, hjust = 1))"

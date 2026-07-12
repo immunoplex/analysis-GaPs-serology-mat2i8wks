@@ -1,0 +1,74 @@
+# Step 7 — FcγR3b Unique Role {#step7}
+
+The joint networks zeroed FcγR3b because it is collinear with FcγR2a. This step separates the two
+receptors and asks whether **FcγR3b carries information independent of FcγR2a** — for ADCD (the
+activation step) and for `r cfg$outcome_label` (the functional endpoint). Two decouplings are used:
+the **residual of FcγR3b on FcγR2a** (the part of 3b orthogonal to 2a) and the **2a/3b log-ratio**.
+Run per antigen, per arm, and in each data mode.
+
+```{r step7-helpers, include=FALSE}
+# unique contribution of `focal` beyond `other`: residualize focal on other,
+# then measure the residual's incremental R² and coefficient on outcome y.
+unique_contrib <- function(d, y, focal, other) {
+  d <- d[stats::complete.cases(d[, c(y, focal, other)]), ]
+  if (nrow(d) < 20) return(NULL)
+  d$.fres <- resid(lm(reformulate(other, response = focal), data = d))
+  base <- lm(reformulate(other, response = y), data = d)
+  full <- lm(reformulate(c(other, ".fres"), response = y), data = d)
+  co <- summary(full)$coefficients[".fres", ]
+  list(n = nrow(d), dR2 = summary(full)$r.squared - summary(base)$r.squared,
+       beta = unname(co[1]), p = unname(co[4]),
+       r0 = suppressWarnings(cor(d[[focal]], d[[y]])))
+}
+```
+
+```{r step7-run, results='asis'}
+.stage(7, "FcγR3b unique role (residual-on-2a and 2a/3b ratio)")
+if (!RUN_FCGR3B) {
+  cat("*Step 7 skipped (run_fcgr3b = FALSE).*\n\n")
+} else {
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    rows <- list()
+    for (A in PATHWAY_ANTIGENS) {
+      r2a <- paste0(A, "_FcgR2a"); r3b <- paste0(A, "_FcgR3b"); adcd <- paste0(A, "_ADCD")
+      if (!all(c(r2a, r3b) %in% names(wd))) next
+      for (m in cfg$maternal_arms) {
+        d <- arm_data_m(mode, m)
+        # FcγR3b unique contribution to ADCD (activation step)
+        uc_adcd <- if (adcd %in% names(wd)) unique_contrib(d, adcd, r3b, r2a) else NULL
+        # FcγR3b unique contribution to the whole-cell outcome
+        uc_out  <- if (OUTCOME %in% names(wd)) unique_contrib(d, OUTCOME, r3b, r2a) else NULL
+        dd <- d[stats::complete.cases(d[, c(r2a, r3b)]), ]
+        ratio <- dd[[r3b]] - dd[[r2a]]                       # log(3b/2a)
+        r_ratio_out <- if (OUTCOME %in% names(wd))
+          suppressWarnings(cor(ratio, dd[[OUTCOME]], use = "complete.obs")) else NA
+        rows[[length(rows) + 1]] <- data.frame(
+          antigen = A, arm = m,
+          cor_2a_3b = round(suppressWarnings(cor(dd[[r2a]], dd[[r3b]])), 3),
+          "3b|2a→ADCD_dR2" = if (is.null(uc_adcd)) NA else round(uc_adcd$dR2, 3),
+          "3b|2a→ADCD_p"   = if (is.null(uc_adcd)) NA else signif(uc_adcd$p, 3),
+          "3b|2a→OUT_dR2"  = if (is.null(uc_out))  NA else round(uc_out$dR2, 3),
+          "3b|2a→OUT_p"    = if (is.null(uc_out))  NA else signif(uc_out$p, 3),
+          "r(3b/2a,OUT)"   = round(r_ratio_out, 3),
+          check.names = FALSE, stringsAsFactors = FALSE)
+        .info("step7 [%s] %s %s done", mode, A, m)
+      }
+    }
+    tb <- do.call(rbind, rows)
+    if (is.null(tb)) { cat("*No complete FcγR pair in this mode.*\n\n"); next }
+    print(knitr::kable(tb, row.names = FALSE,
+      caption = paste0("FcγR3b unique contribution beyond FcγR2a [", mode,
+                       "]: incremental R² and coefficient p of the 3b-residual on ADCD and on the outcome; last column is the 2a/3b ratio's correlation with the outcome."))); cat("\n")
+  }
+}
+```
+
+**How to read this.** `3b|2a→ADCD` columns test the activation claim *net of FcγR2a*: a significant
+positive incremental R² means FcγR3b engages complement independently of FcγR2a (supporting the
+"FcγR3b essential for ADCD" premise); near-zero means the two receptors are interchangeable for ADCD.
+`3b|2a→OUT` does the same for killing. The ratio column asks whether the *balance* between the two
+receptors (rather than either level) tracks the outcome. A consistent, significant 3b-unique
+contribution in one arm but not the other localises the FcγR3b dependence to that arm.

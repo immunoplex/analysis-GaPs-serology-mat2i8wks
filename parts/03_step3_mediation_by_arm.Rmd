@@ -1,0 +1,66 @@
+# Step 3 — Serial Mediation by Arm {#step3}
+
+A path model quantifying the serial indirect effect **IgG1 → FcγR → ADCD → `r cfg$outcome_label`**,
+fit separately in each maternal arm. This is the operational test of "the pathway is intact": if
+the serial indirect through FcγR3b is significant and the residual direct IgG1→outcome path is
+small, the chain is carrying the signal. Standardized (`std.all`) solutions are shown so paths are
+comparable across arms and antigens. The model is fit in each available data mode: **raw**
+(quantity-dominated) and, when residual files are present, **igg_std** (predictors residualized
+on total IgG, outcome kept raw) — the latter being the fair test of whether FcγR/ADCD mediate the
+outcome *independently of antibody quantity*.
+
+```{r step3-run, results='asis'}
+.stage(3, "serial mediation by arm")
+med_model <- '
+  fcgr2a ~ a1*igg1 + igg3
+  fcgr3b ~ a2*igg1 + igg3
+  adcd   ~ b1*fcgr2a + b2*fcgr3b + d*igg1
+  y      ~ g*adcd + h1*fcgr2a + h2*fcgr3b + k*igg1
+  ind_3b := a2*b2*g
+  ind_2a := a1*b1*g
+  direct := k
+'
+if (!RUN_MEDIATION || !have_lavaan) {
+  cat("*Step 3 skipped (", if (!have_lavaan) "lavaan not installed" else "run_mediation = FALSE", ").*\n\n", sep = "")
+} else {
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    for (A in PATHWAY_ANTIGENS) {
+      need <- paste0(A, c("_IgG1", "_IgG3", "_FcgR2a", "_FcgR3b", "_ADCD"))
+      if (!all(c(need, OUTCOME) %in% names(wd))) { cat("### ", A, "\n\n*Missing nodes; skipped.*\n\n", sep = ""); next }
+      cat("### ", A, "\n\n", sep = "")
+      for (m in cfg$maternal_arms) {
+        d <- arm_data_m(mode, m) %>% dplyr::select(dplyr::all_of(c(need, OUTCOME))) %>% tidyr::drop_na()
+        colnames(d) <- c("igg1", "igg3", "fcgr2a", "fcgr3b", "adcd", "y")
+        d <- as.data.frame(scale(d))
+        nt_log(nt, "Pathway", paste0("Step3 mediation [", mode, "]: ", A), A, m, need, arm_data_m(mode, m))
+        cat("#### ", m, " mothers (n = ", nrow(d), ")\n\n", sep = "")
+        .info("step3 [%s] %s %s mediation n=%d", mode, A, m, nrow(d))
+        if (nrow(d) < NETWORK_MIN) { cat(sprintf("*n < %d; skipped.*\n\n", NETWORK_MIN)); next }
+        fit <- tryCatch(lavaan::sem(med_model, data = d, fixed.x = FALSE), error = function(e) NULL)
+        if (is.null(fit) || !lavaan::lavInspect(fit, "converged")) {
+          cat("*Model did not converge.*\n\n"); next }
+        ss <- lavaan::standardizedSolution(fit)
+        key <- ss[ss$label %in% c("a2", "b2", "g", "k", "ind_3b", "ind_2a", "direct"),
+                   c("label", "est.std", "se", "z", "pvalue")]
+        names(key) <- c("path", "std_est", "se", "z", "p")
+        key$path <- c(a2 = "IgG1→FcγR3b (a2)", b2 = "FcγR3b→ADCD (b2)", g = "ADCD→OUTCOME (g)",
+                      k = "IgG1→OUTCOME direct (k)", ind_3b = "serial via FcγR3b (a2·b2·g)",
+                      ind_2a = "serial via FcγR2a (a1·b1·g)", direct = "direct (k)")[key$path]
+        key[, c("std_est", "se", "z", "p")] <- lapply(key[, c("std_est", "se", "z", "p")],
+                                                       function(x) signif(x, 3))
+        print(knitr::kable(key, row.names = FALSE,
+                           caption = paste0("Standardized key paths — ", A, ", ", m, " [", mode, "]."))); cat("\n")
+      }
+    }
+  }
+}
+```
+
+**How to read this.** A significant `serial via FcγR3b (a2·b2·g)` indirect effect is direct support
+that the FcγR3b-specific chain transmits antibody quantity to killing. If the `direct
+(k)` path shrinks toward zero once the chain is in the model, mediation is (near-)complete; a large
+surviving direct path means routes outside ADCD also matter. Comparing arms, similar indirect
+magnitudes = the mechanism operates in both; a collapsed indirect in one arm = a broken link there.

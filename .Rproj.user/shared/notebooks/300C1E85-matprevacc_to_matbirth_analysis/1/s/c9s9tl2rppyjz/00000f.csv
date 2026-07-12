@@ -1,0 +1,7 @@
+"0","knitr::kable(analyte_reach,"
+"0","  col.names = c(""Analyte group"", ""N subjects contributing \u2265 1 paired feature""),"
+"0","  caption = paste0(""Table 3. Number of subjects contributing at least one paired feature "","
+"0","                   ""to each analyte group. Derived from the paired dataset only. The drop "","
+"0","                   ""from Total IgG down through the subclasses mirrors any earlier-visit assay "","
+"0","                   ""batch step-down in Table 2: fewer subjects had cord-blood subclass "","
+"0","                   ""panels run, so fewer can contribute paired subclass features."")) %>% print()"

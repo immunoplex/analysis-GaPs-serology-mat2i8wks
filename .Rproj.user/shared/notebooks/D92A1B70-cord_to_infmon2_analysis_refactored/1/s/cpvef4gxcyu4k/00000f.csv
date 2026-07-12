@@ -1,0 +1,17 @@
+"0","cov_raw <- paired_coverage(data_raw, FROM_VISIT, TO_VISIT)"
+"0","# Standardise column names regardless of what paired_coverage() returns."
+"0","# Columns are always: feature, n_at_from_visit, n_at_to_visit, n_paired."
+"0","names(cov_raw) <- c(""feature"", ""n_cord"", ""n_inf"", ""n_paired"")"
+"0","cov <- cov_raw %>% arrange(desc(n_paired))"
+"0",""
+"0","for (i in seq_len(nrow(cov)))"
+"0","  nt_log_manual(nt, ""Cord→InfMon2"", ""Coverage"", cov$feature[i], ""paired availability"","
+"0","                n_entered = max(cov$n_cord[i], cov$n_inf[i]), n_used = cov$n_paired[i],"
+"0","                note = sprintf(""CordBlood n=%d, InfMon2 n=%d"", cov$n_cord[i], cov$n_inf[i]))"
+"0","cat(sprintf(""Features with at least one paired subject: **%d**; with ≥ %d paired: **%d**.\n\n"","
+"0","            nrow(cov), MIN_PAIRED, sum(cov$n_paired >= MIN_PAIRED)))"
+"1","Features with at least one paired subject: **86**; with ≥ 10 paired: **39**.
+
+"
+"0","knitr::kable(cov, col.names = c(""Feature"", ""n CordBlood"", ""n InfMon2"", ""n paired (both)""),"
+"0","             caption = ""Table 1. Per-feature coverage: subjects with CordBlood, with InfMon2, and with BOTH (the n used). Features with n paired = 0 were not measured at CordBlood and are excluded from all change analyses."") %>% print()"

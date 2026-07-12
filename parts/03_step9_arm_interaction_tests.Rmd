@@ -1,0 +1,61 @@
+# Step 9 — Arm × FcγR Interaction Tests {#step9}
+
+Steps 4 and 7 showed the FcγR(→SBA) coupling descriptively stronger in TdaP than TT. This step
+turns that into a formal test: whether the FcγR→outcome mapping **differs by maternal arm**, rather
+than differing only in the amount pushed through a shared mapping. Two tests per antigen and mode:
+a focal **FcγR3b × arm** interaction on `r cfg$outcome_label`, and a likelihood-ratio test of the
+whole **FcγR block × arm** (does adding arm-interaction terms to `FcγR2a + FcγR3b` improve fit).
+Predictors are standardized within the pooled sample; reference arm is `r cfg$maternal_arms[1]`.
+
+```{r step9-run, results='asis'}
+.stage(9, "arm × FcγR interaction tests on the outcome")
+if (!RUN_ARM_TESTS) {
+  cat("*Step 9 skipped (run_arm_tests = FALSE).*\n\n")
+} else {
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    if (!(OUTCOME %in% names(wd)) || !("arm_name" %in% names(wd))) { cat("*Outcome/arm missing.*\n\n"); next }
+    rows <- list()
+    for (A in PATHWAY_ANTIGENS) {
+      r2a <- paste0(A, "_FcgR2a"); r3b <- paste0(A, "_FcgR3b")
+      if (!all(c(r2a, r3b) %in% names(wd))) next
+      d <- wd %>% dplyr::select(dplyr::all_of(c(OUTCOME, r2a, r3b, "arm_name"))) %>% tidyr::drop_na()
+      if (nrow(d) < 40) next
+      d[[r2a]] <- as.numeric(scale(d[[r2a]])); d[[r3b]] <- as.numeric(scale(d[[r3b]]))
+      d$arm <- factor(d$arm_name, levels = cfg$maternal_arms)
+      # focal: FcγR3b × arm
+      fA <- lm(stats::as.formula(paste0(OUTCOME, " ~ ", r3b, " * arm")), data = d)
+      ci <- summary(fA)$coefficients
+      irow <- grep(paste0("^", r3b, ":arm"), rownames(ci))
+      # FcγR block × arm: LRT (F-test) of interaction terms
+      f_add <- lm(stats::as.formula(paste0(OUTCOME, " ~ (", r2a, " + ", r3b, ") + arm")), data = d)
+      f_int <- lm(stats::as.formula(paste0(OUTCOME, " ~ (", r2a, " + ", r3b, ") * arm")), data = d)
+      av <- anova(f_add, f_int)
+      rows[[length(rows) + 1]] <- data.frame(
+        antigen = A, n = nrow(d),
+        "FcγR3b×arm β" = round(if (length(irow)) ci[irow[1], 1] else NA, 3),
+        "FcγR3b×arm p" = signif(if (length(irow)) ci[irow[1], 4] else NA, 3),
+        "block×arm F"  = round(av$F[2], 2),
+        "block×arm df" = paste0(av$Df[2], ",", av$Res.Df[2]),
+        "block×arm p"  = signif(av$`Pr(>F)`[2], 3),
+        check.names = FALSE, stringsAsFactors = FALSE)
+      .info("step9 [%s] %s interaction done (n=%d)", mode, A, nrow(d))
+    }
+    tb <- do.call(rbind, rows)
+    if (is.null(tb)) { cat("*No antigen had a complete FcγR pair.*\n\n"); next }
+    print(knitr::kable(tb, row.names = FALSE,
+      caption = paste0("Arm-modification of the FcγR\u2192", cfg$outcome_label,
+                       " mapping [", mode, "]: focal FcγR3b\u00d7arm coefficient, and F-test of the whole FcγR-block\u00d7arm interaction (reference arm ", cfg$maternal_arms[1], ")."))); cat("\n")
+  }
+}
+```
+
+**How to read this.** A significant `FcγR3b × arm` term means the per-unit FcγR3b→outcome slope
+genuinely differs between TdaP and TT — evidence the pathway is *wired* differently, not merely
+driven harder in one arm. A significant `block × arm` LRT says the same for the FcγR layer as a
+whole. Non-significant interactions with different per-arm strengths (from steps 4/7) would instead
+point to different *forcing* through a shared mapping. Read alongside the mixed mode, where the
+FcγR/ADCD mediators are quality (quantity-removed): a surviving arm interaction there localises the
+divergence to per-antibody engagement rather than to antibody amount.

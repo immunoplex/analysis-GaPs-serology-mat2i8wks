@@ -1,0 +1,681 @@
+---
+title: "GaPs Results C–F: antibody correlates of infant function, and the variance structure of infant whole-cell binding at two months"
+subtitle: "Forward, transferred, and concurrent predictor frames; a strategy for decomposing the variance of WHOLE_WT_IgG at InfMon2"
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:
+    toc: true
+    toc_depth: 2
+params:
+  arm: "ALL"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center")
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(knitr)
+})
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)), error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+source(find_proj_file("config/endpoints.R"),           local = FALSE, encoding = "UTF-8")
+source(find_proj_file("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
+
+# Full cohort (no arm filter here; the models below treat maternal arm as a predictor).
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+ANTI6 <- ANTIGEN_ORDER
+```
+
+# C–F. Antibody correlates of infant function
+
+Part B established *what happens to the antibody pool* across production, transfer, and decay.
+This document asks the complementary question: **which antibodies explain infant function at the
+two-month, pre-primary-immunisation visit**, for three infant outcomes — serum bactericidal
+activity (SBA), PT-neutralising activity (PTNA), and whole-cell binding (WHOLE_WT_IgG). The
+whole-cell outcome is the focus of the methodological strategy in the final section, because it
+is an *aggregate* readout whose variance should, in principle, be reconstructable from the
+antigen-specific pool that feeds it.
+
+## How to read these models: three predictor frames
+
+The tables that follow mix three frames that must not be conflated, because they answer
+different questions and carry different evidential weight:
+
+* **Forward (honest) frame — maternal antibody *at delivery* predicting infant function at two
+  months.** The predictor is measured *before* the outcome, so a high fit here is genuine
+  prediction (Tables 2–3, and the "prior maternal" column of Table 6).
+* **Transferred frame — cord antibody predicting infant function.** The pool actually delivered
+  to the infant; intermediate in proximity between maternal and concurrent.
+* **Concurrent (descriptive) frame — infant antibody *co-measured at two months*.** This is a
+  **ceiling, not a prediction**: the outcome (whole-cell binding) is itself antigen-specific
+  binding, so co-measured antigen-specific IgG explains it almost by construction (Tables 4–5,
+  and the "concurrent" column of Table 6). It bounds how much structure exists; it does not tell
+  you what is forecastable from earlier information.
+
+The collated tables below are quantities lifted from the rendered maternal-chain
+(`parts/01_maternal_chain.Rmd` via `SBA_analysis.Rmd`, `WT_IgG_analysis.Rmd`,
+`PTNA_analysis.Rmd`) and prediction (`06_prediction_models.Rmd`) modules, so this results
+section knits from one file; regenerate them live by knitting those modules. The variance-
+structure section that follows is **runnable here** against `c_set.RData`.
+
+## Table 2 — maternal antigen-specific IgG at delivery → infant function (std β)
+
+```{r tab2}
+tab2 <- tibble::tribble(
+  ~`Infant outcome (InfMon2)`,        ~`Principal maternal predictor (std β)`, ~`Conditional FHA (std β)`, ~`R² (PT+FHA+PRN)`, ~`R² (+DT+TT+FIM)`,
+  "Serum bactericidal activity (SBA)", "PRN IgG (0.91)",                          "−0.48",                  0.681,                0.687,
+  "Whole-cell binding (WT IgG)",       "PRN IgG (0.46)",                          "−0.35",                  0.351,                0.375,
+  "PT-neutralising activity (PTNA)",   "PT IgG (0.56)",                           "— (ns)",                 0.244,                0.258)
+kable(tab2, caption = "Table 2. Standardised β from the maternal-delivery (forward) models, Block 1. Negative FHA coefficients are conditional/collinear, not protective.")
+```
+
+**Differentiation.** The two adhesin/agglutinogen-driven functions (SBA and whole-cell binding)
+are led by **PRN IgG**, whereas **PTNA is led by PT IgG** — the function maps to the antigen that
+dominates it. The whole-cell outcome behaves like a muted SBA: same principal predictor (PRN),
+lower R², consistent with whole-cell binding pooling many epitopes so no single antigen captures
+it as cleanly. The **negative conditional FHA β is a collinearity artifact**, not biology: FHA
+IgG is correlated with PRN/PT IgG, so once those are in the model FHA absorbs a sign-flipped
+residual. This is the first signal that **the antigen-specific predictors share variance** and
+must be partitioned with relative-importance methods rather than read off raw coefficients.
+Adding the non-pertussis antigens (DT, TT, FIM) barely moves R² — the explainable structure is
+in the pertussis components.
+
+## Table 3 — maternal model fit by maternal arm
+
+```{r tab3}
+tab3 <- tibble::tribble(
+  ~`Infant outcome`,     ~`R² after Tdap-IPV`, ~`R² after tetanus toxoid`, ~Interpretation,
+  "SBA",                 0.687,                   0.179,                          "PRN-dependent; vaccine-sensitive",
+  "Whole-cell binding",  0.375,                   0.083,                          "PRN-dependent; vaccine-sensitive",
+  "PTNA",                0.258,                   0.270,                          "PT-dependent; arm-independent")
+kable(tab3, caption = "Table 3. Maternal-delivery model fit within each maternal arm.")
+```
+
+**Differentiation.** This is the most informative contrast for the variance question. SBA and
+whole-cell binding are **strongly predictable after Tdap-IPV but almost unpredictable after
+tetanus toxoid** — because the predictive antibody (PRN, an acellular-pertussis component) is
+*made by the vaccine* in the Tdap-IPV arm and is near-absent in the comparator. PTNA fit is
+**similar in both arms**, because the PT antibody–PTNA relationship does not depend on which
+vaccine raised the titre. The practical consequence: **the variance structure of whole-cell
+binding is itself arm-structured** — maternal arm is not just a covariate, it gates whether the
+antigen-specific predictors carry signal at all, so the strategy below fits arm-stratified models
+and tests arm × antibody interactions explicitly.
+
+## Table 4 — concurrent (same-visit) infant models at two months
+
+```{r tab4}
+tab4 <- tibble::tribble(
+  ~Outcome,             ~`Base R²`, ~`+ matched total IgG`, ~`+ matched IgG1 (R²/adj/CV)`, ~`Dominant term (β)`, ~n,
+  "PTNA",               "0.340",       "0.520",                "0.576 / 0.569 / 0.547",          "PT IgG1 (0.64)",        235L,
+  "SBA",                "0.378",       "0.766",                "0.859 / 0.856 / 0.841",          "PRN IgG1 (0.95)",       217L,
+  "Whole-cell binding", "—",      "0.452",                "0.536 / 0.521 / 0.498",          "PRN IgG1 (0.62)",       221L)
+kable(tab4, caption = "Table 4. Concurrent infant models (Family 1). Matched IgG1 is the dominant correlate of each function — but this is a co-measured ceiling, not forward prediction.")
+```
+
+**Differentiation.** Co-measured **IgG1** (not total IgG) is the dominant correlate of every
+function, and the antigen mapping repeats (PRN IgG1 for SBA/WT, PT IgG1 for PTNA). The numbers
+are high (whole-cell CV-R² ≈ 0.50) **because the predictor and outcome are the same measurement
+modality at the same visit** — this is the descriptive ceiling and should never be quoted as
+"prediction." Its value is to tell us the maximum reconstructable structure; the gap between this
+ceiling and the forward fit (Table 6) is the part that is only co-measurable.
+
+## Table 5 — Fc-effector and clinical additions
+
+```{r tab5}
+tab5 <- tibble::tribble(
+  ~Outcome,             ~`CV-R²: IgG1 model`, ~`CV-R²: + FcγRIIa/ADCD`, ~`Clinical block`,
+  "PTNA",               0.547,                    0.518,                            "no CV gain; age borderline",
+  "SBA",                0.841,                    0.829,                            "no CV gain",
+  "Whole-cell binding", 0.498,                    0.464,                            "no CV gain")
+kable(tab5, caption = "Table 5. Adding Fc-effector terms lowered cross-validated performance for every outcome; the wider clinical block did not improve CV fit.")
+```
+
+**Differentiation.** Adding Fc-effector / FcγR terms **reduced** cross-validated R² everywhere —
+the hallmark of added noise/overfitting once antigen-specific binding is already in the model. At
+two months, infant function is a **binding phenomenon**, not an Fc-effector one, and the clinical
+block (gestational age, sex, birthweight) adds no cross-validated signal. For the variance
+strategy this means Block 4 (Fc/clinical) is expected to contribute near-zero unique variance and
+serves mainly as a negative control.
+
+## Table 6 — concurrent vs prior (maternal-at-delivery) prediction
+
+```{r tab6}
+tab6 <- tibble::tribble(
+  ~Outcome,             ~`Concurrent R²/CV`, ~`Prior maternal R²/CV`, ~`Concurrent advantage (R²)`, ~n,
+  "PTNA",               "0.558 / 0.523",         "0.477 / 0.437",            "≈ 0.08",                    175L,
+  "SBA",                "0.863 / 0.845",         "0.678 / 0.642",            "≈ 0.19",                    163L,
+  "Whole-cell binding", "0.562 / 0.529",         "0.374 / 0.321",            "≈ 0.19",                    160L)
+kable(tab6, caption = "Table 6. Family 3. Concurrent = descriptive ceiling (same-sample co-measurement); prior maternal = honest forward predictor.")
+```
+
+**Differentiation.** This table is the cleanest statement of the variance split for whole-cell
+binding: a **forward** model from maternal delivery antibody reaches CV-R² ≈ 0.32, while the
+**concurrent** ceiling reaches ≈ 0.53 — so roughly **a third of the whole-cell variance is
+honestly forecastable from maternal antibody at delivery**, and the remainder is only recoverable
+by co-measuring the infant at two months. PTNA shows the smallest concurrent advantage (the
+forward PT signal already captures most of it); SBA and whole-cell show the largest, i.e. more of
+their structure is proximal/co-measured. These three numbers per outcome (forward CV, concurrent
+CV, and their gap) are exactly what the strategy below formalises and computes from scratch.
+
+# Methodological strategy: the variance structure of infant whole-cell binding (WHOLE_WT_IgG) at two months
+
+The goal is a defensible decomposition of the variance in infant whole-cell pertussis binding at
+InfMon2 into interpretable sources, distinguishing what is **forecastable** from earlier
+information from what is merely **co-measurable**, and allocating the explained variance fairly
+among collinear antigen-specific predictors.
+
+## 1. The outcome and why its variance is the right target
+
+WHOLE_WT_IgG at InfMon2 is total IgG binding to whole inactivated *B. pertussis* at two months,
+before the infant's primary immunisation (so it reflects maternally derived antibody, not infant
+production). It is an **aggregate**: it sums the antigen-specific antibodies (PRN, PT, FHA, FIM,
+and others) that recognise epitopes on the intact organism. Its variance should therefore be
+largely reconstructable from the antigen-specific pool — the open questions are *which* antigens,
+measured at *which timepoint*, contribute, and how much of their contribution is **unique** versus
+**shared**.
+
+## 2. Predictor blocks, ordered by causal proximity
+
+| Block | Contents | Frame | Question it answers |
+|---|---|---|---|
+| 0 | maternal arm, gestational age, sex, birthweight | design/clinical | baseline & confounding |
+| 1 | maternal PRN/PT/FHA/FIM IgG (and IgG1) at **MatBirth** | forward (honest) | what is forecastable at delivery |
+| 2 | the same antigens at **CordBlood** | transferred | what the transferred pool adds |
+| 3 | the same antigens at **InfMon2** (concurrent) | descriptive ceiling | maximum reconstructable structure |
+| 4 | Fc-effector / FcγR (where measured) | negative control | does function add beyond binding (expected: no) |
+
+Blocks are entered hierarchically (0 → 1 → 2 → 3 → 4). The honest predictive signal is the
+cross-validated R² of blocks 0–2; block 3 is the ceiling; block 4 is the control.
+
+## 3. Methods to partition the variance
+
+1. **Hierarchical nested regression with cross-validated ΔR².** Fit each cumulative block and
+   report both in-sample R² and k-fold CV-R². The CV increment at block 1–2 is the forward
+   signal; the jump at block 3 is the co-measured ceiling. Report n per model (it shrinks with
+   paired completeness).
+2. **Relative-importance (LMG / Shapley) decomposition within a block.** Because PRN/PT/FHA/FIM
+   IgG are collinear (the Table 2 sign-flip), raw conditional βs are unstable. LMG averages each
+   predictor's R² contribution over all orderings, fairly splitting the shared variance and
+   giving each antigen's share of explained variance.
+3. **Commonality analysis across timepoints.** Decompose the whole-cell variance into the part
+   *unique* to maternal, unique to cord, unique to concurrent, and the parts *common* to two or
+   three timepoints — this is the formal version of the Table 6 forward-vs-ceiling gap.
+4. **Variance components for technical structure.** If plate/run/batch metadata are available,
+   fit them as random effects to bound the assay/technical share and confirm the antigen-specific
+   signal is not a plate artifact (mirrors the cross-plate caution in Part B).
+5. **Arm-stratified fits and arm × antibody interactions.** Table 3 shows the structure is
+   vaccine-gated for SBA/WT; fit the decomposition separately by arm and test arm × PRN IgG
+   (and arm × PT IgG) interactions to confirm whether the variance structure itself differs.
+6. **Errors-in-variables (Deming) for the key slope.** Refit the PRN-IgG → whole-cell and
+   PT-IgG → PTNA relationships as Deming regressions to connect to the earlier GaPs Deming result
+   and to avoid attenuation from measurement error in the predictor.
+
+## 4. Guardrails
+
+* **Circularity.** Never report the concurrent (block 3) fit as prediction; it is a ceiling. The
+  forward CV-R² (blocks 0–2) is the honest predictor.
+* **Collinearity.** Interpret LMG / commonality shares, not conditional βs; the negative FHA β is
+  a collinearity symptom, not a protective effect.
+* **Floor effects.** Cord/infant subclass features near the assay floor (Part B decay note) should
+  be screened (censored or excluded) so they do not masquerade as signal.
+* **Pre-specification & multiplicity.** Fix the block order and the antigen set in advance; rely on
+  cross-validation rather than in-sample R² for all claims.
+
+## 5. Implementation
+
+The strategy is implemented below directly against `c_set.RData` (joined to the clinical
+covariates). The variance shares (Shapley/LMG), the across-timepoint commonality split, and the
+Deming slope are hand-rolled in base R, so the core analysis needs no packages beyond those
+already loaded; the optional `relaimpo`/`deming` cross-checks are guarded and skipped if absent.
+
+```{r vp-setup, echo=TRUE}
+# ---- modelling frame: outcome + forward/transferred/concurrent predictors + context ----
+pull_wide <- function(d, visit, feats, suffix) {
+  d %>%
+    dplyr::filter(visit_name == visit, feature %in% feats) %>%
+    dplyr::distinct(subject_accession, feature, .keep_all = TRUE) %>%
+    dplyr::select(subject_accession, feature, log_assay_value) %>%
+    tidyr::pivot_wider(names_from = feature, values_from = log_assay_value) %>%
+    dplyr::rename_with(~ paste0(.x, suffix), -subject_accession)
+}
+
+ANTI_IGG <- c("PRN_IgG", "PT_IgG", "FHA_IgG", "FIM_IgG")   # antigens that feed whole-cell binding
+OUTCOME  <- "WHOLE_WT_IgG"
+
+ywide <- pull_wide(data_raw, "InfMon2", OUTCOME, "")
+names(ywide)[names(ywide) == OUTCOME] <- "y"
+mat <- pull_wide(data_raw, "MatBirth",  ANTI_IGG, "_mat")
+crd <- pull_wide(data_raw, "CordBlood", ANTI_IGG, "_cord")
+inf <- pull_wide(data_raw, "InfMon2",   ANTI_IGG, "_inf")
+arm <- dplyr::distinct(data_raw, subject_accession, maternal_arm)
+
+clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")),
+                 error = function(e) NULL)
+clin_vars <- c("gestational_age_birth", "infant_sex", "birth_weight", "vaccine_birth_interval_days")
+if (!is.null(clin)) {
+  clin_vars <- intersect(clin_vars, names(clin))
+  clind <- dplyr::select(clin, subject_accession, dplyr::all_of(clin_vars))
+} else { clin_vars <- character(0); clind <- NULL }
+
+mdl <- ywide %>%
+  dplyr::left_join(mat, "subject_accession") %>%
+  dplyr::left_join(crd, "subject_accession") %>%
+  dplyr::left_join(inf, "subject_accession") %>%
+  dplyr::left_join(arm, "subject_accession")
+if (!is.null(clind)) mdl <- dplyr::left_join(mdl, clind, "subject_accession")
+mdl <- dplyr::filter(mdl, !is.na(y))
+
+# predictor sets restricted to columns that actually materialised
+present <- function(cols) cols[cols %in% names(mdl)]
+base_terms <- present(c("maternal_arm", clin_vars))    # Block 0
+mat_p <- present(paste0(ANTI_IGG, "_mat"))             # Block 1 (forward)
+crd_p <- present(paste0(ANTI_IGG, "_cord"))            # Block 2 (transferred)
+inf_p <- present(paste0(ANTI_IGG, "_inf"))             # Block 3 (concurrent ceiling)
+
+# ---- shared fit utilities --------------------------------------------------
+r2 <- function(form, data) {
+  tryCatch({
+    cc <- data[stats::complete.cases(data[, all.vars(form), drop = FALSE]), , drop = FALSE]
+    if (nrow(cc) < 5) return(NA_real_)
+    summary(stats::lm(form, cc))$r.squared
+  }, error = function(e) NA_real_)
+}
+cv_r2 <- function(form, data, K = 10, seed = 1) {
+  tryCatch({
+    vars <- all.vars(form)
+    cc <- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+    if (nrow(cc) < 2 * K) return(NA_real_)
+    set.seed(seed); fold <- sample(rep_len(1:K, nrow(cc)))
+    pr <- numeric(nrow(cc))
+    for (k in 1:K) {
+      fit <- stats::lm(form, cc[fold != k, , drop = FALSE])
+      pr[fold == k] <- stats::predict(fit, cc[fold == k, , drop = FALSE])
+    }
+    yv <- cc[[vars[1]]]
+    1 - sum((yv - pr)^2) / sum((yv - mean(yv))^2)
+  }, error = function(e) NA_real_)
+}
+n_cc <- function(form, data) sum(stats::complete.cases(data[, all.vars(form), drop = FALSE]))
+mk   <- function(terms) reformulate(if (length(terms)) terms else "1", "y")
+
+f0 <- mk(base_terms)
+f1 <- mk(c(base_terms, mat_p))
+f2 <- mk(c(base_terms, mat_p, crd_p))
+f3 <- mk(c(base_terms, mat_p, crd_p, inf_p))
+```
+
+```{r vp-helpers, echo=TRUE}
+# ---------------------------------------------------------------------------
+# Variance-structure helpers, defined ONCE and reused for ALL THREE outcomes
+# (whole-cell binding, SBA, PTNA). Defining them up front lets the whole-cell
+# section run through the same vp_run()/vp_narr() path as SBA and PTNA, so the
+# LMG, commonality, arm and Deming panels render identically for every outcome
+# (the earlier prototype emitted its LMG table via print(kable(...)) inside an
+# if(){}, a non-terminal call that does not splice as a table).
+# ---------------------------------------------------------------------------
+
+# Relative-importance (Shapley / LMG) within a predictor block: each predictor's
+# average marginal R2 over all entry orders, controlling for the base block.
+shapley_lmg <- function(preds, base, data, ycol = "y") {
+  vars <- c(ycol, base, preds)
+  cc <- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+  R  <- function(terms) summary(stats::lm(reformulate(if (length(terms)) terms else "1", ycol), cc))$r.squared
+  perms <- function(x) if (length(x) <= 1) list(x) else
+    do.call(c, lapply(seq_along(x), function(i) lapply(perms(x[-i]), function(p) c(x[i], p))))
+  P <- perms(preds)
+  contrib <- stats::setNames(numeric(length(preds)), preds)
+  for (p in P) {
+    prev <- base
+    for (v in p) { contrib[v] <- contrib[v] + (R(c(prev, v)) - R(prev)); prev <- c(prev, v) }
+  }
+  contrib <- contrib / length(P)
+  data.frame(Predictor = names(contrib),
+             `LMG R2` = round(unname(contrib), 4),
+             `Share of forward R2` = round(unname(contrib) / sum(contrib), 3),
+             check.names = FALSE, row.names = NULL)
+}
+
+# Commonality split (unique vs shared) across the maternal / cord / concurrent
+# timepoints, over and above the design/clinical base block.
+commonality_3 <- function(B, M, C, I, data, ycol = "y") {
+  vars <- c(ycol, B, M, C, I)
+  cc <- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+  Rinc <- function(blocks) {                # incremental R2 over the base block B
+    terms <- c(B, unlist(blocks))
+    summary(stats::lm(reformulate(if (length(terms)) terms else "1", ycol), cc))$r.squared
+  }
+  b0  <- Rinc(list())
+  Rm  <- Rinc(list(M)) - b0;  Rc  <- Rinc(list(C)) - b0;  Ri  <- Rinc(list(I)) - b0
+  Rmc <- Rinc(list(M, C)) - b0; Rmi <- Rinc(list(M, I)) - b0; Rci <- Rinc(list(C, I)) - b0
+  Rall<- Rinc(list(M, C, I)) - b0
+  out <- c(
+    "Unique maternal (forward)"   = Rall - Rci,
+    "Unique cord (transferred)"   = Rall - Rmi,
+    "Unique concurrent (2 mo)"    = Rall - Rmc,
+    "Common maternal & cord"      = Rmi + Rci - Ri - Rall,
+    "Common maternal & concurrent"= Rmc + Rci - Rc - Rall,
+    "Common cord & concurrent"    = Rmc + Rmi - Rm - Rall,
+    "Common all three"            = Rm + Rc + Ri - Rmc - Rmi - Rci + Rall)
+  data.frame(Component = names(out),
+             Coefficient = round(unname(out), 4),
+             `% of explained` = round(100 * unname(out) / sum(out), 1),
+             check.names = FALSE, row.names = NULL, n = nrow(cc))
+}
+
+# Orthogonal/Deming fit with assumed error-variance ratio = 1.
+deming_simple <- function(x, y) {
+  ok <- is.finite(x) & is.finite(y); x <- x[ok]; y <- y[ok]
+  sxx <- stats::var(x); syy <- stats::var(y); sxy <- stats::cov(x, y)
+  b <- (syy - sxx + sqrt((syy - sxx)^2 + 4 * sxy^2)) / (2 * sxy)
+  c(intercept = mean(y) - b * mean(x), slope = b, n = length(x))
+}
+
+# Reusable variance-structure runner. Reuses the predictor frames (mat/crd/inf/
+# arm/clind), antigen set and fit helpers from the vp-setup chunk; only the
+# outcome (and the principal predictor used for the Deming step) varies.
+vp_run <- function(outcome, principal = "PRN_IgG_mat") {
+  yw <- pull_wide(data_raw, "InfMon2", outcome, "")
+  names(yw)[names(yw) == outcome] <- "y"
+  m <- yw %>%
+    dplyr::left_join(mat, "subject_accession") %>%
+    dplyr::left_join(crd, "subject_accession") %>%
+    dplyr::left_join(inf, "subject_accession") %>%
+    dplyr::left_join(arm, "subject_accession")
+  if (!is.null(clind)) m <- dplyr::left_join(m, clind, "subject_accession")
+  m <- dplyr::filter(m, !is.na(y))
+
+  pres <- function(cols) cols[cols %in% names(m)]
+  bt <- pres(c("maternal_arm", clin_vars))
+  mp <- pres(paste0(ANTI_IGG, "_mat"))
+  cp <- pres(paste0(ANTI_IGG, "_cord"))
+  ip <- pres(paste0(ANTI_IGG, "_inf"))
+  mkf <- function(terms) reformulate(if (length(terms)) terms else "1", "y")
+  F0 <- mkf(bt); F1 <- mkf(c(bt, mp)); F2 <- mkf(c(bt, mp, cp)); F3 <- mkf(c(bt, mp, cp, ip))
+
+  blocks <- list("0 design/clinical"        = F0, "1 + maternal (forward)"   = F1,
+                 "2 + cord (transferred)"   = F2, "3 + concurrent (ceiling)" = F3)
+  vt <- data.frame(Block = names(blocks),
+                   n     = vapply(blocks, n_cc, integer(1), data = m),
+                   R2    = round(vapply(blocks, r2,    numeric(1), data = m), 3),
+                   CV_R2 = round(vapply(blocks, cv_r2, numeric(1), data = m), 3),
+                   check.names = FALSE)
+  vt[["ΔCV_R2"]] <- round(c(NA, diff(vt$CV_R2)), 3)
+
+  lmg <- if (length(mp) >= 2) { x <- shapley_lmg(mp, bt, m); x[order(-x[["LMG R2"]]), ] } else NULL
+  comm <- if (length(mp) && length(cp) && length(ip)) commonality_3(bt, mp, cp, ip, m) else NULL
+
+  arm_one <- function(a) {
+    if (a == "Pooled") { d <- m; ff <- F1 }
+    else { d <- dplyr::filter(m, as.character(maternal_arm) == a)
+           ff <- mkf(c(setdiff(bt, "maternal_arm"), mp)) }
+    data.frame(Arm = a, n = n_cc(ff, d), R2 = round(r2(ff, d), 3),
+               CV_R2 = round(cv_r2(ff, d), 3), check.names = FALSE)
+  }
+  arm_tab <- dplyr::bind_rows(lapply(c("Pooled", "TdaP", "TT"), arm_one))
+  arm_int_p <- tryCatch({
+    f1i <- mkf(c(bt, mp, paste0("maternal_arm:", mp)))
+    cc  <- m[stats::complete.cases(m[, all.vars(f1i)]), ]
+    stats::anova(stats::lm(F1, cc), stats::lm(f1i, cc))[["Pr(>F)"]][2]
+  }, error = function(e) NA_real_)
+
+  dem <- NULL
+  if (principal %in% names(m)) {
+    ols <- stats::coef(stats::lm(reformulate(principal, "y"), m))
+    dd  <- deming_simple(m[[principal]], m$y)
+    dem <- data.frame(Method = c("OLS", "Deming (lambda=1)"),
+                      Intercept = round(c(ols[1], dd["intercept"]), 3),
+                      Slope     = round(c(ols[2], dd["slope"]), 3),
+                      n = c(sum(stats::complete.cases(m[, c("y", principal)])), unname(dd["n"])),
+                      check.names = FALSE)
+  }
+  list(outcome = outcome, principal = principal, vt = vt, lmg = lmg, comm = comm,
+       arm_tab = arm_tab, arm_int_p = arm_int_p, dem = dem)
+}
+
+# Computed-summary writer (one bullet block per outcome).
+vp_narr <- function(res) {
+  vt <- res$vt; lmg <- res$lmg; comm <- res$comm; arm_tab <- res$arm_tab
+  ns <- function(x) if (length(x) && !is.na(x)) sprintf("%.3f", x) else "n/a"
+  fp <- function(p) if (is.na(p)) "n/a" else if (p < 0.001) "< 0.001" else sprintf("%.3f", p)
+  cvf <- vt$CV_R2[vt$Block == "2 + cord (transferred)"]
+  cvc <- vt$CV_R2[vt$Block == "3 + concurrent (ceiling)"]
+  topl <- if (!is.null(lmg)) lmg$Predictor[which.max(lmg[["LMG R2"]])] else "n/a"
+  uf <- if (!is.null(comm)) comm$`% of explained`[comm$Component == "Unique maternal (forward)"] else NA
+  uc <- if (!is.null(comm)) comm$`% of explained`[comm$Component == "Unique concurrent (2 mo)"] else NA
+  r2td <- arm_tab$R2[arm_tab$Arm == "TdaP"]; r2tt <- arm_tab$R2[arm_tab$Arm == "TT"]
+  cat(sprintf(paste0(
+    "- **Forward vs ceiling.** Forward (design+maternal+cord) CV-R2 = %s; concurrent ceiling = %s.\n",
+    "- **Dominant antigen (LMG).** largest forward variance share: **%s**.\n",
+    "- **Commonality.** %s%% of explained variance is unique to the maternal (forward) timepoint, ",
+    "%s%% unique to the concurrent timepoint; the rest is shared.\n",
+    "- **Arm dependence.** forward R2 = %s (Tdap-IPV) vs %s (TT); arm x antigen interaction p = %s.\n\n"),
+    ns(cvf), ns(cvc), topl,
+    ifelse(is.na(uf), "n/a", format(uf)), ifelse(is.na(uc), "n/a", format(uc)),
+    ns(r2td), ns(r2tt), fp(res$arm_int_p)))
+}
+```
+
+### 5.1 Hierarchical nested regression with cross-validated ΔR²
+
+```{r vp-wt-run, echo=TRUE}
+# Whole-cell binding through the shared runner — identical code path to SBA/PTNA.
+res_wt <- vp_run("WHOLE_WT_IgG", principal = "PRN_IgG_mat")
+kable(res_wt$vt, caption = paste0("Table 7. Hierarchical variance of infant whole-cell binding (WHOLE_WT_IgG) ",
+  "at InfMon2. R2 is in-sample; CV_R2 is 10-fold cross-validated; ΔCV_R2 is the cross-validated gain ",
+  "of each block. Blocks 1-2 are the honest forward signal; block 3 is the co-measured descriptive ",
+  "ceiling, not prediction."))
+```
+
+### 5.2 Relative-importance (Shapley / LMG) within the forward maternal block
+
+```{r vp-wt-lmg, echo=TRUE}
+if (!is.null(res_wt$lmg)) kable(res_wt$lmg, caption = paste0("Table 8. Shapley/LMG decomposition of the forward ",
+  "(maternal-at-delivery) block: each antigen's average marginal R2 contribution over all orderings, controlling ",
+  "for the design/clinical block. Shares sum to the forward block's added R2 and are collinearity-robust ",
+  "(unlike the raw conditional betas in Table 2).")) else cat("LMG decomposition skipped (insufficient maternal predictors).\n")
+```
+
+### 5.3 Commonality across timepoints (unique vs shared)
+
+```{r vp-wt-comm, echo=TRUE}
+if (!is.null(res_wt$comm)) kable(res_wt$comm, caption = paste0("Table 9. Commonality analysis of the whole-cell ",
+  "variance across the three timepoints (over and above the design/clinical block). 'Unique' = variance only that ",
+  "timepoint explains; 'Common' = variance two or three timepoints share. The forward-vs-ceiling gap in Table 6 ",
+  "is the formal sum of the cord/concurrent-unique and shared terms.")) else cat("Commonality analysis skipped.\n")
+```
+
+### 5.4 Does the variance structure differ by maternal arm?
+
+```{r vp-wt-arm, echo=TRUE}
+kable(res_wt$arm_tab, caption = paste0("Table 10. Forward-model fit within each maternal arm. A high fit after ",
+  "Tdap-IPV but not after tetanus toxoid indicates the predictive antibody is vaccine-induced."))
+# Arm x antigen interaction (formal version of the Table 3 contrast) is res_wt$arm_int_p, reported in 5.7.
+```
+
+### 5.5 Errors-in-variables (Deming) slope for the principal predictor
+
+```{r vp-wt-deming, echo=TRUE}
+if (!is.null(res_wt$dem)) kable(res_wt$dem, caption = sprintf(paste0("Table 11. Principal maternal predictor (%s) ",
+  "-> infant whole-cell binding: OLS vs errors-in-variables (Deming). Deming corrects the attenuation OLS suffers ",
+  "when the predictor is measured with error; a steeper Deming slope is expected."), res_wt$principal)) else cat("Deming step skipped (principal predictor unavailable).\n")
+```
+
+### 5.6 Technical (assay) variance components
+
+```{r vp-technical, echo=TRUE, results='asis'}
+batch_cols <- intersect(c("plate", "batch", "run", "run_date", "assay_plate", "source", "plate_id"),
+                        names(data_raw))
+if (length(batch_cols)) {
+  cat("Detected technical metadata columns:", paste(batch_cols, collapse = ", "),
+      "— fit e.g. `lme4::lmer(y ~ 1 + (1|", batch_cols[1], "))` to estimate the technical share.\n")
+} else {
+  cat("**Technical-variance step not estimable from `c_set.RData`.** The analysis-ready object carries ",
+      "no plate / run / standard-source columns (available columns: ",
+      paste(names(data_raw), collapse = ", "),
+      "). A variance-components model that bounds the assay/technical share needs the raw bead-array ",
+      "metadata joined to each measurement; re-export `c_set` with those keys to enable, for example, ",
+      "`lme4::lmer(y ~ 1 + (1|plate) + (1|run))`. The cross-plate normalisation discussed in the decay ",
+      "stage (Part B) is the upstream control that stands in for this in the meantime.\n", sep = "")
+}
+```
+
+### 5.7 What the decomposition shows (computed)
+
+```{r vp-wt-narrative, echo=FALSE, results='asis'}
+vp_narr(res_wt)
+```
+
+# Applying the same strategy to the two functional outcomes
+
+The methodology is identical to the whole-cell-binding section above — same outcome frame
+construction, same four hierarchical blocks (design/clinical → maternal/forward →
+cord/transferred → concurrent/ceiling), same six methods (cross-validated nested ΔR², Shapley/LMG,
+commonality, arm stratification + interaction, Deming) and the same guardrails. Only the **outcome**
+changes: from `WHOLE_WT_IgG` to the two infant functional readouts at InfMon2, serum bactericidal
+activity (`WHOLE_SBA`) and PT-neutralising activity (`WHOLE_PTNA`). To avoid duplicating code, the
+analysis is wrapped in a single function and called once per outcome.
+
+```{r vp-fn, echo=FALSE}
+# vp_run() and vp_narr() are defined once in the `vp-helpers` chunk above and
+# reused unchanged for every outcome (whole-cell, SBA, PTNA). Nothing is
+# redefined here: the runner is a single shared implementation.
+invisible(NULL)
+```
+
+# Methodological strategy: the variance structure of infant serum bactericidal activity (WHOLE_SBA) at two months
+
+SBA is the functional kill assay — the most antibody-predictable of the three infant outcomes
+(Table 4). The collated models point to **PRN IgG** as the principal correlate and to a strongly
+**vaccine-sensitive** structure (high fit after Tdap-IPV, near-zero after tetanus toxoid; Table 3),
+so the decomposition below should show PRN dominating the forward block and a large arm gap with a
+significant arm × antigen interaction. The Deming step uses PRN IgG at delivery as the principal
+predictor.
+
+```{r vp-sba-run, echo=TRUE}
+res_sba <- vp_run("WHOLE_SBA", principal = "PRN_IgG_mat")
+```
+
+```{r vp-sba-nested}
+kable(res_sba$vt, caption = "Table 12. Hierarchical variance of infant SBA (WHOLE_SBA) at InfMon2: in-sample R2, 10-fold CV-R2, and the cross-validated gain per block.")
+```
+
+```{r vp-sba-lmg}
+if (!is.null(res_sba$lmg)) kable(res_sba$lmg,
+  caption = "Table 13. Shapley/LMG variance shares within the forward (maternal-at-delivery) block for SBA.") else cat("LMG decomposition skipped (insufficient maternal predictors).\n")
+```
+
+```{r vp-sba-comm}
+if (!is.null(res_sba$comm)) kable(res_sba$comm,
+  caption = "Table 14. Commonality of SBA variance across the maternal / cord / concurrent timepoints (over the design+clinical block).") else cat("Commonality analysis skipped.\n")
+```
+
+```{r vp-sba-arm}
+kable(res_sba$arm_tab, caption = "Table 15. Forward-model fit for SBA within each maternal arm.")
+```
+
+```{r vp-sba-deming}
+if (!is.null(res_sba$dem)) kable(res_sba$dem,
+  caption = sprintf("Table 16. Principal maternal predictor (%s) -> infant SBA: OLS vs errors-in-variables (Deming).", res_sba$principal)) else cat("Deming step skipped (principal predictor unavailable).\n")
+```
+
+```{r vp-sba-narrative, results='asis'}
+vp_narr(res_sba)
+```
+
+# Methodological strategy: the variance structure of infant PT-neutralising activity (WHOLE_PTNA) at two months
+
+PTNA is PT-specific neutralisation. The collated models point to **PT IgG / IgG1** as the principal
+correlate and — unlike SBA and whole-cell binding — to an **arm-independent** structure (similar fit
+in both arms; Table 3), reflecting that the PT antibody → PTNA relationship does not depend on which
+vaccine raised the titre. The decomposition below should therefore show PT dominating the forward
+block, a smaller arm gap, and a non-significant arm × antigen interaction. The Deming step uses PT
+IgG at delivery as the principal predictor.
+
+```{r vp-ptna-run, echo=TRUE}
+res_ptna <- vp_run("WHOLE_PTNA", principal = "PT_IgG_mat")
+```
+
+```{r vp-ptna-nested}
+kable(res_ptna$vt, caption = "Table 17. Hierarchical variance of infant PTNA (WHOLE_PTNA) at InfMon2: in-sample R2, 10-fold CV-R2, and the cross-validated gain per block.")
+```
+
+```{r vp-ptna-lmg}
+if (!is.null(res_ptna$lmg)) kable(res_ptna$lmg,
+  caption = "Table 18. Shapley/LMG variance shares within the forward (maternal-at-delivery) block for PTNA.") else cat("LMG decomposition skipped (insufficient maternal predictors).\n")
+```
+
+```{r vp-ptna-comm}
+if (!is.null(res_ptna$comm)) kable(res_ptna$comm,
+  caption = "Table 19. Commonality of PTNA variance across the maternal / cord / concurrent timepoints (over the design+clinical block).") else cat("Commonality analysis skipped.\n")
+```
+
+```{r vp-ptna-arm}
+kable(res_ptna$arm_tab, caption = "Table 20. Forward-model fit for PTNA within each maternal arm (expected: similar across arms).")
+```
+
+```{r vp-ptna-deming}
+if (!is.null(res_ptna$dem)) kable(res_ptna$dem,
+  caption = sprintf("Table 21. Principal maternal predictor (%s) -> infant PTNA: OLS vs errors-in-variables (Deming).", res_ptna$principal)) else cat("Deming step skipped (principal predictor unavailable).\n")
+```
+
+```{r vp-ptna-narrative, results='asis'}
+vp_narr(res_ptna)
+```
+
+## Cross-outcome contrast (computed)
+
+```{r vp-contrast, results='asis'}
+g_outcomes <- list(`whole-cell (WT IgG)` = res_wt$vt,
+                   SBA = res_sba$vt, PTNA = res_ptna$vt)
+fwd <- function(v) if (is.null(v)) NA_real_ else v$CV_R2[v$Block == "2 + cord (transferred)"]
+ceil <- function(v) if (is.null(v)) NA_real_ else v$CV_R2[v$Block == "3 + concurrent (ceiling)"]
+ct <- data.frame(
+  Outcome = names(g_outcomes),
+  `Forward CV-R2`   = vapply(g_outcomes, function(v) round(fwd(v), 3),  numeric(1)),
+  `Ceiling CV-R2`   = vapply(g_outcomes, function(v) round(ceil(v), 3), numeric(1)),
+  check.names = FALSE)
+ct[["Forecastable gap"]] <- round(ct[["Ceiling CV-R2"]] - ct[["Forward CV-R2"]], 3)
+kable(ct, caption = "Table 22. Forward vs concurrent-ceiling cross-validated R2 for the three infant outcomes. A small gap means most of the structure is already forecastable from maternal/cord antibody; a large gap means it is mainly co-measurable at two months.")
+```
+
+# Notes for the analyst
+
+* **Forward vs ceiling is the whole game.** Quote the block 0–2 CV-R² as the predictive result and
+  the block 3 fit only as a descriptive ceiling; the gap is the co-measured component.
+* **Collinearity.** Use the LMG shares, not conditional βs; FHA's negative coefficient is a
+  collinearity symptom.
+* **Interaction tests.** Section/Table 3 is a difference in *variance explained* by arm, not yet a
+  slope difference — the scaffold's arm-interaction `anova` is the formal test (group × PRN IgG for
+  SBA/whole-cell; group × PT IgG for PTNA).
+* **Deming link.** Refit the principal antibody → function slopes as errors-in-variables (Deming)
+  to connect to the earlier GaPs Deming result and avoid predictor-attenuation.
+* **Provenance.** Tables 2–6 collate the rendered maternal-chain and prediction modules; verify
+  against the current knit before submission. The variance-structure analysis (section 5.1-5.7) is implemented and computed here
+  from `c_set.RData` joined to `clin_assess.RData`.
+
+```{r sessioninfo}
+sessionInfo()
+```

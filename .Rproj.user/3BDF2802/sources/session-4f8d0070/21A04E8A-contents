@@ -1,0 +1,632 @@
+---
+title: "Cord Blood → 8 Weeks: Subclass, ADCD & WT-IgG Decay (Supplementary Tables S.4.2 / S.4.3)"
+subtitle: "Extension of the total-IgG half-life analysis (S.4.1) to IgG subclasses, ADCD, and whole-cell IgG — absolute (S.4.2) and total-IgG-standardized (S.4.3). Built from d_set (ebaa_extra2)."
+author: "Scot Zens"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:
+    toc: true
+    toc_depth: 3
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+# (identical bootstrap to cord_to_infmon2_analysis_refactored.Rmd and pathway_analysis.Rmd,
+#  so this file runs from the same project tree with no extra setup)
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+
+library(dplyr)
+library(tidyr)
+
+# ---- IMPORTANT: this analysis uses d_set (object ebaa_extra2), NOT c_set ----
+data_raw <- load_serology_data(find_proj_file("data/d_set.RData"),
+                               object_name = "ebaa_extra2")
+
+FROM_VISIT <- "CordBlood"   # raw code M00 (cord, sample_type C), recoded by load_serology_data()
+TO_VISIT   <- "InfMon2"     # raw code M02 (infant 8-week / 2-month visit)
+MIN_PAIRED <- 10L
+
+# Oguti et al. (2022) log2 conversion: one unit on log2 = one halving.
+LOG10_TO_LOG2 <- 1 / log10(2)          # ~3.321928 ; log2 delta = log10 delta * this
+N_BONF        <- 6L                     # Bonferroni base (six DTP antigens, as in S.4.1)
+
+# analyte sets for the two tables
+S42_ANALYTES <- c("IgG1", "IgG2", "IgG3", "IgG4", "ADCD", "WT_IgG")   # absolute (raw)
+S43_ANALYTES <- c("IgG1", "IgG2", "IgG3", "IgG4", "ADCD")             # standardized by total IgG
+
+# presentation ordering
+ANTIGEN_ORDER_DISP <- c("PT", "PRN", "FHA", "FIM", "TT", "DT",
+                        "IPV1", "IPV2", "IPV3", "PENTAMER", "WHOLE")
+ANALYTE_ORDER_DISP <- c("IgG1", "IgG2", "IgG3", "IgG4", "ADCD", "WT_IgG")
+```
+
+# Purpose and relationship to Table S.4.1
+
+Supplementary Table **S.4.1** (unchanged) reports the half-life of transplacentally
+transferred **total IgG** for the six DTP antigens using the method of Oguti et al. (2022),
+alongside the published pooled estimates. This document **extends that decay analysis** to the
+other analytes that were measured in cord blood in `d_set`:
+
+- **Table S.4.2** — the same decay columns as S.4.1 (the Oguti-method half-life; the Oguti
+  comparison columns are dropped, since Oguti et al. measured only total IgG), **plus** the
+  absolute (raw) amount of decay across **all** paired subjects, the absolute decay restricted
+  to subjects whose level actually **declined**, and the **proportion of samples declining**
+  from cord to 8 weeks. Rows are the **IgG subclasses (IgG1–IgG4)** and **ADCD** for every
+  available antigen, and **WT_IgG** (whole-bacterium IgG).
+- **Table S.4.3** — the identical column set, but computed on values **standardized by total
+  IgG** (each antigen-specific feature residualized on that antigen's total IgG, using the
+  standardization from `pathway_analysis.Rmd`). WT_IgG is excluded here because it has no
+  antigen-specific total-IgG denominator.
+
+**Convention (as in the parent analysis):** Δ = value at **InfMon2** − value at **CordBlood**
+(log₁₀). A **negative** Δ is the expected **decay**; a positive Δ is an increase. The
+Oguti-method half-life uses the per-infant log₂ decay rate and, following the source paper,
+excludes infants whose level increased over the interval (rate ≥ 0, taken to indicate likely
+infection).
+
+```{r visit-check, results='asis'}
+vv <- as.character(unique(data_raw$visit_name))
+cat(sprintf("Loaded `d_set` (`ebaa_extra2`): **%d** rows. Visit labels present include: %s.\n\n",
+            nrow(data_raw), paste(sort(vv), collapse = ", ")))
+if (!all(c(FROM_VISIT, TO_VISIT) %in% vv))
+  cat(sprintf("> **Warning:** expected visit labels '%s' and '%s' were not both found after ",
+              "`load_serology_data()`. Check the visit recode.\n\n", FROM_VISIT, TO_VISIT))
+```
+
+```{r pairing-helpers, include=FALSE}
+## ---------------------------------------------------------------------------
+## Manual within-subject pairing (used for BOTH tables so the pairing logic is
+## identical for raw and standardized values). Takes a long frame with columns
+## subject_accession / visit_name / feature / value and returns one row per
+## subject x feature that has a finite value at both visits, with:
+##   v_from (CordBlood), v_to (InfMon2), delta = v_to - v_from.
+## ---------------------------------------------------------------------------
+make_paired <- function(long_df) {
+  w <- long_df %>%
+    dplyr::filter(visit_name %in% c(FROM_VISIT, TO_VISIT), is.finite(value)) %>%
+    dplyr::distinct(subject_accession, visit_name, feature, .keep_all = TRUE) %>%
+    dplyr::select(subject_accession, visit_name, feature, value) %>%
+    tidyr::pivot_wider(names_from = visit_name, values_from = value)
+  ## If either visit is absent (e.g. a residual source that covers only one visit),
+  ## there is nothing to pair -- return an empty frame rather than erroring, so the
+  ## caller can fall back cleanly.
+  if (!all(c(FROM_VISIT, TO_VISIT) %in% names(w)))
+    return(data.frame(subject_accession = character(0), feature = character(0),
+                      v_from = numeric(0), v_to = numeric(0), delta = numeric(0),
+                      stringsAsFactors = FALSE))
+  w %>%
+    dplyr::filter(is.finite(.data[[FROM_VISIT]]), is.finite(.data[[TO_VISIT]])) %>%
+    dplyr::mutate(v_from = .data[[FROM_VISIT]],
+                  v_to   = .data[[TO_VISIT]],
+                  delta  = v_to - v_from) %>%
+    dplyr::select(subject_accession, feature, v_from, v_to, delta)
+}
+
+## native feature -> analyte map (clean casing from the data), antigen from prefix
+feat_map <- data_raw %>%
+  dplyr::distinct(feature, analyte) %>%
+  dplyr::mutate(feature = as.character(feature),
+                analyte = as.character(analyte),
+                antigen = sub("_.*", "", feature))
+
+attach_meta <- function(pd) {
+  pd %>%
+    dplyr::mutate(feature = as.character(feature)) %>%
+    dplyr::left_join(feat_map, by = "feature")
+}
+```
+
+```{r interval-days, include=FALSE}
+## ---------------------------------------------------------------------------
+## Per-infant CordBlood -> 8-week interval in days (same source as S.4.1).
+## Loaded from data/INTERVAL_DAYS_BY_SUBJECT.RData if present; otherwise every
+## infant falls back to the cohort/nominal interval. Because each infant's rate
+## is divided by that infant's own interval, half-lives are on a true per-day
+## footing; the fallback affects only absolute half-life scaling, never the
+## relative comparison between analytes.
+## ---------------------------------------------------------------------------
+NOMINAL_INTERVAL_DAYS <- 8.7 * 7        # 60.9 d (Oguti Table 1 pooled median; fallback only)
+
+if (!exists("INTERVAL_DAYS_BY_SUBJECT")) {
+  .iv_path <- tryCatch(find_proj_file("data/INTERVAL_DAYS_BY_SUBJECT.RData", optional = TRUE),
+                       error = function(e) NULL)
+  if (!is.null(.iv_path) && file.exists(.iv_path)) load(.iv_path)
+}
+
+if (exists("INTERVAL_DAYS_BY_SUBJECT") &&
+    is.data.frame(INTERVAL_DAYS_BY_SUBJECT) &&
+    all(c("subject_accession", "interval_days") %in% names(INTERVAL_DAYS_BY_SUBJECT))) {
+  .iv_tbl <- INTERVAL_DAYS_BY_SUBJECT[, c("subject_accession", "interval_days")]
+  .iv_tbl$subject_accession <- as.character(.iv_tbl$subject_accession)
+  .iv_tbl$interval_days     <- as.numeric(.iv_tbl$interval_days)
+  .iv_med <- stats::median(.iv_tbl$interval_days, na.rm = TRUE)
+  INTERVAL_IS_NOMINAL <- FALSE
+  INTERVAL_SOURCE <- sprintf(
+    "exact per-infant cord->8-week interval from sample-receipt dates (n=%d infants, median %.1f d)",
+    sum(is.finite(.iv_tbl$interval_days)), .iv_med)
+} else {
+  .iv_tbl <- NULL
+  .iv_med <- NOMINAL_INTERVAL_DAYS
+  INTERVAL_IS_NOMINAL <- TRUE
+  INTERVAL_SOURCE <- sprintf(paste0("nominal constant of %.1f days (INTERVAL_DAYS_BY_SUBJECT not ",
+                                    "found in the session or under data/)"), NOMINAL_INTERVAL_DAYS)
+}
+
+attach_interval <- function(pd) {
+  pd$subject_accession <- as.character(pd$subject_accession)
+  if (INTERVAL_IS_NOMINAL) {
+    pd$interval_days <- NOMINAL_INTERVAL_DAYS
+  } else {
+    .fb <- if (is.finite(.iv_med)) .iv_med else NOMINAL_INTERVAL_DAYS
+    pd <- pd %>% dplyr::left_join(.iv_tbl, by = "subject_accession") %>%
+      dplyr::mutate(interval_days = ifelse(is.finite(interval_days), interval_days, .fb))
+  }
+  pd
+}
+```
+
+```{r decay-builder, include=FALSE}
+## ---------------------------------------------------------------------------
+## Oguti-method intercept-only fit -> half-life + 95% CI, from a vector of
+## per-infant log2/day decay rates. Half-life = 1 / |mean rate|.
+## ---------------------------------------------------------------------------
+.hl_fit <- function(rate) {
+  r <- rate[is.finite(rate)]
+  n <- length(r)
+  if (n < 3L || stats::sd(r) == 0) return(NULL)
+  fit <- stats::lm(r ~ 1)
+  est <- unname(stats::coef(fit)[1])
+  ci  <- unname(stats::confint(fit)[1, ])
+  p   <- stats::coef(summary(fit))[1, 4]
+  hl_ci <- sort(1 / abs(ci))
+  data.frame(n_used = n, rate = est, half_life = 1 / abs(est),
+             hl_lo = hl_ci[1], hl_hi = hl_ci[2], p_raw = p)
+}
+
+## ---------------------------------------------------------------------------
+## One decay summary row per (antigen, analyte). `pd` must carry:
+##   subject_accession, antigen, analyte, delta (log10), interval_days.
+## Columns produced (S.4.2 / S.4.3 layout):
+##   n_pair        - subjects paired at both visits (all subjects)
+##   n_used        - subjects contributing to the half-life (decliners; matches
+##                   S.4.1 "This study N", which excludes increases per Oguti)
+##   half_life,hl_lo,hl_hi,p_raw  - Oguti-method half-life + 95% CI
+##   med_all       - median absolute decay Δlog10 across ALL paired subjects
+##   n_dec, med_dec- decliners count and median Δlog10 among decliners only
+##   pct_dec       - % of paired samples declining (Δ < 0)
+## ---------------------------------------------------------------------------
+build_decay_table <- function(pd, exclude_increases = TRUE) {
+  pd <- pd %>%
+    dplyr::filter(is.finite(delta), is.finite(interval_days), interval_days > 0)
+  if (!nrow(pd)) return(data.frame())
+  keys <- pd %>% dplyr::distinct(antigen, analyte)
+  rows <- lapply(seq_len(nrow(keys)), function(i) {
+    ant <- keys$antigen[i]; an <- keys$analyte[i]
+    d <- pd %>% dplyr::filter(antigen == ant, analyte == an)
+    n_pair <- nrow(d)
+    if (n_pair < MIN_PAIRED) return(NULL)
+    dec     <- d %>% dplyr::filter(delta < 0)
+    n_dec   <- nrow(dec)
+    med_all <- stats::median(d$delta)
+    med_dec <- if (n_dec) stats::median(dec$delta) else NA_real_
+    pct_dec <- 100 * n_dec / n_pair
+    d$rate  <- (d$delta * LOG10_TO_LOG2) / d$interval_days
+    use     <- if (exclude_increases) d$rate[d$rate < 0] else d$rate
+    hl      <- .hl_fit(use)
+    data.frame(
+      antigen = ant, analyte = an, n_pair = n_pair,
+      n_used    = if (is.null(hl)) NA_integer_ else hl$n_used,
+      half_life = if (is.null(hl)) NA_real_    else hl$half_life,
+      hl_lo     = if (is.null(hl)) NA_real_    else hl$hl_lo,
+      hl_hi     = if (is.null(hl)) NA_real_    else hl$hl_hi,
+      p_raw     = if (is.null(hl)) NA_real_    else hl$p_raw,
+      med_all = med_all, n_dec = n_dec, med_dec = med_dec, pct_dec = pct_dec,
+      stringsAsFactors = FALSE)
+  })
+  out <- dplyr::bind_rows(rows)
+  if (!nrow(out)) return(out)
+  out$p_bonf <- pmin(1, out$p_raw * N_BONF)
+  out %>%
+    dplyr::mutate(
+      antigen = factor(antigen, levels = union(ANTIGEN_ORDER_DISP, sort(unique(antigen)))),
+      analyte = factor(analyte, levels = union(ANALYTE_ORDER_DISP, sort(unique(analyte))))) %>%
+    dplyr::arrange(analyte, antigen)
+}
+
+## Pretty-printer shared by both tables (columns mirror S.4.1 minus Oguti, + 3 new)
+render_decay_table <- function(tbl, caption, half_life_dagger = FALSE) {
+  hl_hdr <- if (half_life_dagger) "Half-life (days) (95% CI) \u2020" else "Half-life (days) (95% CI)"
+  ## Build with plain, syntactic column names, then attach the display headers via
+  ## col.names. (Unicode \u escapes are legal in normal double-quoted strings but
+  ## NOT inside backtick-quoted names, so the fancy headers live only in col.names.)
+  disp <- tbl %>% dplyr::transmute(
+    antigen   = as.character(antigen),
+    analyte   = as.character(analyte),
+    n_pair    = n_pair,
+    n_used    = ifelse(is.na(n_used), "\u2014", as.character(n_used)),
+    half_life = ifelse(is.na(half_life), "\u2014",
+                       sprintf("%.1f (%.1f \u2013 %.1f)", half_life, hl_lo, hl_hi)),
+    med_all   = sprintf("%+.3f", med_all),
+    med_dec   = ifelse(is.na(med_dec), "\u2014", sprintf("%+.3f", med_dec)),
+    pct_dec   = sprintf("%.1f%%", pct_dec))
+  knitr::kable(
+    disp, caption = caption,
+    col.names = c("Antigen", "Analyte", "N paired", "N used (decay)", hl_hdr,
+                  "Median \u0394log\u2081\u2080, all subjects",
+                  "Median \u0394log\u2081\u2080, decliners",
+                  "% declining")) %>% print()
+  invisible(disp)
+}
+```
+
+# Coverage of the extended analytes in `d_set`
+
+```{r coverage, results='asis'}
+cov <- data_raw %>%
+  dplyr::mutate(visit_name = as.character(visit_name),
+                antigen = sub("_.*", "", as.character(feature)),
+                analyte = as.character(analyte)) %>%
+  dplyr::filter(analyte %in% S42_ANALYTES, visit_name %in% c(FROM_VISIT, TO_VISIT)) %>%
+  dplyr::distinct(subject_accession, visit_name, feature, .keep_all = TRUE) %>%
+  dplyr::group_by(antigen, analyte) %>%
+  dplyr::summarize(
+    n_cord   = dplyr::n_distinct(subject_accession[visit_name == FROM_VISIT]),
+    n_inf    = dplyr::n_distinct(subject_accession[visit_name == TO_VISIT]),
+    .groups  = "drop")
+
+## paired counts
+raw_long0 <- data_raw %>%
+  dplyr::transmute(subject_accession, visit_name = as.character(visit_name),
+                   feature = as.character(feature), value = log_assay_value)
+paired_all <- make_paired(raw_long0) %>% attach_meta()
+pair_cnt <- paired_all %>%
+  dplyr::filter(analyte %in% S42_ANALYTES) %>%
+  dplyr::group_by(antigen, analyte) %>%
+  dplyr::summarize(n_paired = dplyr::n(), .groups = "drop")
+
+cov <- cov %>% dplyr::left_join(pair_cnt, by = c("antigen", "analyte")) %>%
+  dplyr::mutate(n_paired = ifelse(is.na(n_paired), 0L, n_paired),
+                antigen = factor(antigen, levels = union(ANTIGEN_ORDER_DISP, sort(unique(antigen)))),
+                analyte = factor(analyte, levels = union(ANALYTE_ORDER_DISP, sort(unique(analyte))))) %>%
+  dplyr::arrange(analyte, antigen)
+
+knitr::kable(
+  cov %>% dplyr::transmute(Antigen = as.character(antigen), Analyte = as.character(analyte),
+                           `n CordBlood` = n_cord, `n InfMon2` = n_inf, `n paired` = n_paired),
+  caption = paste0("Coverage of the extended analytes in d_set: subjects with CordBlood, with ",
+                   "InfMon2, and with BOTH (the n used). Only analyte x antigen cells with ",
+                   sprintf("n paired \u2265 %d ", MIN_PAIRED),
+                   "enter Tables S.4.2 / S.4.3.")) %>% print()
+
+cat(sprintf("\nInterval source for all half-lives: **%s**.\n\n", INTERVAL_SOURCE))
+```
+
+# Table S.4.2 — Absolute (raw) decay: IgG subclasses, ADCD, and WT-IgG
+
+```{r s42, results='asis'}
+pd_raw <- paired_all %>%
+  dplyr::filter(analyte %in% S42_ANALYTES) %>%
+  attach_interval()
+
+s42 <- build_decay_table(pd_raw, exclude_increases = TRUE)
+
+render_decay_table(
+  s42,
+  caption = paste0(
+    "Supplementary Table S.4.2. Decay of transplacental antibody from cord blood to the ",
+    "8-week infant visit for the IgG subclasses (IgG1\u2013IgG4) and ADCD across every available ",
+    "antigen, and for whole-bacterium IgG (WT_IgG). Columns mirror S.4.1 (Oguti-method half-life ",
+    "on the per-infant log2 decay rate; the Oguti reference columns are omitted because that ",
+    "study measured only total IgG), with three additions: the absolute (raw) median decay ",
+    "\u0394log10 (InfMon2 \u2212 CordBlood; negative = decay) across all paired subjects, the same ",
+    "restricted to subjects whose level declined, and the percentage of paired samples that ",
+    "declined. 'N used (decay)' is the half-life sample after excluding infants whose level ",
+    "increased over the interval (rate \u2265 0), matching Oguti et al. and the 'This study N' of S.4.1."))
+```
+
+```{r s42-raw-values, results='asis'}
+## Full-precision values (for transcription into the supplement document)
+knitr::kable(
+  s42 %>% dplyr::transmute(
+    antigen = as.character(antigen), analyte = as.character(analyte),
+    n_pair, n_used,
+    half_life = round(half_life, 2), hl_lo = round(hl_lo, 2), hl_hi = round(hl_hi, 2),
+    p_raw = signif(p_raw, 3), p_bonf = signif(p_bonf, 3),
+    med_all = round(med_all, 4), n_dec, med_dec = round(med_dec, 4),
+    pct_dec = round(pct_dec, 1)),
+  caption = "Table S.4.2 (full-precision underlying values).") %>% print()
+```
+
+# Standardization by total IgG (for Table S.4.3)
+
+```{r standardize-setup, include=FALSE}
+## ===========================================================================
+## Total-IgG standardization.
+## PRIMARY (preferred): the project's own bubble-plot transform
+##   (R/connection_transform.R :: standardized_set(), per infant arm), exactly as in
+##   the standardization section of pathway_analysis.Rmd, using the COMBINED residual
+##   files that standardize M00 (CordBlood), M02 (InfMon2) and M05 together under a
+##   single parameterization:
+##     igg_standard_residuals_{ap,wp}_..._k_trn.RData
+##   Both visits of the decay contrast are therefore standardized the SAME way, so the
+##   per-subject cord->8-week change is not confounded by differing model fits.
+## FALLBACK 1 (period-specific residuals, two separate model fits): CordBlood from the
+##   maternal/cord ("_mat") residuals and InfMon2 from the infant/8-week residuals.
+##   Used only if the combined "_trn" files are unavailable; kept internally consistent
+##   (either BOTH visits from _trn, or BOTH from the period-specific pair).
+## FALLBACK 2 (only if the transform/files/helpers are unavailable): residualize each
+##   antigen-specific feature (log10) on that antigen's total IgG (log10) in-document,
+##   fit per feature x infant-arm across both visits. The path used is reported in the
+##   HTML diagnostics.
+## In all cases the standardized value is a residual on total IgG; features with no
+## antigen-specific total IgG (IPV*, PENTAMER, WHOLE/WT_IgG) drop out.
+## ===========================================================================
+STD_METHOD  <- "none"
+std_paired  <- NULL
+STD_DIAG    <- character(0)
+.dg <- function(...) STD_DIAG <<- c(STD_DIAG, sprintf(...))
+
+## Known filenames of the project bubble residuals (per infant arm), in data/.
+## PREFERRED: the combined "_trn" files standardize CordBlood (M00), InfMon2 (M02) and
+## M05 together under one parameterization, so the cord->8-week contrast uses a single
+## consistent model. The period-specific "_mat" (maternal+cord) and infant/8-week files
+## are retained as an internally-consistent fallback pair. The project constant is tried
+## first (the symbol pathway_analysis.Rmd uses), then these literal names.
+RESID_TRN_AP <- "igg_standard_residuals_ap_matpm_prevacvacc_k_trn.RData"   # combined M00+M02+M05
+RESID_TRN_WP <- "igg_standard_residuals_wp_matpm_prevacvacc_k_trn.RData"
+RESID_INF_AP <- "igg_standard_residuals_ap_matpm_prevacvacc_k.RData"       # 8-week (InfMon2)
+RESID_INF_WP <- "igg_standard_residuals_wp_matpm_prevacvacc_k.RData"
+RESID_MAT_AP <- "igg_standard_residuals_ap_matpm_prevacvacc_k_mat.RData"   # maternal + cord
+RESID_MAT_WP <- "igg_standard_residuals_wp_matpm_prevacvacc_k_mat.RData"
+
+.resolve_resid <- function(const_name, literal) {
+  ## 1) project constant, resolved through find_proj_file (as in pathway_analysis.Rmd)
+  if (exists(const_name, inherits = TRUE)) {
+    cval <- get(const_name, inherits = TRUE)
+    p <- tryCatch(find_proj_file(cval, optional = TRUE), error = function(e) NULL)
+    if (!is.null(p) && file.exists(p)) { .dg("%s: resolved via constant %s -> %s", literal, const_name, p); return(p) }
+  }
+  ## 2) known filename through find_proj_file (bare and under data/)
+  for (cand in c(literal, file.path("data", literal))) {
+    p <- tryCatch(find_proj_file(cand, optional = TRUE), error = function(e) NULL)
+    if (!is.null(p) && file.exists(p)) { .dg("%s: resolved via find_proj_file('%s') -> %s", literal, cand, p); return(p) }
+  }
+  ## 3) plain relative existence
+  for (cand in c(file.path("data", literal), literal, file.path("..", "data", literal))) {
+    if (file.exists(cand)) { .dg("%s: resolved via relative path -> %s", literal, cand); return(normalizePath(cand)) }
+  }
+  .dg("%s: NOT found (constant %s %s)", literal, const_name,
+      if (exists(const_name, inherits = TRUE)) paste0("= '", get(const_name, inherits = TRUE), "'") else "undefined")
+  NULL
+}
+
+## ---- attempt the project transform ----------------------------------------
+.ct_err <- tryCatch({
+  source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8"); NA_character_
+}, error = function(e) conditionMessage(e))
+if (!is.na(.ct_err)) .dg("source(R/connection_transform.R) ERROR: %s", .ct_err)
+
+have_ct  <- exists("standardized_set", mode = "function")
+have_dt  <- requireNamespace("data.table", quietly = TRUE)
+have_inc <- exists("BUBBLE_INCLUDE_FEATURE")
+.dg("standardized_set()=%s | BUBBLE_INCLUDE_FEATURE=%s | data.table=%s", have_ct, have_inc, have_dt)
+
+.inc_feat <- if (have_inc) BUBBLE_INCLUDE_FEATURE else character(0)
+
+## Resolve all residual sources (project constant first, then literal filename).
+.res_trn_ap <- .resolve_resid("BUBBLE_RESIDUAL_TRN_AP", RESID_TRN_AP)
+.res_trn_wp <- .resolve_resid("BUBBLE_RESIDUAL_TRN_WP", RESID_TRN_WP)
+.res_inf_ap <- .resolve_resid("BUBBLE_RESIDUAL_AP",     RESID_INF_AP)
+.res_inf_wp <- .resolve_resid("BUBBLE_RESIDUAL_WP",     RESID_INF_WP)
+.res_mat_ap <- .resolve_resid("BUBBLE_RESIDUAL_MAT_AP", RESID_MAT_AP)
+.res_mat_wp <- .resolve_resid("BUBBLE_RESIDUAL_MAT_WP", RESID_MAT_WP)
+
+## Standardize ONE visit's slice with a specified residual pair, mirroring how
+## pathway_analysis.Rmd calls standardized_set() on a single visit at a time. Returns
+## a long frame (subject_accession, visit_name = v, feature, value) or NULL.
+std_one_visit <- function(v, res_ap, res_wp, src_label) {
+  if (is.null(res_ap) || is.null(res_wp)) return(NULL)
+  cv <- data_raw %>%
+    dplyr::filter(feature %in% .inc_feat, visit_name == v) %>%
+    dplyr::select(subject_accession, visit_name, arm_name, infant_arm,
+                  antigen, analyte, feature, value_reported, log_assay_value) %>%
+    dplyr::distinct(subject_accession, feature, .keep_all = TRUE) %>%
+    dplyr::mutate(dplyr::across(c(visit_name, antigen, analyte, feature, arm_name, infant_arm),
+                                as.character))
+  if (!nrow(cv)) return(NULL)
+  s <- tryCatch(
+    dplyr::bind_rows(
+      standardized_set("IgG", cv[cv$infant_arm == "wP", ], res_wp),
+      standardized_set("IgG", cv[cv$infant_arm == "aP", ], res_ap)),
+    error = function(e) { .dg("visit '%s' via %s: standardized_set ERROR: %s", v, src_label, conditionMessage(e)); NULL })
+  if (is.null(s)) return(NULL)
+  if (!all(c("subject_accession", "feature", "log_assay_value") %in% names(s))) {
+    .dg("visit '%s' via %s: returned cols {%s} (required subject_accession/feature/log_assay_value missing)",
+        v, src_label, paste(names(s), collapse = ", "))
+    return(NULL)
+  }
+  s <- s %>% dplyr::filter(is.finite(log_assay_value))
+  .dg("visit '%s' via %s: %d usable rows (%d subjects, %d features)",
+      v, src_label, nrow(s), dplyr::n_distinct(s$subject_accession), dplyr::n_distinct(s$feature))
+  if (!nrow(s)) return(NULL)
+  s %>% dplyr::transmute(subject_accession = as.character(subject_accession),
+                         visit_name = v, feature = as.character(feature),
+                         value = log_assay_value)
+}
+
+## Build a paired standardized set from a FROM-visit source and a TO-visit source.
+## Returns a paired frame (with a "method" attribute) or NULL if either visit is empty.
+build_std <- function(from_src, to_src, method_label) {
+  if (is.null(from_src$ap) || is.null(to_src$ap)) return(NULL)
+  f <- std_one_visit(FROM_VISIT, from_src$ap, from_src$wp, from_src$label)
+  t <- std_one_visit(TO_VISIT,   to_src$ap,   to_src$wp,   to_src$label)
+  sl <- dplyr::bind_rows(f, t)
+  if (is.null(sl) || !nrow(sl) ||
+      !any(sl$visit_name == FROM_VISIT) || !any(sl$visit_name == TO_VISIT)) return(NULL)
+  cand <- make_paired(sl)
+  .dg("  -> paired standardized rows (finite at BOTH visits): %d", nrow(cand))
+  if (!nrow(cand)) return(NULL)
+  attr(cand, "method") <- method_label
+  cand
+}
+
+if (have_ct && have_dt && have_inc) {
+  .src_trn <- list(ap = .res_trn_ap, wp = .res_trn_wp, label = "combined M00+M02+M05 residuals (_trn)")
+  .src_mat <- list(ap = .res_mat_ap, wp = .res_mat_wp, label = "maternal/cord residuals (_mat)")
+  .src_inf <- list(ap = .res_inf_ap, wp = .res_inf_wp, label = "infant/8-week residuals")
+
+  cand <- NULL
+  ## Preferred: BOTH visits from the combined (_trn) residuals -- one parameterization.
+  if (!is.null(.src_trn$ap)) {
+    .dg("Trying combined (_trn) residuals for both %s and %s ...", FROM_VISIT, TO_VISIT)
+    cand <- build_std(.src_trn, .src_trn,
+      "project transform (standardized_set on the combined '_trn' residuals): CordBlood and InfMon2 standardized under a single M00+M02+M05 parameterization, differenced per subject")
+  }
+  ## Fallback: period-specific residuals -- CordBlood from _mat, InfMon2 from infant.
+  if (is.null(cand) && !is.null(.src_mat$ap) && !is.null(.src_inf$ap)) {
+    .dg("Combined (_trn) path unavailable/empty; trying period-specific residuals (cord<-_mat, 8wk<-infant).")
+    cand <- build_std(.src_mat, .src_inf,
+      "project transform (standardized_set): CordBlood from maternal/cord (_mat) residuals and InfMon2 from infant residuals, differenced per subject (separate model fits)")
+  }
+  if (!is.null(cand)) {
+    std_paired <- cand
+    STD_METHOD  <- attr(cand, "method")
+  } else {
+    .dg("No project-transform path produced a paired standardized set; using fallback.")
+  }
+} else {
+  .dg("Primary preconditions not all met (see flags above) -- using fallback.")
+}
+
+## ---- fallback: in-document residual-on-total-IgG ---------------------------
+if (is.null(std_paired)) {
+  .dg("FALLBACK engaged: in-document residual-on-total-IgG (per feature x infant_arm, both visits pooled).")
+  base <- data_raw %>%
+    dplyr::mutate(visit_name = as.character(visit_name),
+                  feature = as.character(feature),
+                  analyte = as.character(analyte),
+                  infant_arm = as.character(infant_arm),
+                  antigen = sub("_.*", "", feature)) %>%
+    dplyr::filter(visit_name %in% c(FROM_VISIT, TO_VISIT)) %>%
+    dplyr::distinct(subject_accession, visit_name, feature, .keep_all = TRUE)
+
+  tot <- base %>% dplyr::filter(analyte == "IgG") %>%
+    dplyr::transmute(subject_accession, visit_name, antigen, tot_igg = log_assay_value)
+
+  targ <- base %>%
+    dplyr::filter(analyte %in% S43_ANALYTES) %>%
+    dplyr::left_join(tot, by = c("subject_accession", "visit_name", "antigen")) %>%
+    dplyr::filter(is.finite(log_assay_value), is.finite(tot_igg))
+
+  targ <- targ %>%
+    dplyr::group_by(feature, infant_arm) %>%
+    dplyr::mutate(std_val = tryCatch(
+      as.numeric(stats::residuals(stats::lm(log_assay_value ~ tot_igg))),
+      error = function(e) rep(NA_real_, dplyr::n()))) %>%
+    dplyr::ungroup()
+
+  .stdlong <- targ %>%
+    dplyr::transmute(subject_accession, visit_name, feature, value = std_val)
+  std_paired <- make_paired(.stdlong)
+  STD_METHOD <- "in-document residual-on-total-IgG (project transform unavailable or not covering both visits -- see diagnostics)"
+}
+
+std_paired <- std_paired %>% attach_meta()
+```
+
+```{r standardize-note, results='asis'}
+cat(sprintf(paste0(
+  "Standardization method used at knit time: **%s**. Each antigen-specific feature is expressed ",
+  "as its residual on that antigen's **total IgG**, so the reported decay reflects change in ",
+  "antibody *quality/composition* net of the bulk total-IgG quantity change. Only antigens with ",
+  "an antigen-specific total IgG at both visits are standardizable (in `d_set` that is ",
+  "DT, FHA, PRN, PT, TT), so IPV, PENTAMER and WT_IgG do not appear in S.4.3.\n\n"),
+  STD_METHOD))
+
+## Full standardization diagnostics (so the path taken is auditable in the HTML).
+cat("**Standardization diagnostics (knit-time):**\n\n")
+for (.m in STD_DIAG) cat(sprintf("- %s\n", .m))
+cat("\n")
+```
+
+# Table S.4.3 — Total-IgG-standardized decay: IgG subclasses and ADCD
+
+```{r s43, results='asis'}
+pd_std <- std_paired %>%
+  dplyr::filter(analyte %in% S43_ANALYTES) %>%
+  attach_interval()
+
+s43 <- build_decay_table(pd_std, exclude_increases = TRUE)
+
+render_decay_table(
+  s43,
+  half_life_dagger = TRUE,
+  caption = paste0(
+    "Supplementary Table S.4.3. Decay from cord blood to the 8-week infant visit for the IgG ",
+    "subclasses (IgG1\u2013IgG4) and ADCD on all available antigens, computed on values ",
+    "standardized by total IgG (each feature residualized on its antigen's total IgG, per the ",
+    "standardization section of pathway_analysis.Rmd). Column layout is identical to S.4.2; here ",
+    "\u0394 is the change in the total-IgG-standardized value (InfMon2 \u2212 CordBlood), so a ",
+    "negative value indicates decay in the quantity-adjusted (quality) measure and '% declining' ",
+    "is the share of subjects whose standardized value fell. \u2020 Because the standardized value ",
+    "is a residual (not a raw titre), the half-life is a formal extension of the Oguti calculation ",
+    "and should be read as a decay-rate summary of the standardized quantity rather than a ",
+    "titre-halving time."))
+```
+
+```{r s43-raw-values, results='asis'}
+knitr::kable(
+  s43 %>% dplyr::transmute(
+    antigen = as.character(antigen), analyte = as.character(analyte),
+    n_pair, n_used,
+    half_life = round(half_life, 2), hl_lo = round(hl_lo, 2), hl_hi = round(hl_hi, 2),
+    p_raw = signif(p_raw, 3), p_bonf = signif(p_bonf, 3),
+    med_all = round(med_all, 4), n_dec, med_dec = round(med_dec, 4),
+    pct_dec = round(pct_dec, 1)),
+  caption = "Table S.4.3 (full-precision underlying values).") %>% print()
+```
+
+# Notes
+
+- **Data source.** All quantities are computed from `d_set` (object `ebaa_extra2`) via the shared
+  pipeline (`config/endpoints.R`, `R/serology_helpers.R`, the global visit recode). This is the
+  same object used by `pathway_analysis.Rmd`. The cord (`CordBlood`, raw code `M00`,
+  sample_type C) and 8-week (`InfMon2`, raw code `M02`) visits are paired within subject.
+- **Half-life method.** Identical to S.4.1 / Oguti et al. (2022): per-infant decay rate =
+  Δlog₂ ÷ (days between draws); per (antigen × analyte) intercept-only fit; half-life = 1/|mean
+  rate| with reciprocal-of-CI limits; infants whose level increased (rate ≥ 0) are excluded
+  ('N used'). p-values are Bonferroni-scaled by 6 (as in S.4.1) in the full-precision tables.
+- **Why the two tables differ only in the value.** S.4.2 uses the raw log₁₀ assay value
+  ("absolute"); S.4.3 uses the total-IgG-standardized residual. Every column definition is the
+  same, so the two tables are directly comparable: a subclass/ADCD that decays in S.4.2 but not
+  in S.4.3 was decaying only because total IgG was decaying with it.
+- **Reproduce with:** `rmarkdown::render("cord_to_infmon2_decay_subclass_adcd.Rmd")`.

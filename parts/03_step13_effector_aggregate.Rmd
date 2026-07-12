@@ -1,0 +1,80 @@
+# Step 13 — Antigen-Specificity and Multi-Effector Model {#step13}
+
+Two final questions: is any effector→`r cfg$outcome_label` association **antigen-specific or broad**
+(focal `r FOCAL_ANTIGEN` vs an aggregate mean across the antigens carrying that effector), and when the
+three functions compete in one model, **which — if any — is independently on the path**? Reported per
+arm and mode; the aggregate uses each effector's own available-antigen set.
+
+```{r step13-run, results='asis'}
+.stage(13, "antigen-specificity and multi-effector model")
+if (!RUN_EFF_AGG) {
+  cat("*Step 13 skipped (run_effector_aggregate = FALSE).*\n\n")
+} else {
+  fit1 <- function(d, pred) {
+    dd <- d[stats::complete.cases(d[, c(OUTCOME, pred)]), , drop = FALSE]
+    if (nrow(dd) < NETWORK_MIN) return(NULL)
+    f <- lm(reformulate(pred, response = OUTCOME), data = dd); co <- summary(f)$coefficients[pred, ]
+    data.frame(n = nrow(dd), R2 = round(summary(f)$r.squared, 3),
+               beta = round(unname(co[1]), 3), p = signif(unname(co[4]), 3))
+  }
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    if (!(OUTCOME %in% names(wd))) { cat("*Outcome missing.*\n\n"); next }
+    # build focal + aggregate columns per effector
+    agg_names <- c()
+    for (fn in EFFECTORS) {
+      cols <- intersect(eff_all(fn), names(wd))
+      if (length(cols)) { wd[[paste0("agg_", fn)]] <- rowMeans(wd[, cols, drop = FALSE], na.rm = TRUE)
+                          agg_names <- c(agg_names, paste0("agg_", fn)) }
+    }
+    strat <- setNames(lapply(cfg$maternal_arms, function(m) dplyr::filter(wd, arm_name == m)), cfg$maternal_arms)
+
+    # (a) focal vs aggregate, per effector
+    rows <- list()
+    for (fn in EFFECTORS) {
+      foc <- paste0(FOCAL_ANTIGEN, "_", fn); agg <- paste0("agg_", fn)
+      for (m in cfg$maternal_arms) {
+        d <- strat[[m]]
+        rf <- if (foc %in% names(d)) fit1(d, foc) else NULL
+        ra <- if (agg %in% names(d)) fit1(d, agg) else NULL
+        if (!is.null(rf)) rows[[length(rows)+1]] <- cbind(effector = fn, arm = m, scope = paste0("focal ", FOCAL_ANTIGEN), rf)
+        if (!is.null(ra)) rows[[length(rows)+1]] <- cbind(effector = fn, arm = m,
+          scope = paste0("aggregate (", length(intersect(eff_all(fn), names(wd))), " antigens)"), ra)
+      }
+    }
+    tb <- do.call(rbind, rows)
+    if (!is.null(tb)) print(knitr::kable(tb, row.names = FALSE,
+      caption = paste0("Antigen-specificity of effector\u2192", cfg$outcome_label, " [", mode,
+      "]: focal ", FOCAL_ANTIGEN, " vs aggregate score, univariate."))); cat("\n")
+
+    # (b) joint focal three-effector model; (c) joint aggregate model
+    for (basis in c("focal", "aggregate")) {
+      preds <- if (basis == "focal") paste0(FOCAL_ANTIGEN, "_", EFFECTORS) else paste0("agg_", EFFECTORS)
+      jrows <- list()
+      for (m in cfg$maternal_arms) {
+        d <- strat[[m]]; pp <- intersect(preds, names(d))
+        dd <- d[stats::complete.cases(d[, c(OUTCOME, pp)]), , drop = FALSE]
+        if (length(pp) < 2 || nrow(dd) < NETWORK_MIN) next
+        f <- lm(reformulate(pp, response = OUTCOME), data = dd); co <- summary(f)$coefficients
+        for (p in pp) jrows[[length(jrows)+1]] <- data.frame(
+          arm = m, n = nrow(dd), R2_model = round(summary(f)$r.squared, 3),
+          effector = sub(paste0("^", FOCAL_ANTIGEN, "_|^agg_"), "", p),
+          beta = round(co[p,1],3), p = signif(co[p,4],3), check.names = FALSE)
+      }
+      jb <- do.call(rbind, jrows)
+      if (!is.null(jb)) print(knitr::kable(jb, row.names = FALSE,
+        caption = paste0("Joint ", basis, " ADCD+ADCP+ADNP model for ", cfg$outcome_label,
+        " [", mode, "]: which effector is independently associated."))); cat("\n")
+    }
+    .info("step13 [%s] done", mode)
+  }
+}
+```
+
+**How to read this.** If the aggregate score outperforms focal `r FOCAL_ANTIGEN`, the effector's link
+to `r cfg$outcome_label` is broad across antigens rather than pertactin-specific. In the joint models,
+a single effector retaining a significant coefficient identifies the function that is independently on
+the path; if all three collapse (as ADCD did against FcγR3b), the effector functions are collinear
+correlates of receptor engagement rather than separable steps. The quantity-removed modes are decisive.

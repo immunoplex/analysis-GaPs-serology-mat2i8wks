@@ -1,0 +1,7 @@
+"0","disp <- feat_summary %>%"
+"0","  transmute(feature, class = feature_class, antigen, analyte, n_paired,"
+"0","            `% increase` = pct_inc, `% decrease` = pct_dec,"
+"0","            `median delta` = median_delta, `mean delta` = mean_delta,"
+"0","            `p signed-rank` = p_signrank, `p sign-test` = p_sign, direction)"
+"0","knitr::kable(disp,"
+"0","  caption = ""Table 4. Per-feature paired change (later vs earlier visit), sorted by % increasing. Positive delta = increase."") %>% print()"

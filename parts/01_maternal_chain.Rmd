@@ -1,458 +1,232 @@
-```{r chain-setup, include=FALSE}
-# This is a CHILD document. It assumes the parent master .Rmd has already:
-#   - sourced config/endpoints.R and R/serology_helpers.R
-#   - created `cfg`  (via get_endpoint_config(params$endpoint))
-#   - created `data_raw` (recoded long antibody data)
-#   - created `nt`   (the participant N-tracker)
-roles <- chain_visit_roles(cfg)   # $early $matbirth $cord $infant (recoded names)
+<!--
+=====================================================================
+parts/01_maternal_chain.Rmd   (REFACTORED — Result #2 only)
+TITLE: Result #2 — Absolute subclass ratios at every upstream stage vs infant SBA
+---------------------------------------------------------------------
+FOCUSED REFACTOR of the original six-block maternal chain. The original
+emitted absolute ratios only implicitly (Blocks 2/4/6 modelled the *delta*
+ratios across transitions). This version consolidates the ABSOLUTE
+pro-/tolerogenic subclass ratios at each upstream visit
+(PregEarly, MatBirth, CordBlood) as predictors of the infant outcome
+(SBA at InfMon2), all in one place, as requested.
+
+Ratio definition (identical to the original):
+  pro-inflammatory = IgG1 + IgG3 ; tolerogenic = IgG2 + IgG4
+  ratio = log10[(IgG1 + IgG3) / (IgG2 + IgG4)]   (positive = pro-inflammatory)
+The ratio columns are built by add_chain_derived() -> `<ANT>_ratio_<visit>`.
+
+Runs as a CHILD (master provides cfg / data_raw / nt / roles) or STANDALONE
+(bootstrap chunk sources the pipeline).
+=====================================================================
+-->
+
+```{r ratio-setup, include=FALSE}
+suppressPackageStartupMessages({
+  library(dplyr); library(tidyr); library(ggplot2); library(broom)
+})
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+if (!exists("cfg") || !exists("data_raw")) {
+  .stub <- function(rel, optional = FALSE) {
+    cand <- character(0)
+    if (requireNamespace("here", quietly = TRUE))
+      cand <- c(cand, here::here(rel), here::here("analysis", rel))
+    rmd_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                        error = function(e) NA_character_)
+    if (!is.na(rmd_dir)) cand <- c(cand, file.path(rmd_dir, rel),
+                                   file.path(dirname(rmd_dir), rel))
+    cand <- unique(c(cand, file.path(getwd(), rel), rel))
+    hit  <- cand[file.exists(cand)]
+    if (length(hit)) return(normalizePath(hit[1], winslash = "/", mustWork = FALSE))
+    if (optional) return(NULL)
+    stop("Cannot locate '", rel, "'. Run from project root.", call. = FALSE)
+  }
+  if (!exists("find_proj_file")) source(.stub("R/find_proj_file.R"))
+  source(find_proj_file("config/endpoints.R"),  encoding = "UTF-8")
+  source(find_proj_file("R/serology_helpers.R"), encoding = "UTF-8")
+  cfg      <- get_endpoint_config("SBA")
+  data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+  nt       <- new_ntracker()
+}
+if (!exists("roles")) roles <- chain_visit_roles(cfg)
 ```
 
-# Maternal → Cord → Infant Antibody Chain {#chain}
-
-This part traces how the infant's **`r cfg$outcome_label` at `r roles$infant`**
-(2 months of age, before first vaccination) is shaped by the chain of antibody
-events running from maternal vaccination, through placental transfer, into early
-infancy. Six sequential predictor blocks each interrogate one mechanistic step.
-
-**Primary stratification is the maternal vaccination arm** (TdaP vs TT). Within
-each maternal arm we report (a) all infant arms pooled, then (b) each infant
-priming level (aP, wP) separately — i.e. the maternal margins plus the
-maternal × infant cross. *(This re-centres the analysis on the maternal arms;
-the earlier infant-arm-primary layout is available via `build_infant_strata()`.)*
-
-```{r chain-framework, echo=FALSE}
-fw <- data.frame(
-  Block = paste0("Block ", 1:6),
-  Period = c(
-    paste0(roles$early, " & ", roles$matbirth, " (maternal)"),
-    paste0(roles$early, " \u2192 ", roles$matbirth, " (maternal)"),
-    paste0(roles$matbirth, " \u2192 ", roles$cord, " (maternal \u2192 cord)"),
-    paste0(roles$matbirth, " \u2192 ", roles$cord, " (maternal \u2192 cord)"),
-    paste0(roles$cord, " \u2192 ", roles$infant, " (cord \u2192 infant)"),
-    paste0(roles$cord, " \u2192 ", roles$infant, " (cord \u2192 infant)")),
-  Type = c("Antibody quantity", "Class switching", "Antibody quantity",
-           "Class switching", "Antibody quantity", "Class switching"),
-  Question = c(
-    "Do maternal IgG levels before and at delivery predict the infant outcome?",
-    "Does gestational subclass polarisation predict it?",
-    "Does the quantity transferred across the placenta predict it?",
-    "Does subclass-selective placental transfer predict it?",
-    "Does the cord\u2192infant quantity change predict it?",
-    "Does subclass-selective cord\u2192infant change predict it?"),
-  stringsAsFactors = FALSE)
-knitr::kable(fw, col.names = c("Block", "Period", "Predictor type", "Biological question"),
-             caption = "Table C1. Six-block predictor framework (visit names recoded).")
-```
+# Absolute subclass ratios (all upstream stages) → `r cfg$outcome_label` at `r roles$infant` {#ratio-stages}
 
 Pro-inflammatory subclasses: IgG1, IgG3. Tolerogenic: IgG2, IgG4.
-Ratio = log10[(IgG1 + IgG3) / (IgG2 + IgG4)]; positive = pro-inflammatory polarisation.
+Ratio = log10[(IgG1 + IgG3) / (IgG2 + IgG4)]; positive = pro-inflammatory
+polarisation. This part regresses the **absolute** PT / FHA / PRN ratios
+measured at **`r paste(cfg$ratio_stages, collapse = ", ")`** on the infant
+**`r cfg$outcome_label`** at `r roles$infant`, adjusting for maternal arm —
+first one ratio at a time (consolidated table + forest plot), then all
+three antigen ratios per stage, then every stage together.
 
-```{r chain-mapnote-1, echo=FALSE, results='asis'}
-mapnote(
-  "This whole part corresponds to the **dual-stratified interpretation summary** ",
-  "for ", cfg$outcome_label, " (the \"six-block maternal-to-infant antibody chain\").",
-  feeds = c(
-    "Block 1 results \u2192 summary \u00a72 (variance landscape) and \u00a73 (dominant predictor / antigen identity); synthesis Q1, Q2",
-    "Maternal-arm contrast (TdaP vs TT) \u2192 \u00a74 (booster dependence); synthesis Q5",
-    "Ratio Blocks 2/4/6 \u2192 \u00a75 (qualitative layer); synthesis Q3",
-    "Blocks 3 & 5 \u2192 \u00a78 (mechanistic synthesis; Block-5 positive-median caveat); synthesis Q6",
-    "Cross-stratum comparisons \u2192 \u00a76 (what each stratification isolates) and \u00a77 (cross-outcome); synthesis Q4",
-    "R\u00b2 / reduced-model inputs \u2192 \"Proposed Reduced Model\" section"))
-```
-
----
-
-## Data Preparation
-
-```{r chain-data, results='asis'}
+```{r ratio-data, results='asis'}
 chain_feats <- c(cfg$outcome_feature, PREDICTOR_FEATURES)
 
-data_long_chain <- data_raw %>%
+data_wide_chain <- data_raw %>%
   dplyr::filter(feature    %in% chain_feats,
                 visit_name %in% cfg$chain_visits,
                 arm_name   %in% cfg$maternal_arms) %>%
-  dplyr::select(subject_accession, visit_name, arm_name, infant_arm,
-                feature, log_assay_value) %>%
-  distinct(subject_accession, visit_name, feature, .keep_all = TRUE)
+  dplyr::select(subject_accession, arm_name, infant_arm,
+                feature, visit_name, log_assay_value) %>%
+  dplyr::distinct(subject_accession, visit_name, feature, .keep_all = TRUE) %>%
+  tidyr::pivot_wider(id_cols     = c(subject_accession, arm_name, infant_arm),
+                     names_from  = c(feature, visit_name),
+                     values_from = log_assay_value,
+                     names_sep   = "_") %>%
+  dplyr::mutate(arm_name = factor(arm_name, levels = cfg$maternal_arms)) %>%
+  add_chain_derived(cfg)                    # builds <ANT>_ratio_<visit>
 
-data_wide_chain <- data_long_chain %>%
-  pivot_wider(id_cols     = c(subject_accession, arm_name, infant_arm),
-              names_from  = c(feature, visit_name),
-              values_from = log_assay_value,
-              names_sep   = "_") %>%
-  add_chain_derived(cfg)
+oc     <- cfg$outcome_col                   # WHOLE_SBA_InfMon2
+stages <- cfg$ratio_stages                  # PregEarly, MatBirth, CordBlood
+ants   <- cfg$antigens                      # PT, FHA, PRN
 
-cat(sprintf("Wide chain dataset: **%d subjects \u00d7 %d columns**  \n",
-            nrow(data_wide_chain), ncol(data_wide_chain)))
-cat(sprintf("Outcome column `%s`: **%d non-missing**\n\n",
-            cfg$outcome_col, sum(!is.na(data_wide_chain[[cfg$outcome_col]]))))
+# every absolute-ratio column we expect, keeping only those actually built
+ratio_grid <- expand.grid(antigen = ants, stage = stages,
+                          stringsAsFactors = FALSE)
+ratio_grid$col <- paste0(ratio_grid$antigen, "_ratio_", ratio_grid$stage)
+ratio_grid     <- ratio_grid[ratio_grid$col %in% names(data_wide_chain), ]
 
-ft <- as.data.frame(table(data_long_chain$feature, data_long_chain$visit_name))
-colnames(ft) <- c("Feature", "Visit", "n")
-ft <- ft %>% dplyr::filter(n > 0) %>%
-  pivot_wider(names_from = Visit, values_from = n, values_fill = 0)
-knitr::kable(ft, caption = "Table C2. Observations per feature \u00d7 visit (after recode & filter).") %>% print()
+cat(sprintf("Wide chain frame: **%d subjects**; outcome `%s` non-missing = %d.  \n",
+            nrow(data_wide_chain), oc, sum(!is.na(data_wide_chain[[oc]]))))
+cat(sprintf("Absolute-ratio predictors available: **%d of %d** (antigen \u00d7 stage).\n\n",
+            nrow(ratio_grid), length(ants) * length(stages)))
+if (nrow(ratio_grid) == 0)
+  cat("> No ratio columns were built — check that the IgG1-4 subclasses exist ",
+      "at these visits in the data.\n\n", sep = "")
 ```
 
-```{r chain-strata, results='asis'}
-# Maternal-arm-primary strata: each maternal arm, pooled + per infant arm.
-strata <- build_maternal_strata(data_wide_chain)
+## 1 · Consolidated univariate table (one ratio at a time, arm-adjusted)
 
-# Per-stratum headcount BEFORE any predictor-driven attrition.
-nt_outcome_counts(data_wide_chain, strata, cfg$outcome_col,
-                  caption = "Table C3. Subjects per stratum and number with a non-missing outcome.")
-mapnote("This headcount is the starting N for each stratum; subsequent ",
-        "per-model attrition (driven by missing subclass/cord measurements) ",
-        "is tracked in the participant-accounting tables and explains the small ",
-        "subclass-model samples flagged as a caveat in the interpretation summary.")
-```
+Each row is a single model `r cfg$outcome_col` ~ ratio + maternal arm. The
+coefficient (beta) is the slope on that ratio; a positive value means a more
+pro-inflammatory profile at that stage predicts higher infant
+`r cfg$outcome_label`.
 
-```{r chain-run, results='hide'}
-# Fit all six blocks for every stratum. Every model is logged to `nt`.
-chain <- lapply(names(strata), function(k)
-  run_chain_blocks(strata[[k]]$data, cfg, tracker = nt,
-                   part = "Maternal chain", stratum = strata[[k]]$label))
-names(chain) <- names(strata)
+```{r ratio-univariate, results='asis'}
+uni_rows <- lapply(seq_len(nrow(ratio_grid)), function(i) {
+  col <- ratio_grid$col[i]
+  res <- run_lm(oc, c(col, "arm_name"), data_wide_chain,
+                label = paste0(col, " + arm"),
+                show_relimp_calc = FALSE,
+                tracker = nt, part = "Ratio stages",
+                section = "Univariate (arm-adjusted)",
+                stratum = "TdaP+TT pooled")
+  if (is.null(res$model)) return(NULL)
+  ci  <- tryCatch(stats::confint(res$model, col), error = function(e) c(NA, NA))
+  cf  <- summary(res$model)$coefficients
+  data.frame(
+    Antigen  = ratio_grid$antigen[i],
+    Stage    = factor(ratio_grid$stage[i], levels = stages),
+    n        = res$n_obs,
+    beta     = if (col %in% rownames(cf)) unname(cf[col, 1]) else NA,
+    lo       = ci[1], hi = ci[2],
+    p        = if (col %in% rownames(cf)) unname(cf[col, 4]) else NA,
+    stringsAsFactors = FALSE)
+})
+uni <- dplyr::bind_rows(uni_rows)
 
-# Display order + which models to show for pooled margins vs infant splits.
-mat_primary_order <- c("TdaP", "TdaP_aP", "TdaP_wP", "TT", "TT_aP", "TT_wP")
-mat_primary_order <- intersect(mat_primary_order, names(chain))
-
-# Infant splits show a reduced key set (antigen-level + full-12) to keep the
-# document readable; set infant_split_full <- TRUE to show every model.
-infant_split_full <- FALSE
-split_ids <- list("1" = c("1a","1b","1c","1k"),
-                  "3" = c("3a","3e"),
-                  "5" = c("5a","5e"))
-
-display_stratum <- function(key, ids, show_relimp = TRUE) {
-  cat("####", strata[[key]]$label, "\n\n")
-  for (id in ids) if (!is.null(chain[[key]]$br[[id]]))
-    show_model(chain[[key]]$br[[id]], show_relimp = show_relimp)
-}
-
-display_block <- function(full_ids, split_key, show_relimp = TRUE) {
-  sids <- if (isTRUE(infant_split_full) || is.null(split_key)) full_ids
-          else split_ids[[split_key]]
-  for (m in cfg$maternal_arms) {
-    cat("###", m, "mothers\n\n")
-    display_stratum(m, full_ids, show_relimp)                 # pooled margin
-    for (i in cfg$infant_arms) {
-      key <- paste0(m, "_", i)
-      if (!is.null(chain[[key]])) display_stratum(key, sids, show_relimp)
-    }
-  }
-}
-```
-
----
-
-## Block 1 — Maternal Antibody Levels (`r roles$early` and `r roles$matbirth`)
-
-**Biological context.** Maternal vaccination during pregnancy raises antigen-specific
-IgG; the levels in maternal circulation at **`r roles$matbirth` (delivery)** are the
-pool available for placental transfer, while **`r roles$early`** captures the
-pre-vaccination baseline. Entering both visits separates pre-existing background from
-the vaccine-induced rise, and asks whether it is the absolute level at delivery or the
-gestational *change* that matters for the infant outcome. All models use listwise
-deletion, so the effective n varies with subclass/visit missingness (tracked below).
-
-```{r chain-b1-mapnote, echo=FALSE, results='asis'}
-mapnote("Block 1 is the part the interpretation leans on most heavily.",
-        feeds = c(
-          paste0("Which antigen dominates the maternal supply (\u00a73 / Q2 of the ",
-                 cfg$outcome_label, " summary)"),
-          "How much variance the maternal supply explains (\u00a72 / Q1)",
-          "The TdaP-vs-TT contrast that diagnoses booster dependence (\u00a74 / Q5)"))
-```
-
-```{r chain-b1, results='asis'}
-display_block(full_ids = paste0("1", letters[1:12]), split_key = "1")
-```
-
-### Maternal subclass slopes at `r roles$matbirth`: TdaP vs TT
-
-```{r chain-b1-slopes, fig.cap=paste0("Figure C1. Maternal subclass IgG at ", roles$matbirth, " vs infant ", cfg$outcome_label, " at ", roles$infant, ", by antigen and maternal arm."), fig.height=6}
-vm  <- roles$matbirth
-pat <- paste0("(PT|FHA|PRN)_(IgG[1-4])_(", vm, ")")
-dl_b1 <- data_wide_chain %>%
-  dplyr::filter(arm_name %in% cfg$maternal_arms) %>%
-  dplyr::select(arm_name, all_of(cfg$outcome_col), matches(paste0("IgG[1-4]_", vm, "$"))) %>%
-  pivot_longer(matches(paste0("IgG[1-4]_", vm, "$")),
-               names_to = c("antigen","subclass","visit"),
-               names_pattern = pat,
-               values_to = "subclass_value") %>%
-  tidyr::drop_na(tidyselect::all_of(c("subclass_value", cfg$outcome_col)))
-
-ggplot(dl_b1, aes(x = subclass_value, y = .data[[cfg$outcome_col]],
-                  color = subclass, linetype = arm_name)) +
-  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
-  facet_grid(antigen ~ arm_name) +
-  scale_color_brewer(palette = "Set1") +
-  labs(x = paste0("Log10 maternal subclass IgG at ", vm),
-       y = cfg$outcome_y_label, color = "Subclass", linetype = "Maternal arm",
-       title = paste0("Block 1 (", vm, "): antigen \u00d7 subclass \u2192 ",
-                      cfg$outcome_label, " at ", roles$infant)) +
-  theme_bw(base_size = 11)
-```
-
----
-
-## Block 2 — Gestational Subclass Switching (`r roles$early` → `r roles$matbirth`)
-
-**Biological context.** Beyond absolute levels, the *direction of class switching*
-during pregnancy may carry independent information. A positive Δ ratio
-(`r roles$matbirth` − `r roles$early`) indicates a shift toward pro-inflammatory
-(IgG1+IgG3) dominance; a positive coefficient means that shift predicts a higher
-infant outcome.
-
-```{r chain-b2-mapnote, echo=FALSE, results='asis'}
-mapnote("Ratio block \u2014 tests the *qualitative* (subclass-balance) layer.",
-        feeds = paste0("\u00a75 (is there a reproducible qualitative layer?) and synthesis Q3 of the ",
-                       cfg$outcome_label, " summary"))
-```
-
-```{r chain-b2, results='asis'}
-display_block(full_ids = "2", split_key = NULL, show_relimp = FALSE)
-```
-
----
-
-## Block 3 — Placental Transfer: Quantity (`r roles$matbirth` → `r roles$cord`)
-
-**Biological context.** Placental IgG transfer is an active FcRn-mediated process.
-The transferred quantity is Δ = `r roles$cord` − `r roles$matbirth` (log10). A positive
-coefficient means more efficient transfer of that antigen/subclass predicts a higher
-infant outcome.
-
-```{r chain-b3-mapnote, echo=FALSE, results='asis'}
-mapnote("Transfer-quantity block.",
-        feeds = paste0("\u00a78 (mechanistic synthesis \u2014 transfer step) of the ",
-                       cfg$outcome_label, " summary; synthesis Q6"))
-```
-
-```{r chain-b3, results='asis'}
-display_block(full_ids = paste0("3", letters[1:5]), split_key = "3")
-```
-
----
-
-## Block 4 — Placental Transfer: Selectivity (`r roles$matbirth` → `r roles$cord`)
-
-**Biological context.** FcRn transfers subclasses with differing efficiency. The
-change in pro-/tolerogenic ratio across transfer tests whether *selective* transfer
-(IgG1 enrichment or depletion) predicts the infant outcome.
-
-```{r chain-b4-mapnote, echo=FALSE, results='asis'}
-mapnote("Ratio block (transfer selectivity).",
-        feeds = paste0("\u00a75 (qualitative layer) and synthesis Q3 of the ",
-                       cfg$outcome_label, " summary"))
-```
-
-```{r chain-b4, results='asis'}
-display_block(full_ids = "4", split_key = NULL, show_relimp = FALSE)
-```
-
----
-
-## Block 5 — Neonatal Change: Quantity (`r roles$cord` → `r roles$infant`)
-
-**Biological context.** Between birth and 2 months, measured IgG changes. The
-quantity change is Δ = `r roles$infant` − `r roles$cord` (log10). **Caveat (carried
-in the interpretation summary):** in these data the medians are typically *positive*
-— measured IgG is higher at `r roles$infant` than in cord blood, which is backwards
-for passively transferred antibody and most likely reflects a cord-vs-infant
-assay/normalisation difference. Block 5 should be read as "`r roles$cord`→`r roles$infant`
-change," **not** catabolic decay.
-
-```{r chain-b5-check, results='asis'}
-b5_ant <- paste0("delta_", cfg$antigen_totals, "_", roles$cord, "_", roles$infant)
-for (m in cfg$maternal_arms) {
-  d <- strata[[m]]$data
-  present <- intersect(b5_ant, names(d))
-  if (length(present)) {
-    meds <- round(apply(d[, present, drop = FALSE], 2, median, na.rm = TRUE), 3)
-    knitr::kable(data.frame(Antigen = names(meds), median_delta = unname(meds)),
-                 col.names = c("Antigen", "Median \u0394 log10"),
-                 caption = paste0("Median ", roles$cord, "\u2192", roles$infant,
-                                  " change (", m, " mothers) \u2014 positive = measured rise (artifact, see caveat)."),
-                 row.names = FALSE) %>% print()
-    cat("\n")
-  }
-}
-mapnote("The positive-median check above is the quantitative basis for the ",
-        "Block-5 caveat.",
-        feeds = paste0("\u00a71 (caveats) and \u00a78 of the ", cfg$outcome_label, " summary"))
-```
-
-```{r chain-b5, results='asis'}
-display_block(full_ids = paste0("5", letters[1:5]), split_key = "5")
-```
-
-### Subclass change slopes: TdaP vs TT
-
-```{r chain-b5-slopes, fig.cap=paste0("Figure C2. Subclass ", roles$cord, "\u2192", roles$infant, " change vs infant ", cfg$outcome_label, ", by antigen and maternal arm."), fig.height=6}
-vc <- roles$cord; vi <- roles$infant
-patd <- paste0("^delta_(PT|FHA|PRN)_(IgG[1-4])_", vc, "_", vi, "$")
-dl_b5 <- data_wide_chain %>%
-  dplyr::filter(arm_name %in% cfg$maternal_arms) %>%
-  dplyr::select(arm_name, all_of(cfg$outcome_col),
-                matches(paste0("^delta_(PT|FHA|PRN)_IgG[1-4]_", vc, "_", vi, "$"))) %>%
-  pivot_longer(matches(paste0("^delta_(PT|FHA|PRN)_IgG[1-4]_", vc, "_", vi, "$")),
-               names_to = c("antigen","subclass"),
-               names_pattern = patd, values_to = "delta_value") %>%
-  tidyr::drop_na(tidyselect::all_of(c("delta_value", cfg$outcome_col)))
-
-ggplot(dl_b5, aes(x = delta_value, y = .data[[cfg$outcome_col]],
-                  color = subclass, linetype = arm_name)) +
-  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
-  facet_grid(antigen ~ arm_name) +
-  scale_color_brewer(palette = "Set1") +
-  labs(x = paste0("\u0394 log10 subclass IgG (", vi, " \u2212 ", vc, ")"),
-       y = cfg$outcome_y_label, color = "Subclass", linetype = "Maternal arm",
-       title = paste0("Block 5: antigen \u00d7 subclass change \u2192 ", cfg$outcome_label)) +
-  theme_bw(base_size = 11)
-```
-
----
-
-## Block 6 — Neonatal Change: Selectivity (`r roles$cord` → `r roles$infant`)
-
-**Biological context.** If subclasses change at different rates from cord to 2 months,
-the ratio shifts. A positive Δ ratio means pro-inflammatory subclasses are relatively
-better preserved.
-
-```{r chain-b6-mapnote, echo=FALSE, results='asis'}
-mapnote("Ratio block (neonatal-change selectivity).",
-        feeds = paste0("\u00a75 (qualitative layer) and synthesis Q3 of the ",
-                       cfg$outcome_label, " summary"))
-```
-
-```{r chain-b6, results='asis'}
-display_block(full_ids = "6", split_key = NULL, show_relimp = FALSE)
-```
-
----
-
-## Cross-Stratum Comparisons
-
-```{r chain-r2-mapnote, echo=FALSE, results='asis'}
-mapnote("The R\u00b2 landscape and the TdaP-vs-TT contrast below are the direct inputs ",
-        "to the summary's variance-landscape and booster-dependence sections.",
-        feeds = c(
-          paste0("\u00a72 (variance landscape) / Q1 of the ", cfg$outcome_label, " summary"),
-          "\u00a74 (booster dependence) / Q5",
-          "\u00a76 (what each stratification isolates) / Q4",
-          "Reduced-model R\u00b2 benchmarks"))
-```
-
-### R² Across All Blocks and Strata
-
-```{r chain-r2-table, results='asis'}
-r2_all <- bind_rows(lapply(names(chain), function(k)
-  chain[[k]]$r2 %>% mutate(stratum = strata[[k]]$label,
-                           marm = strata[[k]]$marm, iarm = strata[[k]]$iarm))) %>%
-  arrange(block, model)
-r2_disp <- r2_all %>%
-  mutate(R2     = ifelse(saturated, "\u2014", sprintf("%.3f", R2)),
-         adj_R2 = ifelse(saturated, "\u2014", sprintf("%.3f", adj_R2))) %>%
-  dplyr::select(stratum, block, model, n_obs, R2, adj_R2)
-knitr::kable(r2_disp,
-             caption = "Table C4. R\u00b2 for every model across all blocks and strata (saturated models, n \u2264 predictors + 1, shown as \u2014).",
-             align = c("l","l","l","r","r","r")) %>% print()
-```
-
-```{r chain-r2-wide, results='asis'}
-# Primary contrast: pooled maternal margins TdaP vs TT.
-r2_wide <- r2_all %>%
-  dplyr::filter(iarm == "all") %>%
-  mutate(R2 = ifelse(saturated, NA_real_, R2)) %>%
-  dplyr::select(marm, block, model, R2) %>%
-  pivot_wider(names_from = marm, values_from = R2) %>%
-  mutate(delta_R2_TdaP_minus_TT = round(.data[["TdaP"]] - .data[["TT"]], 4)) %>%
-  arrange(block, model) %>%
-  mutate(across(c("TdaP", "TT", "delta_R2_TdaP_minus_TT"),
-                ~ ifelse(is.na(.), "\u2014", sprintf("%.3f", .))))
-knitr::kable(r2_wide,
-             caption = "Table C5. R\u00b2 side-by-side, pooled maternal margins: TdaP vs TT (saturated shown as \u2014).",
-             align = c("l","l","r","r","r")) %>% print()
-```
-
-```{r chain-r2-barplot, fig.cap="Figure C3. R\u00b2 of antigen-total models by block, maternal arm (facets) and infant level (fill; 'all' = pooled).", fig.height=5}
-iarm_fill <- c(all = "grey45", cfg$iarm_colors)
-r2_ant <- r2_all %>%
-  dplyr::filter(grepl("antigen", model)) %>%
-  mutate(block_clean = gsub("_qty|_quantity|_switch|_ratio|_change", "", block))
-ggplot(r2_ant, aes(x = block_clean, y = R2, fill = iarm)) +
-  geom_col(position = position_dodge(0.7), width = 0.6) +
-  facet_wrap(~ marm) +
-  scale_fill_manual(values = iarm_fill, name = "Infant level") +
-  labs(x = "Block", y = "R\u00b2",
-       title = paste0("Explained variance (antigen-total models) \u2014 ", cfg$outcome_label)) +
-  theme_bw(base_size = 11) +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
-```
-
-### Ratio-Model Coefficients: TdaP vs TT (Blocks 2, 4, 6)
-
-```{r chain-ratio-coef, fig.cap="Figures C4-C6. Ratio-model coefficients for the pooled maternal margins. Error bars = 95% CI.", fig.height=5}
-blk_lab <- c(B2 = paste0("Block 2: \u0394 ratio ", roles$early, "\u2192", roles$matbirth),
-             B4 = paste0("Block 4: \u0394 ratio ", roles$matbirth, "\u2192", roles$cord),
-             B6 = paste0("Block 6: \u0394 ratio ", roles$cord, "\u2192", roles$infant))
-for (blk in c("B2","B4","B6")) {
-  rows <- lapply(cfg$maternal_arms, function(m) {
-    mod <- chain[[m]]$ratio_models[[blk]]
-    if (is.null(mod)) return(NULL)
-    broom::tidy(mod) %>% dplyr::filter(term != "(Intercept)") %>% mutate(maternal_arm = m)
-  }) %>% bind_rows()
-  if (nrow(rows) == 0) next
-  p <- ggplot(rows, aes(x = term, y = estimate, fill = maternal_arm,
-                        ymin = estimate - 1.96*std.error, ymax = estimate + 1.96*std.error)) +
-    geom_col(position = position_dodge(0.6), width = 0.5) +
-    geom_errorbar(position = position_dodge(0.6), width = 0.2) +
-    geom_hline(yintercept = 0, linetype = "dashed") +
-    scale_fill_manual(values = cfg$marm_colors) +
-    labs(x = "Pro-inflammatory / tolerogenic ratio",
-         y = paste0("\u03b2 (\u2192 ", cfg$outcome_label, " ", roles$infant, ")"),
-         title = blk_lab[blk], fill = "Maternal arm") +
-    theme_bw(base_size = 11)
-  print(p)
-}
-```
-
-### Relative Importance: TdaP vs TT (full 12-subclass models)
-
-```{r chain-relimp, results='asis'}
-relimp_blocks <- c("B1_birth" = paste0("Block 1 full-12 @ ", roles$matbirth),
-                   "B3_transfer" = "Block 3 full-12 (transfer)",
-                   "B5_change"   = "Block 5 full-12 (change)")
-for (rb in names(relimp_blocks)) {
-  rTdaP <- chain[["TdaP"]]$relimp[[rb]]; rTT <- chain[["TT"]]$relimp[[rb]]
-  if (is.null(rTdaP) || is.null(rTT)) next
-  cmp <- merge(
-    data.frame(feature = names(rTdaP@lmg), lmg_TdaP = round(rTdaP@lmg*100, 2)),
-    data.frame(feature = names(rTT@lmg),   lmg_TT   = round(rTT@lmg*100, 2)),
-    by = "feature") %>%
-    mutate(delta_lmg = round(lmg_TdaP - lmg_TT, 2)) %>%
-    arrange(desc(abs(delta_lmg)))
-  knitr::kable(cmp, caption = paste0("Relative importance (lmg %) \u2014 ",
-               relimp_blocks[rb], ". delta_lmg = TdaP \u2212 TT."),
-               align = c("l","r","r","r")) %>% print()
+if (nrow(uni)) {
+  uni_disp <- uni %>%
+    dplyr::arrange(Stage, Antigen) %>%
+    dplyr::mutate(`95% CI` = sprintf("[%.3f, %.3f]", lo, hi),
+                  beta = round(beta, 3), p = signif(p, 3),
+                  sig = pvalue_to_label(p)) %>%
+    dplyr::select(Antigen, Stage, n, beta, `95% CI`, p, sig)
+  print(knitr::kable(
+    uni_disp, row.names = FALSE,
+    caption = paste0("Absolute pro-/tolerogenic ratio at each stage vs ",
+                     cfg$outcome_label, " at ", roles$infant,
+                     " (each row: outcome ~ ratio + maternal arm; pooled arms)."),
+    align = c("l", "l", "r", "r", "r", "r", "c")))
   cat("\n")
 }
 ```
 
----
+```{r ratio-forest, fig.width=8, fig.height=4.8, fig.cap=paste0("Univariate arm-adjusted slope of each absolute subclass ratio on ", cfg$outcome_label, " at ", roles$infant, " (beta with 95% CI), by stage and antigen.")}
+if (exists("uni") && nrow(uni)) {
+  ggplot(uni, aes(x = beta, y = Antigen, colour = Antigen)) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey40") +
+    geom_point(size = 2.4) +
+    geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.25, linewidth = 0.7) +
+    facet_wrap(~ Stage, ncol = 1, strip.position = "right") +
+    scale_colour_brewer(palette = "Set1", guide = "none") +
+    labs(x = paste0("beta (ratio -> ", cfg$outcome_label, " at ", roles$infant, ")"),
+         y = NULL,
+         title = paste0("Absolute subclass ratio -> ", cfg$outcome_label,
+                        " by upstream stage")) +
+    theme_bw(base_size = 11)
+}
+```
 
-## Participant Accounting (Maternal Chain) {#chain-naccounting}
+## 2 · Per-stage multivariable models (three antigen ratios together, arm-adjusted)
 
-Every model above is listed here with how many subjects entered its stratum, how many
-were actually used after listwise deletion, and which predictor(s) drove the drop. This
-is what lets a reader reconcile the differing sample sizes across sections — in
-particular the steep attrition from antigen-total models (large n) to subclass/full-12
-models (small n) flagged as a caveat in the interpretation summary.
+```{r ratio-perstage, results='asis'}
+r2_perstage <- list()
+for (st in stages) {
+  cols_st <- paste0(ants, "_ratio_", st)
+  cols_st <- cols_st[cols_st %in% names(data_wide_chain)]
+  if (length(cols_st) == 0) next
+  cat("###", st, "\n\n")
+  res <- run_lm(oc, c(cols_st, "arm_name"), data_wide_chain,
+                label = paste0("Ratios @ ", st, " (PT+FHA+PRN) + arm"),
+                show_relimp_calc = FALSE,
+                tracker = nt, part = "Ratio stages",
+                section = "Per-stage multivariable", stratum = st)
+  show_model(res, show_relimp = FALSE)
+  r2_perstage[[st]] <- data.frame(Stage = st, n = res$n_obs,
+                                  R2 = res$R2, adj_R2 = res$adj_R2)
+}
+if (length(r2_perstage))
+  print(knitr::kable(dplyr::bind_rows(r2_perstage), row.names = FALSE,
+        caption = "Per-stage multivariable fit (all three antigen ratios + arm).",
+        align = c("l", "r", "r", "r")))
+cat("\n")
+```
 
-```{r chain-naccount, results='asis'}
-nt_render(nt, part = "Maternal chain",
-          caption = "Table C7. Participant accounting for every maternal-chain model.")
+## 3 · All stages together
+
+A single model with every available absolute ratio (antigen x stage) plus
+maternal arm. Complete-case deletion across all predictors makes this the
+smallest-n model; the n is reported so the table can be read against the
+univariate rows above.
+
+```{r ratio-allstages, results='asis'}
+all_cols <- ratio_grid$col
+if (length(all_cols) >= 2) {
+  res_all <- run_lm(oc, c(all_cols, "arm_name"), data_wide_chain,
+                    label = "All absolute ratios (antigen x stage) + arm",
+                    show_relimp_calc = FALSE,
+                    tracker = nt, part = "Ratio stages",
+                    section = "All stages combined", stratum = "TdaP+TT pooled")
+  show_model(res_all, show_relimp = FALSE)
+
+  # Optional collinearity diagnostic
+  if (!is.null(res_all$model) && requireNamespace("car", quietly = TRUE)) {
+    vif <- tryCatch(car::vif(res_all$model), error = function(e) NULL)
+    if (!is.null(vif)) {
+      vdf <- data.frame(term = names(vif), VIF = round(as.numeric(vif), 2))
+      print(knitr::kable(vdf, row.names = FALSE,
+            caption = "Variance inflation factors (all-stages model).",
+            align = c("l", "r")))
+      cat("\n")
+    }
+  }
+} else {
+  cat("> Fewer than two ratio predictors available — the combined model is skipped.\n\n")
+}
+```
+
+## 4 · Interpretation aid
+
+```{r ratio-interpret, results='asis'}
+mapnote(
+  "Reading this block: \u00a71 is the requested single consolidated view — every ",
+  "absolute PT/FHA/PRN ratio at ", paste(cfg$ratio_stages, collapse = ", "),
+  " against infant ", cfg$outcome_label,
+  ". \u00a72 asks whether the three antigen ratios at a given stage jointly add ",
+  "signal, and \u00a73 whether ratios across stages carry independent information ",
+  "(watch the n and the VIFs, as the stage ratios are correlated within antigen).",
+  feeds = "Result #2 of the request")
 ```

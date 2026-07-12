@@ -1,0 +1,203 @@
+---
+title: "Systems Serology — Concurrent Within-Visit Associations"
+subtitle: "Focused endpoint-parameterized driver · SBA · WT_IgG · PTNA · maternal-arm primary (TdaP vs TT)"
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+params:
+  endpoint: "SBA"      # "SBA" | "WT_IgG" | "PTNA"  <-- the ONLY thing to change per endpoint
+  data_file: "data/d_set.RData"   # <-- switched from data/c_set.RData
+  data_object: "ebaa_extra2"      # <-- switched from ebaa_extra (more ADCD at maternal/cord)
+  nct_it: 1000                    # NCT permutations; set e.g. 100 for a fast pass
+  run_nct: true                   # STAGE 5 (most expensive) on/off
+output:
+  html_document:        # -> hand this to the summary engine
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+  word_document:        # -> hand this to the analysis recipient
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 6
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+
+# ---- self-locating resolver -------------------------------------------------
+# Finds config/, R/, parts/, data/ whether they sit beside this .Rmd, under an
+# analysis/ subfolder, or at the project root — and works even when rmarkdown
+# renders from a temp directory. Returns the first candidate that exists.
+# ---- shared path resolver: single definition in R/find_proj_file.R ----
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
+                "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"),
+                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
+                      error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE)
+  rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+
+# ---- shared configuration + helper library (sourced once) ----
+# NOTE: identical bootstrap to the full *_analysis.Rmd drivers. We deliberately
+# do NOT source config/endpoints_additions.R here: the concurrent part needs
+# only ANTIGENS = c("PT","FHA","PRN") (endpoints.R) for add_concurrent_ratios(),
+# and the FcG/effector vocabularies in the additions file belong to Parts 4/5.
+source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+
+# ---- resolve the endpoint config from the single param ----
+cfg <- get_endpoint_config(params$endpoint)
+
+# ---- load + recode the antibody data ONCE ----
+# Switched to d_set / ebaa_extra2 (same schema as c_set / ebaa_extra, with more
+# ADCD at maternal + cord blood). load_serology_data() rebuilds `feature` from
+# antigen+analyte (mixed case), calls verify_predictor_casing() internally, and
+# a benign "unmapped visit codes" warning (P05/P08) is expected. If the d_set
+# file is absent this errors clearly via find_proj_file(); drop it in data/.
+.data_path <- find_proj_file(params$data_file)
+data_raw <- load_serology_data(.data_path, object_name = params$data_object)
+
+# ---- staging controls consumed by parts/03 (see that file's conc-setup) ----
+CONC_VISIT <- "InfMon2"                 # infant 8-week timepoint only
+DATA_MODES <- c("raw")                  # untransformed only (igg_std deferred)
+NCT_IT     <- as.integer(params$nct_it)
+RUN_NCT    <- isTRUE(params$run_nct)
+
+# ---- participant N-tracker (concurrent models + networks only) ----
+nt <- new_ntracker()
+```
+
+# `r cfg$outcome_label`: Concurrent Within-Visit Antibody Analysis {-}
+
+This is a **focused, expanded extract** of the full config-driven serology pipeline.
+It runs **only the concurrent (within-visit) association layer** for the infant's
+**`r cfg$outcome_long`** (`r cfg$outcome_feature`), **restricted to the 8-week infant
+timepoint (`r CONC_VISIT`)**, and it now covers the expanded feature set — FIM plus
+the FcγR binding and antigen-specific effector functions — on the untransformed (raw)
+log assay values. The total-IgG-standardised mode is deferred. The maternal-chain,
+clinical, and other pipeline parts are excluded.
+
+The endpoint is set once (`params$endpoint = "`r params$endpoint`"`); switching to
+`WT_IgG` or `PTNA` is a one-line change to that parameter (or use the
+`render_concurrent_all()` helper in the appendix to knit all three at once).
+
+**Visit naming.** All visits are recoded for clarity throughout:
+`r paste(paste0(names(VISIT_RECODE), "\u2192", VISIT_RECODE), collapse = ", ")`.
+This analysis is restricted to the **8-week infant timepoint (`r CONC_VISIT`)**.
+
+**Stratification.** Primary axis is the **maternal vaccination arm (TdaP vs TT)**;
+within each, results are reported pooled across infant arms and separately for each
+infant priming level (aP, wP).
+
+**Downstream use.** The knitted **HTML** is intended for the summary engine; the
+**Word** document is for the analysis recipient. Inline "🧭 Maps to interpretation"
+callouts tie each block to the matching section of the written concurrent-analysis
+summary for this endpoint.
+
+---
+
+```{r part-concurrent, child=find_proj_file('parts/03_concurrent_networks_v2.Rmd')}
+# Expanded + staged concurrent within-visit part (FIM + FcγR + ADCD/ADCP/ADNP,
+# untransformed/raw, 8-week visit only). Reuses cfg, data_raw, nt,
+# find_proj_file() and the staging controls set in the bootstrap chunk above.
+```
+
+---
+
+# Synthesis Questions to Address (Concurrent) {#synthesis}
+
+*These are the concurrent-analysis subset of the pipeline's synthesis prompts,
+restated inline so the summary engine has the questions alongside the evidence
+above. Each maps to a "Maps to interpretation" callout in the results.*
+
+1. **Antigen / subclass relative importance** — within-visit, which antigen and
+   which IgG subclass carries the signal for `r cfg$outcome_label`? Is PRN
+   dominance reproduced (feeds §1), and is the FHA association negative (feeds §2)?
+2. **Arm-specific signatures** — does the leading concurrent predictor differ
+   between TdaP and TT mothers (full-12 relative-importance comparison; feeds §3)?
+3. **Pro-/tolerogenic ratio effect** — do the PT/FHA/PRN IgG1+IgG3 vs IgG2+IgG4
+   ratios add a qualitative (subclass-balance) layer to the within-visit outcome,
+   overall and by visit, and does it differ by maternal arm (feeds §4)?
+4. **Antigen × subclass × level interaction** — does *which* subclass matters
+   depend on antigen and on binding level (the three-way mixed-model term; feeds §5)?
+5. **Network architecture and bridge centrality** — at
+   `r if ("InfMon5" %in% cfg$concurrent_visits) "InfMon5" else tail(cfg$concurrent_visits, 1)`,
+   which nodes bridge the outcome to the antigen communities, and does the bridge
+   structure differ between TdaP and TT (feeds §6)?
+6. **Temporal and cross-arm network comparison (NCT)** — is the within-visit
+   network invariant across the first vs last concurrent visit (temporal, feeds §7),
+   and across maternal arm / infant arm at the reference visit (feeds §8)?
+7. **Convergence with the maternal chain** — does the dominant concurrent antigen
+   agree with the dominant antigen identified by the upstream maternal-chain part
+   (cross-reference the full `r cfg$outcome_label` analysis)?
+
+---
+
+# Participant Accounting (Concurrent) {#naccounting}
+
+A single attrition ledger for every concurrent model and network fitted in this
+document, so differing sample sizes between sections are fully traceable. (This
+mirrors the concurrent slice of the full pipeline's global ledger.)
+
+```{r naccount, results='asis'}
+nt_render(nt, caption = "Participant accounting across all concurrent models / networks.")
+```
+
+---
+
+# Appendix — Reproducibility {#appendix}
+
+**Environment.** Network and NCT sections require `bootnet`, `qgraph`,
+`networktools`, and `NetworkComparisonTest`; the mixed model requires `lme4`;
+partial-correlation heatmaps require `corrplot`. If any are absent the
+corresponding sections are skipped with an inline note and the regression +
+ratio layers still run. `NCT_IT` (permutations) is set inside the concurrent
+part; lower it for a quick pass.
+
+**Knit one endpoint.**
+
+```r
+rmarkdown::render("concurrent_analysis.Rmd",
+                  params = list(endpoint = "SBA"),      # or "WT_IgG" / "PTNA"
+                  output_file = "concurrent_SBA.html",
+                  output_format = "html_document")
+```
+
+**Knit all three** (one HTML per endpoint, named by endpoint):
+
+```r
+render_concurrent_all <- function(rmd = "concurrent_analysis.Rmd",
+                                  endpoints = c("SBA", "WT_IgG", "PTNA"),
+                                  fmt = "html_document") {
+  for (ep in endpoints) {
+    ext <- if (grepl("word", fmt)) "docx" else "html"
+    rmarkdown::render(
+      rmd,
+      params        = list(endpoint = ep),
+      output_file   = sprintf("concurrent_%s.%s", ep, ext),
+      output_format = fmt,
+      envir         = new.env())   # fresh environment per endpoint
+  }
+}
+# render_concurrent_all()
+```
+
+*Generated by the config-driven serology pipeline (concurrent-only driver). Place
+this file beside the existing `*_analysis.Rmd` drivers so it can locate `config/`,
+`R/`, `parts/`, and `data/`.*

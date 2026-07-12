@@ -1,0 +1,413 @@
+---
+title: "Subclass polarisation and infant SBA: a compositional (balance) re-analysis with a complement-mediation check"
+subtitle: "Rationale, methods, and staged results — GaPS cohort, SBA at the 8-week baseline"
+date: "`r format(Sys.Date())`"
+params:
+  endpoint: "SBA"
+  analysis_antigens: "PT,FHA,PRN,TT,DT"   # PT/FHA/PRN = pertussis; TT/DT = vaccine-control antigens
+  med_antigen: "PRN"          # antigen whose cord-blood balance is the mediation exposure
+  med_x_visit: "CordBlood"    # upstream stage used as the mediation exposure
+output:
+  html_document: { toc: true, toc_depth: 3, toc_float: true, number_sections: true, df_print: kable }
+  word_document: { toc: true, toc_depth: 3 }
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+suppressPackageStartupMessages({ library(dplyr); library(tidyr); library(ggplot2) })
+
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0L) b else a
+
+# ---- locate + source the pipeline (standalone bootstrap) -------------------
+.stub <- function(rel, optional = FALSE) {
+  cand <- character(0)
+  if (requireNamespace("here", quietly = TRUE))
+    cand <- c(cand, here::here(rel), here::here("analysis", rel))
+  rmd_dir <- tryCatch(dirname(knitr::current_input(dir = TRUE)), error = function(e) NA_character_)
+  if (!is.na(rmd_dir)) cand <- c(cand, file.path(rmd_dir, rel), file.path(dirname(rmd_dir), rel))
+  cand <- unique(c(cand, file.path(getwd(), rel), rel))
+  hit  <- cand[file.exists(cand)]
+  if (length(hit)) return(normalizePath(hit[1], winslash = "/", mustWork = FALSE))
+  if (optional) return(NULL)
+  stop("Cannot locate '", rel, "'. Run from the project root.", call. = FALSE)
+}
+if (!exists("find_proj_file")) source(.stub("R/find_proj_file.R"))
+source(find_proj_file("config/endpoints.R"),            encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),          encoding = "UTF-8")
+source(find_proj_file("R/subclass_balance_helpers.R"),  encoding = "UTF-8")
+
+cfg      <- get_endpoint_config(params$endpoint)
+data_raw <- load_serology_data(here::here("./data/d_set.RData"), object_name = "ebaa_extra2")
+verify_predictor_casing(data_raw)
+nt       <- new_ntracker()
+roles    <- chain_visit_roles(cfg)
+
+# ---- antigen set for this analysis (pertussis core + TT/DT controls) -------
+ants <- trimws(strsplit(params$analysis_antigens, ",")[[1]])
+pert_ants <- intersect(ants, cfg$antigens)                    # PT, FHA, PRN
+ctrl_ants <- setdiff(ants, cfg$antigens)                      # TT, DT (vaccine-control)
+
+# ---- discover the complement (ADCD) measure available in this dataset ------
+adcd_info      <- derive_adcd_tag(data_raw, ants, pattern = "ADCD")
+adcd_available <- !is.null(adcd_info)
+adcd_tag       <- if (adcd_available) adcd_info$tag else NA_character_
+adcd_feats     <- if (adcd_available) adcd_info$feats else character(0)
+
+# ---- wide chain frame: subclasses + outcome + ADCD, plus balances & deltas -
+chain_feats <- c(cfg$outcome_feature, PREDICTOR_FEATURES, adcd_feats)
+data_wide_chain <- data_raw %>%
+  dplyr::filter(feature %in% chain_feats,
+                visit_name %in% cfg$chain_visits,
+                arm_name %in% cfg$maternal_arms) %>%
+  dplyr::select(subject_accession, arm_name, infant_arm, feature, visit_name, log_assay_value) %>%
+  dplyr::distinct(subject_accession, visit_name, feature, .keep_all = TRUE) %>%
+  tidyr::pivot_wider(id_cols = c(subject_accession, arm_name, infant_arm),
+                     names_from = c(feature, visit_name),
+                     values_from = log_assay_value, names_sep = "_") %>%
+  dplyr::mutate(arm_name = factor(arm_name, levels = cfg$maternal_arms)) %>%
+  add_chain_derived(cfg) %>%                                   # gives <ANT>_ratio_<v> (pertussis core)
+  add_subclass_balances(ants, cfg$chain_visits) %>%            # gives <ANT>_bal_<v> for all antigens
+  add_balance_deltas(ants)                                     # gives <ANT>_baldelta_<stage>
+if (adcd_available)                                            # gives <ANT>_ADCDdelta_<stage>
+  data_wide_chain <- add_stage_deltas(data_wide_chain, ants, tag = adcd_tag)
+
+oc      <- cfg$outcome_col       # WHOLE_SBA_InfMon2
+prod_v  <- roles$matbirth %||% "MatBirth"
+walk_nodes <- c(Maternal = roles$matbirth %||% "MatBirth",
+                Cord     = roles$cord     %||% "CordBlood",
+                Baseline = roles$infant   %||% "InfMon2")
+STAGE_LABEL <- c(production = "Maternal production (level at delivery)",
+                 transfer   = "Placental transfer (\u0394 delivery\u2192cord)",
+                 decay      = "Post-natal decay (\u0394 cord\u21928 weeks)")
+
+# small renderers reused for the balance (bal) and complement (ADCD) measures
+render_within_stage <- function(tag, measure) {
+  u <- fit_stage_univariate(data_wide_chain, ants, oc, tag = tag, arm = "arm_name",
+                            production_visit = prod_v, nt = nt)
+  if (is.null(u) || !nrow(u)) { cat("> No", measure, "stage quantities available.\n\n"); return(invisible(NULL)) }
+  u <- u[order(u$stage, match(u$antigen, ants)), ]
+  d <- transform(u, Stage = STAGE_LABEL[as.character(stage)],
+                 `95% CI` = sprintf("%.3f to %.3f", lo, hi),
+                 beta = round(beta, 3), p = signif(p, 3), sig = pvalue_to_label(p))
+  d <- d[, c("antigen", "Stage", "n", "beta", "95% CI", "p", "sig")]; names(d)[1] <- "Antigen"
+  print(knitr::kable(d, row.names = FALSE, align = c("l","l","r","r","r","r","c"),
+    caption = paste0("Within-stage ", measure, " vs ", cfg$outcome_label,
+                     " at 8 weeks (SBA ~ stage quantity + maternal group).")))
+  cat("\n"); invisible(u)
+}
+render_forest <- function(u, measure) {
+  if (is.null(u) || !nrow(u)) { cat("\n"); return(invisible(NULL)) }
+  u$sig <- (u$lo > 0) | (u$hi < 0)
+  u$antigen <- factor(u$antigen, levels = rev(ants))
+  u$Stage <- factor(STAGE_LABEL[as.character(u$stage)], levels = STAGE_LABEL)
+  print(
+    ggplot(u, aes(beta, antigen)) +
+      geom_vline(xintercept = 0, linetype = "dashed", colour = "grey55", linewidth = 0.7) +
+      geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.22, colour = "grey25") +
+      geom_point(aes(fill = sig), shape = 21, size = 3, colour = "grey15") +
+      scale_fill_manual(values = c(`TRUE` = "grey15", `FALSE` = "white"), guide = "none") +
+      facet_wrap(~ Stage, ncol = 1, strip.position = "right") +
+      labs(x = paste0("Adjusted \u03b2 for log10 ", measure, " at 8 weeks (95% CI)"), y = NULL) +
+      theme_bw(base_size = 11))
+  invisible(NULL)
+}
+render_sequential <- function(tag, measure) {
+  for (a in ants) {
+    s <- fit_sequential_stages(data_wide_chain, a, oc, tag = tag, arm = "arm_name",
+                               production_visit = prod_v, nt = nt)
+    cat("\n**", a, "**\n\n", sep = "")
+    if (is.null(s$steps)) { cat("> ", measure, " columns unavailable for ", a, ".\n\n", sep = ""); next }
+    st <- transform(s$steps, Step = STAGE_LABEL[step], R2 = round(R2, 3),
+                    adj_R2 = round(adj_R2, 3), `ΔR²` = round(delta_R2, 3))[,
+                    c("Step","n","R2","adj_R2","\u0394R\u00b2")]
+    print(knitr::kable(st, row.names = FALSE, align = c("l","r","r","r","r"),
+      caption = paste0(a, " (", measure, "): incremental fit as stages are added (common n=", s$n, ").")))
+    cat("\n")
+    if (!is.null(s$full_model)) {
+      fm <- s$full_model
+      fm$Stage <- ifelse(grepl("delta_transfer", fm$term), STAGE_LABEL["transfer"],
+                  ifelse(grepl("delta_decay", fm$term), STAGE_LABEL["decay"], STAGE_LABEL["production"]))
+      fmd <- data.frame(Stage = fm$Stage, beta = round(fm$beta, 3),
+        `95% CI` = sprintf("%.3f to %.3f", fm$lo, fm$hi),
+        p = signif(fm$p, 3), sig = pvalue_to_label(fm$p), check.names = FALSE)
+      print(knitr::kable(fmd, row.names = FALSE, align = c("l","r","r","r","c"),
+        caption = paste0(a, " (", measure, "): all three stage terms together + arm.")))
+      cat("\n")
+    }
+  }
+}
+```
+
+# Background: what the pro-/tolerogenic ratio assumes
+
+Our earlier analyses summarised each antigen's IgG-subclass response as a single
+**pro-inflammatory-to-tolerogenic ratio**, log10[(IgG1+IgG3)/(IgG2+IgG4)], and
+related it to serum bactericidal activity (SBA) at 8 weeks. That ratio is a
+reasonable first pass, but it bundles together several biological and statistical
+assumptions that are worth making explicit before we extend the work.
+
+The **effector split itself is well grounded.** Across the literature the
+functional hierarchy runs roughly IgG4 < IgG2 < IgG1 < IgG3 for complement
+fixation and activating-Fc\u03b3-receptor engagement: IgG1 and IgG3 are the strong
+mediators of complement- and Fc\u03b3R-dependent functions, IgG2 is a weak mediator
+tied to polysaccharide responses, and IgG4 has minimal effector capacity and can
+actively block IgG1/IgG3 complement activation while preferentially engaging the
+inhibitory receptor Fc\u03b3RIIb [1\u20134]. This matters here because **our readout is
+itself complement-mediated** \u2014 SBA is complement-dependent bacterial killing \u2014 so
+placing the complement-fixing subclasses in the numerator and the
+non-complement-fixing IgG4 in the denominator is mechanistically defensible, and
+almost certainly explains why the ratio predicts SBA at all.
+
+But the dichotomy is crude in ways that matter for this dataset:
+
+* **IgG2 is not "tolerogenic".** IgG4 is the genuinely immunoregulatory,
+  chronic-antigen "blocking" subclass; IgG2 is simply the low-effector
+  anti-polysaccharide subclass. Summing them conflates "does little" with
+  "actively suppresses" [1,3].
+* **In pertussis the contrast is really IgG1 vs IgG4.** For pertussis antigens
+  IgG1 dominates and IgG3 contributes little, while IgG4 rises specifically after
+  repeated acellular vaccination and reflects Th2 skewing; whole-cell priming
+  instead favours IgG1 and a Th1/Th17 profile with better opsonisation and killing
+  [5\u20137]. Because IgG4 does not fix complement, a high IgG4 share is expected to
+  depress a complement-dependent readout such as SBA, and low IgG1/IgG4 ratios have
+  been linked to reduced protection [7]. So our "polarisation" axis is, in this
+  cohort, largely an aP-vs-wP / Th2-vs-Th1 axis \u2014 which is meaningful, but should be
+  named as such.
+* **Cord blood adds a placental-transfer confound.** The subclasses cross the
+  placenta with different efficiencies (IgG1 most efficiently, IgG2 least; the exact
+  hierarchy is not settled and transfer falls as maternal titre rises) [8,9]. A cord
+  ratio therefore mixes maternal production with differential transfer, and will not
+  equal the maternal ratio in the same woman.
+* **The arithmetic hides the potency we care about.** The original ratio sums
+  *linear* concentrations, so it is dominated by the most abundant subclass; IgG3 \u2014
+  the most potent per molecule \u2014 barely moves it.
+* **Effector class is not fixed by subclass.** Fc glycosylation (galactosylation,
+  sialylation, fucosylation) strongly re-tunes the activating/inhibitory balance of
+  any given subclass [4]. A subclass-only index cannot see this.
+
+# Why a balance, and why a complement-mediation check
+
+Two consequences follow, and they define this analysis.
+
+**(2) Use a compositional balance rather than a linear-sum ratio.** The four
+subclasses are parts of a whole and carry *relative* information, which is exactly
+the setting compositional data analysis (CoDA) was built for; naive ratios of parts
+have produced spurious correlations since Pearson (1897), and the principled fix is a
+log-ratio *balance* [10\u201313]. For the {IgG1,IgG3} vs {IgG2,IgG4} partition the
+isometric-log-ratio balance is
+
+$$ b \;=\; \tfrac{1}{2}\big(\log \mathrm{IgG1} + \log \mathrm{IgG3}\big) \;-\; \tfrac{1}{2}\big(\log \mathrm{IgG2} + \log \mathrm{IgG4}\big), $$
+
+i.e. a **geometric-mean contrast** that weights each subclass equally (so IgG3
+counts as much as IgG1) and is scale-invariant. This is the same move the microbiome
+field made away from the crude Firmicutes/Bacteroidetes ratio toward CoDA balances
+[11\u201313].
+
+**Scale note (crucial for our arbitrary-unit assays).** Each subclass is measured in
+its own arbitrary unit, so absolute balance values are not concentration-interpretable.
+However, a per-subclass unit change multiplies each subclass by a constant, i.e. adds a
+constant to its log \u2014 shifting $b$ by a fixed offset that is identical for every
+subject. In a regression SBA ~ $b$ (+ arm) that offset is absorbed by the intercept:
+the **slope, its confidence interval and p value are unchanged**. Stage **deltas**
+($b_{\text{to}}-b_{\text{from}}$) cancel the offset entirely. So associations, ordering,
+$\Delta R^2$ and proportion-mediated are all interpretable on ordinal data; only absolute
+balance levels and individual mediation path coefficients are not.
+
+**(6) Ask whether the balance acts through measured complement deposition, at every
+stage.** Because SBA is complement killing, the sharpest mechanistic test is whether a
+polarisation signal predicts SBA *through* the antibody's measured complement-deposition
+capacity (antigen-specific ADCD). Now that ADCD is available at the maternal and cord
+visits as well as the 8-week baseline, we can **walk complement through the chain** \u2014 at
+the maternal, cord and baseline nodes in turn \u2014 fitting balance \u2192 ADCD \u2192 SBA at each,
+so complement is analysed with the same stage machinery as the subclasses rather than at
+a single timepoint.
+
+# Methods
+
+We work on the recoded, mixed-case chain frame produced by `load_serology_data()`
+and compute, for each antigen and visit, the balance $b$ above
+(`add_subclass_balances()`). Antigens comprise the three pertussis targets
+(PT, FHA, PRN) plus the two shared vaccine-control toxoids, **tetanus toxoid (TT)** and
+**diphtheria toxoid (DT)**. TT and DT serve as a specificity check: because the outcome
+(SBA) is bactericidal killing of *B pertussis*, a pertussis-specific mechanism should
+show the balance\u2192SBA and balance\u2192ADCD\u2192SBA signal for PT/FHA/PRN but *not* for TT/DT;
+association of the toxoid balances with SBA would instead point to a nonspecific,
+global IgG-polarisation effect. We then run **two measures in parallel through the same
+stage machinery** \u2014 the subclass balance and antibody-dependent complement deposition
+(ADCD) \u2014 decomposing the maternal\u2192cord\u2192infant chain into three **stages**: maternal
+production (level at delivery), placental transfer ($\Delta$ delivery\u2192cord) and
+post-natal decay ($\Delta$ cord\u21928 weeks) (`add_stage_deltas()`, generic over the
+measure). All models take log10 SBA at 8 weeks (`r oc`) as the outcome and adjust for
+maternal vaccine group (Tdap-IPV vs tetanus toxoid, Tdap-IPV reference).
+
+Four questions are addressed: (i) *within each stage*, does that stage's quantity
+predict SBA, for balance and for ADCD (one antigen at a time, arm-adjusted); (ii)
+*sequentially*, do transfer and decay add predictive value once maternal production is
+in the model (nested models on one common complete-case sample, reporting $\Delta R^2$);
+(iii) a **complement walk** tracing balance \u2192 ADCD \u2192 SBA at the maternal, cord and
+baseline nodes (a-path ADCD~balance, b-path SBA~ADCD, and the mediated effect; bootstrap
+product-of-coefficients, and the `mediation` package where available); and (iv) a
+robustness check of the geometric balance against the original linear-sum ratio.
+Analyses were run in R; participant accounting for every model is tabulated at the end.
+
+---
+
+# Result A — within each stage, what predicts SBA?
+
+Each row is a single arm-adjusted model, SBA ~ (that stage's quantity) + maternal group,
+run in parallel for the subclass **balance** and for **complement deposition (ADCD)**.
+
+## Subclass balance
+
+```{r stage-uni-bal, results='asis'}
+uni_bal <- render_within_stage("bal", "subclass balance")
+```
+
+```{r stage-forest-bal, fig.width=8, fig.height=4.8, fig.cap="Within-stage arm-adjusted association of each antigen's subclass balance with SBA at 8 weeks. Filled points: 95% CI excludes zero."}
+render_forest(uni_bal, cfg$outcome_label)
+```
+
+## Complement deposition (ADCD)
+
+```{r stage-uni-adcd, results='asis'}
+uni_adcd <- NULL
+if (!adcd_available) cat("> No ADCD measure was found in this dataset; complement stages are skipped.\n\n") else
+  uni_adcd <- render_within_stage(adcd_tag, "complement (ADCD)")
+```
+
+```{r stage-forest-adcd, fig.width=8, fig.height=4.8, fig.cap="Within-stage arm-adjusted association of each antigen's ADCD with SBA at 8 weeks. Filled points: 95% CI excludes zero."}
+if (adcd_available) render_forest(uni_adcd, paste0(cfg$outcome_label, " (ADCD predictor)"))
+```
+
+# Result B — do transfer and decay survive once maternal production is in the model?
+
+For each antigen we fit three nested models on one common complete-case sample:
+production alone (+ arm), then adding transfer, then adding decay, reporting the term
+added at each step and the gain in variance explained ($\Delta R^2$). This is run for the
+balance and, in parallel, for complement.
+
+## Subclass balance
+
+```{r seq-bal, results='asis'}
+render_sequential("bal", "subclass balance")
+```
+
+## Complement deposition (ADCD)
+
+```{r seq-adcd, results='asis'}
+if (!adcd_available) cat("> No ADCD measure; complement sequential models skipped.\n\n") else
+  render_sequential(adcd_tag, "complement (ADCD)")
+```
+
+# Result C — walking complement through the stages (maternal → cord → baseline)
+
+At each node we fit the two mechanistic paths and the mediated effect: the **a-path**
+(ADCD ~ balance + arm) asks whether polarisation drives complement deposition *at that
+node*; the **b-path** (SBA ~ ADCD + arm) asks whether complement *at that node* predicts
+8-week SBA; and the **indirect effect** is the balance → ADCD → SBA path, with a
+dimensionless proportion mediated.
+
+```{r walk, results='asis'}
+if (!adcd_available) {
+  cat("> No ADCD measure found; the complement walk is skipped.\n\n")
+} else {
+  walk <- stage_complement_walk(data_wide_chain, ants, oc, nodes = walk_nodes,
+                                bal_tag = "bal", adcd_tag = adcd_tag,
+                                arm = "arm_name", R = 2000, nt = nt)
+  if (is.null(walk) || !nrow(walk)) {
+    cat("> No node had both a balance and an ADCD column; walk skipped.\n\n")
+  } else {
+    wd <- data.frame(
+      Antigen = walk$antigen,
+      Node    = as.character(walk$node),
+      Visit   = walk$visit,
+      n       = walk$n,
+      `a: ADCD~balance, β (p)` = sprintf("%.3f (%.2g)", walk$a_beta, walk$a_p),
+      `b: SBA~ADCD, β (p)`     = sprintf("%.3f (%.2g)", walk$b_beta, walk$b_p),
+      `indirect (95% CI)`        = sprintf("%.3f (%.3f, %.3f)", walk$indirect, walk$indirect_lo, walk$indirect_hi),
+      `prop. mediated`           = ifelse(is.na(walk$prop_med), "\u2014", sprintf("%.0f%%", 100 * walk$prop_med)),
+      check.names = FALSE, stringsAsFactors = FALSE)
+    print(knitr::kable(wd, row.names = FALSE,
+      align = c("l","l","l","r","r","r","r","r"),
+      caption = paste0("Complement walk (", adcd_tag, "): balance \u2192 ADCD \u2192 SBA at 8 weeks, ",
+        "by antigen and node. a-path = ADCD ~ balance + arm; b-path = SBA ~ ADCD + arm; ",
+        "indirect = balance\u2192ADCD\u2192SBA (bootstrap). Proportion mediated is dimensionless.")))
+    cat("\n\n*Path coefficients are on arbitrary units and are not comparable in magnitude ",
+        "across nodes; signs, p values and proportion mediated are the interpretable quantities.*\n\n")
+  }
+}
+```
+
+# Result D — balance vs the original linear-sum ratio (robustness)
+
+For the driver antigen at cord blood, does the CoDA balance recover the same signal
+as the original linear-sum ratio?
+
+```{r compare, results='asis'}
+cmp <- compare_balance_vs_ratio(data_wide_chain, params$med_antigen,
+                                params$med_x_visit, oc, arm = "arm_name")
+if (is.null(cmp)) {
+  cat("> Neither representation was available for the comparison.\n\n")
+} else {
+  cmpd <- transform(cmp, beta = round(beta, 3),
+    `95% CI` = sprintf("%.3f to %.3f", lo, hi), p = signif(p, 3), R2 = round(R2, 3))[,
+    c("representation","n","beta","95% CI","p","R2")]
+  names(cmpd)[1] <- "Representation"
+  print(knitr::kable(cmpd, row.names = FALSE, align = c("l","r","r","r","r","r"),
+    caption = paste0(params$med_antigen, " at ", params$med_x_visit,
+                     ": geometric balance vs linear-sum ratio as predictors of SBA at 8 weeks.")))
+  cat("\n")
+}
+```
+
+# Interpretation
+
+Read together: Result A localises which *stage* of the maternal\u2192cord\u2192infant chain
+carries the signal for SBA, separately for subclass polarisation and for complement
+deposition; Result B asks whether transfer and decay add anything once maternal
+production is accounted for (if their coefficients collapse, the 8-week profile is
+essentially inherited maternal production; if they survive, transfer selectivity and/or
+differential decay independently shape it), again for both measures; Result C **walks
+complement through the chain** \u2014 the a-path shows where polarisation drives complement
+deposition, the b-path shows which node's complement predicts eventual SBA, and the
+mediated effect shows where the balance\u2192complement\u2192killing mechanism is operative
+(given that SBA is complement killing, we expect the b-path and mediation to be strongest
+at the cord and baseline nodes closest to the readout); and Result D confirms the
+compositional balance is not an artefact of the original ratio's arithmetic. Throughout,
+only associations, $\Delta R^2$ and proportion-mediated are interpreted, consistent with
+the ordinal nature of the arbitrary-unit assays.
+
+The tetanus (TT) and diphtheria (DT) toxoids are read as specificity controls: their
+balances and ADCD are processed identically to the pertussis antigens, so if the
+pertussis PT/FHA/PRN signals reflect a genuinely pertussis-specific,
+complement-dependent mechanism we expect the TT/DT rows to be null (weak a-path, weak
+b-path, little mediation), whereas broadly positive TT/DT associations would flag a
+nonspecific global-polarisation or shared-arm effect that any interpretation of the
+pertussis findings would need to accommodate.
+
+# Participant accounting
+
+```{r naccount, results='asis'}
+nt_render(nt, caption = "Participant accounting for the balance, complement, sequential, and walk models.")
+```
+
+# References
+
+1. Vidarsson G, Dekkers G, Rispens T. IgG subclasses and allotypes: from structure to effector functions. *Front Immunol* 2014;5:520.
+2. IgG subclass FcγR and complement effector functions (technical review). Effector hierarchy IgG4 < IgG2 < IgG1 < IgG3.
+3. Lilienthal G-M, et al. Potential of murine IgG1 and human IgG4 to inhibit the classical complement and Fcγ receptor activation pathways. *Front Immunol* 2018;9:958 (PMC5954034).
+4. Harnessing IgG Fc glycosylation for clinical benefit (review), 2023 (PMC9870045).
+5. Hendrikx LH, et al. Different IgG-subclass distributions after whole-cell and acellular pertussis infant primary vaccinations. *Vaccine* 2011.
+6. What is wrong with pertussis vaccine immunity? Why immunological memory to pertussis is failing (review), 2017 (PMID 28289059).
+7. Whole-cell or acellular pertussis vaccination in infancy determines IgG subclass profiles to DTaP booster vaccination. *Vaccine* 2017.
+8. Clements T, et al. Update on transplacental transfer of IgG subclasses: impact of maternal and fetal factors. *Front Immunol* 2020;11:1920 (PMC7516031).
+9. On the perplexingly low rate of transport of IgG2 across the human placenta. *PLoS One* 2014;9:e108319 (PMID 25251461).
+10. Aitchison J. The statistical analysis of compositional data. *J R Stat Soc Ser B* 1982;44:139\u2013177.
+11. Pearson K. On a form of spurious correlation which may arise when indices are used in the measurement of organs. *Proc R Soc Lond* 1897;60:489\u2013498.
+12. Rivera-Pinto J, et al. Balances: a new perspective for microbiome analysis. *mSystems* 2018;3:e00053-18.
+13. Calle ML, Susin A. coda4microbiome: compositional data analysis for microbiome studies. *BMC Bioinformatics* 2023;24:82.
+14. Chung AW, et al. Dissecting polyclonal vaccine-induced humoral immunity against HIV using systems serology. *Cell* 2015;163:988\u2013998.
+
+```{r sessioninfo}
+sessionInfo()
+```

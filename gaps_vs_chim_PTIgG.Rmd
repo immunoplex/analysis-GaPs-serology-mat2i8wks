@@ -1,0 +1,425 @@
+---
+title: "GaPs infant post-priming serum IgG vs de Graaf CHIM 'resistant' adults"
+subtitle: "Is post-vaccination serum PT IgG (and PRN/FHA/FIM) in GaPs infants above the tentative CHIM correlate-of-protection concentrations? Anchored to de Graaf et al. Lancet Microbe 2026, Table 1."
+author: "Prepared for co-author review"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    df_print: kable
+    theme: readable
+    code_folding: hide
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
+options(scipen = 999)
+```
+
+```{r libs, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(knitr)
+```
+
+# What this document does
+
+The de Graaf *et al.* controlled human infection (CHIM) study (Lancet Microbe 2026)
+identified a **sub-group of adults who resisted colonisation** after intranasal *B pertussis*
+challenge, and this resistant phenotype was associated with **higher pre-inoculation serum
+anti-pertussis-toxin (PT) IgG** (among other markers). PT IgG is therefore proposed — very
+tentatively — as a possible correlate of protection against colonisation.
+
+The question from the co-author: **how do post-primary-vaccination serum PT IgG
+concentrations in our GaPs infants (especially the blunted wP / maternal-Tdap infants)
+compare with the CHIM adult "resistant" concentration?** If the infant concentrations sit
+well *above* the resistant-adult anchor, that is a substantive point.
+
+The comparison rests on the units being directly comparable. The GaPs total-IgG assay is the
+**RIVM (Bilthoven) multiplex/ELISA in IU/mL**, and the de Graaf CHIM PT/PRN/FHA IgG values are
+reported in the **same RIVM IU/mL scale** (de Graaf Table 1 footnote; fimbriae 2/3 are in
+AU/mL in *both* studies). So PT, PRN and FHA are compared IU-for-IU; FIM is compared AU-for-AU.
+This is the assumption that makes the numeric comparison legitimate and it is stated explicitly
+in the output so a reader can judge it.
+
+---
+
+# CHIM anchors (from de Graaf Table 1, NOT the digitized Figure 3)
+
+These are the **published geometric means (95% CI)** for pre-inoculation serum IgG, taken
+directly from Table 1 of de Graaf *et al.* 2026. They are hard-coded here so the comparison is
+anchored to the paper's own reported statistics rather than to points digitized off Figure 3.
+
+```{r chim-anchors}
+# --- de Graaf 2026, Table 1: pre-inoculation serum IgG, geometric mean (95% CI) ---
+#   PT, PRN, FHA reported in IU/mL ; Fimbriae 2/3 (FIM) reported in AU/mL.
+#   colonised   = became colonised after primary challenge (n = 20)  -> "susceptible"
+#   resistant   = non-colonised after primary challenge   (n = 30)  -> "protected"
+chim <- tibble::tribble(
+  ~antigen, ~unit,   ~n_col, ~gm_col, ~col_lo, ~col_hi, ~p_table1, ~n_res, ~gm_res, ~res_lo, ~res_hi,
+  "PT",     "IU/mL",  20,     1.9,     0.9,     4.0,     0.028,      30,     6.2,     3.0,    12.8,
+  "PRN",    "IU/mL",  20,     7.3,     2.4,    22.3,     0.037,      30,    17.6,     8.1,    38.2,
+  "FHA",    "IU/mL",  20,     8.5,     2.5,    29.2,     0.010,      30,    30.1,    13.5,    67.3,
+  "FIM",    "AU/mL",  20,    28.2,     7.4,   108.0,     0.97,       30,    25.4,     8.6,    75.5
+)
+
+chim_disp <- chim %>%
+  transmute(
+    Antigen = antigen,
+    Unit = unit,
+    `CHIM colonised (susceptible) GM (95% CI)` =
+      sprintf("%.1f (%.1f\u2013%.1f)", gm_col, col_lo, col_hi),
+    `CHIM resistant (protected) GM (95% CI)` =
+      sprintf("%.1f (%.1f\u2013%.1f)", gm_res, res_lo, res_hi),
+    `p (colonised vs resistant, Table 1)` = p_table1)
+
+kable(chim_disp,
+      caption = "CHIM adult pre-inoculation serum IgG anchors (de Graaf 2026, Table 1). PT/PRN/FHA in IU/mL; FIM in AU/mL. p-values are the Table 1 colonised-vs-non-colonised comparisons (Mann-Whitney; FIM n.s.).")
+```
+
+The single most relevant anchors for the co-author's argument are the **PT IgG** values:
+**resistant adults GM = 6.2 IU/mL (3.0\u201312.8)** vs **colonised adults GM = 1.9 IU/mL
+(0.9\u20134.0)**. The two thresholds carried through every infant comparison below are the
+**resistant GM (6.2)** and the **colonised GM (1.9)**.
+
+---
+
+# Load GaPs infant data (`d_set` / `ebaa_extra2`)
+
+```{r load-dset}
+# ---------------------------------------------------------------------------
+# d_set path: put d_set.RData beside this Rmd (or edit the path below).
+# The object inside is named `ebaa_extra2` (per the project pipeline). We load
+# it defensively so this file also works if the object name changes.
+# ---------------------------------------------------------------------------
+DSET_PATH <- if (file.exists("d_set.RData")) "d_set.RData" else
+             if (file.exists("data/d_set.RData")) "data/d_set.RData" else "d_set.RData"
+
+stopifnot(file.exists(DSET_PATH))
+.e <- new.env()
+.loaded <- load(DSET_PATH, envir = .e)
+
+# Prefer the known object name; otherwise take the first data.frame loaded.
+if ("ebaa_extra2" %in% .loaded) {
+  d_set <- get("ebaa_extra2", envir = .e)
+} else {
+  .dfs <- .loaded[vapply(.loaded, function(o) is.data.frame(get(o, envir = .e)), logical(1))]
+  stopifnot(length(.dfs) >= 1)
+  d_set <- get(.dfs[1], envir = .e)
+}
+d_set <- as.data.frame(d_set)
+cat(sprintf("Loaded object(s): %s\nUsing a data frame with %d rows and %d columns.\n",
+            paste(.loaded, collapse = ", "), nrow(d_set), ncol(d_set)))
+```
+
+### Structure discovery (so column/label choices are auditable)
+
+I cannot assume the exact spelling of every column, so the chunk below **prints what is
+actually in `d_set`** — the columns, the visit labels, the antigen and analyte levels, and the
+infant/maternal group labels. Skim this once; if any of the auto-detected choices in the next
+section are wrong, they are trivially editable there.
+
+```{r discover, results='asis'}
+show_levels <- function(df, col, max_n = 40) {
+  if (!col %in% names(df)) return(sprintf("- **%s**: (absent)\n", col))
+  u <- sort(unique(as.character(df[[col]])))
+  sprintf("- **%s** (%d levels): %s\n", col, length(u),
+          paste(utils::head(u, max_n), collapse = ", "))
+}
+cat("**Columns present:**\n\n")
+cat(paste0("`", names(d_set), "`", collapse = ", "), "\n\n")
+
+cat("**Key level sets:**\n\n")
+for (cc in c("visit_name", "visit", "timepoint",
+             "antigen", "analyte", "feature", "isotype", "subclass",
+             "infant_arm", "arm_name", "maternal_arm", "mat_arm",
+             "group", "study_group", "arm"))
+  cat(show_levels(d_set, cc))
+```
+
+---
+
+# Focal selection: 5-month post-priming visit, total IgG, PT/PRN/FHA/FIM
+
+```{r focal-config}
+# ---- EDIT HERE if the discovery output above shows different spellings -----
+
+# 1) Visit column and the 5-month (InfMon5) post-priming label.
+VISIT_COL   <- if ("visit_name" %in% names(d_set)) "visit_name" else
+               if ("visit" %in% names(d_set)) "visit" else "timepoint"
+FOCAL_VISIT <- "InfMon5"   # 5 months after the infant priming series
+
+# 2) Antigen column + the four antigens of interest.
+ANTIGEN_COL <- if ("antigen" %in% names(d_set)) "antigen" else "antigen"
+ANTIGENS    <- c("PT", "PRN", "FHA", "FIM")
+
+# 3) Analyte column + the value that denotes TOTAL IgG (not a subclass).
+ANALYTE_COL   <- if ("analyte" %in% names(d_set)) "analyte" else "analyte"
+TOTAL_IGG_VAL <- "IgG"     # total IgG; subclasses are IgG1..IgG4 in this dataset
+
+# 4) The native concentration column (IU/mL or AU/mL), NOT the log10 column.
+#    In this pipeline the native value is `value_reported` and the log10 is
+#    `log_assay_value`. We use the native value and compute GM ourselves.
+CONC_COL <- if ("value_reported" %in% names(d_set)) "value_reported" else
+            if ("concentration"  %in% names(d_set)) "concentration"  else
+            if ("value"          %in% names(d_set)) "value"          else NA_character_
+stopifnot(!is.na(CONC_COL))
+
+# 5) Infant priming arm (wP vs aP) and maternal arm (Tdap vs TT).
+INFANT_ARM_COL <- if ("infant_arm" %in% names(d_set)) "infant_arm" else NA_character_
+
+# Maternal arm: try common names; else try to derive from arm_name.
+MAT_ARM_COL <- {
+  cand <- c("maternal_arm", "mat_arm", "maternal_vaccine", "mat_vaccine")
+  hit  <- cand[cand %in% names(d_set)]
+  if (length(hit)) hit[1] else NA_character_
+}
+
+cat(sprintf("Using: visit='%s' (focal='%s'), antigen='%s', analyte='%s' (total='%s'), conc='%s', infant_arm='%s', maternal_arm='%s'\n",
+            VISIT_COL, FOCAL_VISIT, ANTIGEN_COL, ANALYTE_COL, TOTAL_IGG_VAL, CONC_COL,
+            ifelse(is.na(INFANT_ARM_COL), "(none)", INFANT_ARM_COL),
+            ifelse(is.na(MAT_ARM_COL), "(derive/none)", MAT_ARM_COL)))
+```
+
+```{r derive-maternal, results='asis'}
+# If there is no explicit maternal-arm column, try to derive one from arm_name.
+# GaPs maternal randomisation: Tdap-IPV vs tetanus-toxoid (TT). We look for a
+# text signature in arm_name; anything matching Tdap/aP-IPV -> "Tdap", TT -> "TT".
+d <- d_set
+if (is.na(MAT_ARM_COL) && "arm_name" %in% names(d)) {
+  an <- tolower(as.character(d$arm_name))
+  mat <- ifelse(grepl("tdap|t-dap|ipv|pertussis", an) & !grepl("^tt|tetanus[- ]?toxoid", an), "Tdap",
+         ifelse(grepl("\\btt\\b|tetanus", an), "TT", NA_character_))
+  if (any(!is.na(mat))) {
+    d$maternal_arm_derived <- mat
+    MAT_ARM_COL <- "maternal_arm_derived"
+    cat("> Derived a maternal arm from `arm_name` by text match. **Verify** the mapping below ",
+        "against the discovery output; edit the `grepl()` rules if it is wrong.\n\n")
+    print(kable(as.data.frame(table(arm_name = d$arm_name, maternal = d$maternal_arm_derived)),
+                caption = "Derived maternal-arm mapping (check me)"))
+    cat("\n\n")
+  }
+}
+if (is.na(MAT_ARM_COL)) {
+  cat("> **No maternal-arm column found or derivable.** The maternal-split rows in the ",
+      "comparison table will be skipped; the infant wP/aP and all-infant rows will still be ",
+      "produced. Add/point `MAT_ARM_COL` to the correct column to enable the maternal split.\n\n")
+}
+```
+
+```{r build-focal}
+# Coerce helper columns to character for robust filtering.
+d$.visit   <- as.character(d[[VISIT_COL]])
+d$.antigen <- as.character(d[[ANTIGEN_COL]])
+d$.analyte <- as.character(d[[ANALYTE_COL]])
+d$.conc    <- suppressWarnings(as.numeric(d[[CONC_COL]]))
+d$.infarm  <- if (!is.na(INFANT_ARM_COL)) as.character(d[[INFANT_ARM_COL]]) else NA_character_
+d$.matarm  <- if (!is.na(MAT_ARM_COL))    as.character(d[[MAT_ARM_COL]])    else NA_character_
+
+focal <- d %>%
+  filter(.visit == FOCAL_VISIT,
+         .analyte == TOTAL_IGG_VAL,
+         .antigen %in% ANTIGENS,
+         is.finite(.conc), .conc > 0)
+
+# One value per subject x antigen (guard against duplicate assay rows).
+subj_col <- if ("subject_accession" %in% names(focal)) "subject_accession" else
+            if ("subject_id" %in% names(focal)) "subject_id" else names(focal)[1]
+focal <- focal %>%
+  distinct(.data[[subj_col]], .antigen, .infarm, .matarm, .keep_all = TRUE)
+
+cat(sprintf("Focal rows (visit=%s, total IgG, 4 antigens): %d across %d subjects.\n",
+            FOCAL_VISIT, nrow(focal), dplyr::n_distinct(focal[[subj_col]])))
+```
+
+```{r sanity-focal, results='asis'}
+if (nrow(focal) == 0) {
+  cat("> **No rows selected.** The focal visit/analyte/antigen labels did not match the data. ",
+      "Re-check the discovery output above and edit the `focal-config` chunk. Common fixes: the ",
+      "5-month visit may be spelled differently (e.g. 'InfMon5', 'M05', 'V05', '5m'), or total ",
+      "IgG may be coded as 'IgG_total' rather than 'IgG'.\n\n")
+} else {
+  cat("Per-antigen row counts at the focal visit:\n\n")
+  print(kable(as.data.frame(table(antigen = focal$.antigen)), caption = "n per antigen (focal visit, total IgG)"))
+}
+```
+
+---
+
+# Comparison engine
+
+```{r gm-helpers}
+gm    <- function(x) { x <- x[is.finite(x) & x > 0]; if (!length(x)) NA_real_ else exp(mean(log(x))) }
+gm_ci <- function(x, conf = 0.95) {
+  x <- x[is.finite(x) & x > 0]; n <- length(x)
+  if (n < 2) return(c(gm = if (n) x else NA_real_, lo = NA_real_, hi = NA_real_))
+  lx <- log(x); m <- mean(lx); se <- stats::sd(lx) / sqrt(n)
+  tt <- stats::qt(1 - (1 - conf) / 2, df = n - 1)
+  c(gm = exp(m), lo = exp(m - tt * se), hi = exp(m + tt * se))
+}
+
+# Summarise one infant subgroup vs the CHIM anchors for one antigen.
+summarise_group <- function(vals, antigen_code, group_label) {
+  vals <- vals[is.finite(vals) & vals > 0]
+  a <- chim[chim$antigen == antigen_code, ]
+  ci <- gm_ci(vals)
+  gm_res <- a$gm_res; gm_col <- a$gm_col
+  tibble::tibble(
+    Antigen      = antigen_code,
+    Group        = group_label,
+    n            = length(vals),
+    GM           = round(unname(ci["gm"]), 1),
+    GM_CI        = if (is.na(ci["lo"])) NA_character_ else sprintf("%.1f\u2013%.1f", ci["lo"], ci["hi"]),
+    Median       = round(stats::median(vals), 1),
+    `xGM_vs_resistant` = if (is.na(gm_res) || is.na(ci["gm"])) NA_real_ else round(unname(ci["gm"]) / gm_res, 1),
+    `%>_resistantGM`   = round(100 * mean(vals > gm_res), 0),
+    `%>_colonisedGM`   = round(100 * mean(vals > gm_col), 0)
+  )
+}
+
+# Assemble the infant subgroups that exist in the data.
+build_subgroups <- function(fa, antigen_code) {
+  s <- fa %>% filter(.antigen == antigen_code)
+  out <- list()
+  add <- function(v, lbl) if (length(v[is.finite(v) & v > 0]) >= 1)
+    out[[length(out) + 1]] <<- summarise_group(v, antigen_code, lbl)
+
+  # All infants
+  add(s$.conc, "All GaPs infants (5 mo)")
+
+  # Infant priming arm
+  if (any(!is.na(s$.infarm))) {
+    add(s$.conc[s$.infarm == "wP"], "Infant wP-primed (5 mo)")
+    add(s$.conc[s$.infarm == "aP"], "Infant aP-primed (5 mo)")
+  }
+
+  # Maternal arm (the blunting axis)
+  if (any(!is.na(s$.matarm))) {
+    add(s$.conc[s$.matarm == "Tdap"], "Maternal-Tdap infants (blunted)")
+    add(s$.conc[s$.matarm == "TT"],   "Maternal-TT infants (unblunted)")
+    # Fully-crossed cells (the co-author's 'most blunted' = maternal-Tdap x wP)
+    if (any(!is.na(s$.infarm))) {
+      add(s$.conc[s$.matarm == "Tdap" & s$.infarm == "wP"], "Maternal-Tdap x wP (most blunted)")
+      add(s$.conc[s$.matarm == "Tdap" & s$.infarm == "aP"], "Maternal-Tdap x aP")
+      add(s$.conc[s$.matarm == "TT"   & s$.infarm == "wP"], "Maternal-TT x wP")
+      add(s$.conc[s$.matarm == "TT"   & s$.infarm == "aP"], "Maternal-TT x aP")
+    }
+  }
+  dplyr::bind_rows(out)
+}
+```
+
+# Results table — PT IgG (the tentative correlate)
+
+```{r pt-table, results='asis'}
+if (nrow(focal) > 0 && "PT" %in% focal$.antigen) {
+  a <- chim[chim$antigen == "PT", ]
+  chim_rows <- tibble::tibble(
+    Antigen = "PT",
+    Group   = c("CHIM adult colonised (susceptible)", "CHIM adult resistant (protected)"),
+    n       = c(a$n_col, a$n_res),
+    GM      = c(a$gm_col, a$gm_res),
+    GM_CI   = c(sprintf("%.1f\u2013%.1f", a$col_lo, a$col_hi),
+                sprintf("%.1f\u2013%.1f", a$res_lo, a$res_hi)),
+    Median  = c(NA_real_, NA_real_),
+    `xGM_vs_resistant` = c(round(a$gm_col / a$gm_res, 1), 1),
+    `%>_resistantGM`   = c(NA_real_, NA_real_),
+    `%>_colonisedGM`   = c(NA_real_, NA_real_)
+  )
+  pt_tbl <- dplyr::bind_rows(chim_rows, build_subgroups(focal, "PT"))
+  kable(pt_tbl, caption = "PT IgG (IU/mL). CHIM anchors from de Graaf Table 1; GaPs infant rows computed from d_set at the 5-month post-priming visit (total IgG). 'xGM_vs_resistant' = infant GM / 6.2. '%>_resistantGM' = share of infants above 6.2 IU/mL; '%>_colonisedGM' = share above 1.9 IU/mL.")
+} else {
+  cat("> PT rows unavailable (see selection diagnostics above).\n")
+}
+```
+
+# Results tables — PRN, FHA, FIM IgG
+
+```{r other-tables, results='asis'}
+for (ag in c("PRN", "FHA", "FIM")) {
+  if (nrow(focal) == 0 || !(ag %in% focal$.antigen)) {
+    cat(sprintf("\n> %s rows unavailable.\n\n", ag)); next
+  }
+  a <- chim[chim$antigen == ag, ]
+  unit <- a$unit
+  chim_rows <- tibble::tibble(
+    Antigen = ag,
+    Group   = c("CHIM adult colonised (susceptible)", "CHIM adult resistant (protected)"),
+    n       = c(a$n_col, a$n_res),
+    GM      = c(a$gm_col, a$gm_res),
+    GM_CI   = c(sprintf("%.1f\u2013%.1f", a$col_lo, a$col_hi),
+                sprintf("%.1f\u2013%.1f", a$res_lo, a$res_hi)),
+    Median  = c(NA_real_, NA_real_),
+    `xGM_vs_resistant` = c(round(a$gm_col / a$gm_res, 1), 1),
+    `%>_resistantGM`   = c(NA_real_, NA_real_),
+    `%>_colonisedGM`   = c(NA_real_, NA_real_)
+  )
+  tbl <- dplyr::bind_rows(chim_rows, build_subgroups(focal, ag))
+  print(kable(tbl, caption = sprintf(
+    "%s IgG (%s). CHIM anchors from de Graaf Table 1. For %s the Table 1 colonised-vs-resistant difference was %s.",
+    ag, unit, ag,
+    if (ag == "FIM") "NOT significant (p=0.97) \u2014 so the resistant 'threshold' is not meaningful for FIM" else
+      sprintf("significant (p=%s)", format(a$p_table1)))))
+  cat("\n\n")
+}
+```
+
+---
+
+# Auto-generated summary sentences (for pasting into the LLM / manuscript)
+
+```{r narrative, results='asis'}
+if (nrow(focal) > 0 && "PT" %in% focal$.antigen) {
+  pt <- build_subgroups(focal, "PT")
+  res_gm <- chim$gm_res[chim$antigen == "PT"]   # 6.2
+  col_gm <- chim$gm_col[chim$antigen == "PT"]   # 1.9
+  say <- function(row) {
+    sprintf(paste0("- **%s** (n=%d): GM = %.1f IU/mL%s, median = %.1f. That is **%.1f\u00d7** the ",
+                   "resistant-adult PT IgG GM (6.2), with **%d%%** of infants above the resistant ",
+                   "GM and **%d%%** above the colonised GM (1.9)."),
+            row$Group, row$n, row$GM,
+            ifelse(is.na(row$GM_CI), "", sprintf(" (95%% CI %s)", row$GM_CI)),
+            row$Median, row$xGM_vs_resistant, row$`%>_resistantGM`, row$`%>_colonisedGM`)
+  }
+  cat("PT IgG, GaPs infants at 5 months vs the CHIM resistant-adult anchor (6.2 IU/mL):\n\n")
+  for (i in seq_len(nrow(pt))) cat(say(pt[i, ]), "\n")
+  cat("\n\n")
+
+  # headline for the most-blunted cell if present
+  mb <- pt[pt$Group == "Maternal-Tdap x wP (most blunted)", ]
+  if (nrow(mb) == 1 && is.finite(mb$GM)) {
+    verdict <- if (mb$GM > res_gm)
+      sprintf("Even the **most blunted** GaPs cell (maternal-Tdap x wP) sits **above** the resistant-adult PT IgG GM (%.1f vs 6.2 IU/mL, %.1f\u00d7), with %d%% of those infants above 6.2 IU/mL.",
+              mb$GM, mb$xGM_vs_resistant, mb$`%>_resistantGM`)
+    else
+      sprintf("The most blunted GaPs cell (maternal-Tdap x wP) has GM %.1f IU/mL, **below** the resistant-adult anchor (6.2); %d%% of those infants nonetheless exceed 6.2 IU/mL.",
+              mb$GM, mb$`%>_resistantGM`)
+    cat("**Headline:** ", verdict, "\n\n")
+  }
+} else {
+  cat("> Narrative skipped: PT selection produced no rows (fix the focal-config chunk).\n")
+}
+```
+
+# Caveats to keep in the narrative
+
+- The CHIM correlate is **tentative and directional**: de Graaf show *higher* pre-inoculation
+  PT IgG in resistant adults, not a validated protective threshold. 6.2 IU/mL is a group
+  geometric mean, not a cut-off, and the confidence intervals for colonised (0.9\u20134.0) and
+  resistant (3.0\u201312.8) adults **overlap**. Read "% above 6.2" as a descriptive framing device,
+  not a protection probability.
+- Whether the CHIM signal reflects **vaccine- or infection-induced** immunity is unknown; the
+  adults were whole-cell-primed in infancy and were *not* selected on PT IgG, so some of the
+  resistant-adult titre may reflect silent natural boosting.
+- **Age / kinetics mismatch:** GaPs values are peak post-priming infant titres; the CHIM adults
+  are decades removed from priming. High infant titres now do not imply durable protection at
+  the ages when CHIM-type exposure occurs.
+- **Units:** PT/PRN/FHA compared in RIVM IU/mL (directly comparable per the assay provenance you
+  confirmed); FIM in AU/mL. The Table 1 FIM difference was not significant (p=0.97), so the FIM
+  "resistant threshold" is not interpretable as a correlate.
+- All GaPs numbers above are **computed live from `d_set`**; if the discovery output shows a
+  different visit/analyte/group spelling, edit the single `focal-config` chunk and re-knit.
+
+*Anchors: de Graaf et al., Lancet Microbe 2026, Table 1 (pre-inoculation serum IgG geometric means).*

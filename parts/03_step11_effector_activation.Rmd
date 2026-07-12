@@ -1,0 +1,75 @@
+# Step 11 — Effector Activation by FcγR {#step11}
+
+The chain analysis treated ADCD as the effector node. Here we ask the same activation question of all
+three antibody-dependent effector functions — complement deposition (ADCD), cellular phagocytosis
+(ADCP), and neutrophil phagocytosis (ADNP): **is each engaged by FcγR2a/FcγR3b?** For every effector
+present for a given antigen we regress the effector on the two receptors, isolate the FcγR3b-specific
+contribution (residual on FcγR2a), and test whether the FcγR→effector mapping differs by maternal arm.
+ADCP and ADNP are available for only a subset of antigens; absent effector×antigen cells are skipped.
+
+```{r step11-run, results='asis'}
+.stage(11, "effector activation by FcγR (ADCD / ADCP / ADNP)")
+if (!RUN_EFF_ACT) {
+  cat("*Step 11 skipped (run_effector_activation = FALSE).*\n\n")
+} else {
+  .modes <- if (RUN_STD_RERUNS) MODES else "raw"
+  for (mode in .modes) {
+    cat("## Data mode: `", mode, "`", mode_desc(mode), "\n\n", sep = "")
+    wd <- wide_for(mode)
+    rows <- list(); irows <- list()
+    for (fn in EFFECTORS) {
+      for (A in PATHWAY_ANTIGENS) {
+        eff <- paste0(A, "_", fn); r2a <- paste0(A, "_FcgR2a"); r3b <- paste0(A, "_FcgR3b")
+        if (!all(c(eff, r2a, r3b) %in% names(wd))) next
+        for (m in cfg$maternal_arms) {
+          d <- arm_data_m(mode, m) %>% dplyr::select(dplyr::all_of(c(eff, r2a, r3b))) %>% tidyr::drop_na()
+          if (nrow(d) < NETWORK_MIN) next
+          f <- lm(reformulate(c(r2a, r3b), response = eff), data = d)
+          co <- summary(f)$coefficients
+          d$.fres <- resid(lm(reformulate(r2a, response = r3b), data = d))
+          base <- lm(reformulate(r2a, response = eff), data = d)
+          full <- lm(reformulate(c(r2a, ".fres"), response = eff), data = d)
+          uc <- summary(full)$coefficients[".fres", ]
+          rows[[length(rows)+1]] <- data.frame(
+            effector = fn, antigen = A, arm = m, n = nrow(d),
+            R2 = round(summary(f)$r.squared, 3),
+            "β FcγR2a" = round(co[r2a,1],3), "p FcγR2a" = signif(co[r2a,4],3),
+            "β FcγR3b" = round(co[r3b,1],3), "p FcγR3b" = signif(co[r3b,4],3),
+            "3b|2a ΔR²" = round(summary(full)$r.squared - summary(base)$r.squared, 3),
+            "3b|2a p" = signif(uc[4],3), check.names = FALSE, stringsAsFactors = FALSE)
+        }
+        # arm interaction on the FcγR->effector mapping (pooled, standardized predictors)
+        di <- wd %>% dplyr::select(dplyr::all_of(c(eff, r2a, r3b, "arm_name"))) %>% tidyr::drop_na()
+        if (nrow(di) >= 40) {
+          di[[r2a]] <- as.numeric(scale(di[[r2a]])); di[[r3b]] <- as.numeric(scale(di[[r3b]]))
+          di$arm <- factor(di$arm_name, levels = cfg$maternal_arms)
+          f_add <- lm(reformulate(c(r2a, r3b, "arm"), response = eff), data = di)
+          f_int <- lm(stats::as.formula(paste0(eff, " ~ (", r2a, " + ", r3b, ") * arm")), data = di)
+          av <- anova(f_add, f_int)
+          irows[[length(irows)+1]] <- data.frame(
+            effector = fn, antigen = A, n = nrow(di),
+            "block×arm F" = round(av$F[2],2), "block×arm p" = signif(av$`Pr(>F)`[2],3),
+            check.names = FALSE, stringsAsFactors = FALSE)
+        }
+        .info("step11 [%s] %s %s activation done", mode, fn, A)
+      }
+    }
+    tb <- do.call(rbind, rows)
+    if (is.null(tb)) { cat("*No effector×antigen present in this mode.*\n\n"); next }
+    print(knitr::kable(tb, row.names = FALSE,
+      caption = paste0("Effector activation by FcγR [", mode,
+      "]: effector regressed on FcγR2a + FcγR3b, with the FcγR3b-specific (residual-on-2a) contribution."))); cat("\n")
+    ib <- do.call(rbind, irows)
+    if (!is.null(ib)) print(knitr::kable(ib, row.names = FALSE,
+      caption = paste0("Arm-modification of the FcγR→effector mapping [", mode,
+      "]: F-test of the FcγR-block × arm interaction (reference ", cfg$maternal_arms[1], ")."))); cat("\n")
+  }
+}
+```
+
+**How to read this.** A significant positive FcγR coefficient means that effector is antibody-Fc-driven
+in that arm/antigen; comparing the three functions shows whether FcγR engagement feeds complement
+(ADCD), monocyte phagocytosis (ADCP) and neutrophil phagocytosis (ADNP) equally or selectively. The
+`3b|2a` columns isolate the FcγR3b-specific drive (the receptor implicated for SBA in the ADCD
+chain). A significant block×arm interaction indicates the FcγR→effector coupling itself differs
+between TdaP and TT infants, not just its inputs.

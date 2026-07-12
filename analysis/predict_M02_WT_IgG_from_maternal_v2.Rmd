@@ -1,0 +1,1420 @@
+---
+title: "Predicting Infant M02 WT IgG from Maternal and Cord IgG"
+subtitle: |
+  Six predictor blocks tracing the maternal antibody signal from vaccination
+  through placental transfer to the infant at 2 months
+author: "Scot Zens"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: true
+    toc_depth: 3
+    fig_width: 9
+    fig_height: 6
+params:
+  outcome_feature: "WHOLE_WT_IgG"       # WHOLE_PTNA | WHOLE_SBA | WHOLE_WT_IgG
+  outcome_label: "WT_IgG"             # used in cat() and plot titles
+  outcome_y_label: "Log10 WT_IgG"
+---
+
+```{r global-opts, include=FALSE}
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE,
+  echo    = TRUE
+)
+```
+
+---
+
+# Analytical Framework
+
+This document investigates how the infant's pertussis toxin neutralization
+capacity at **M02** (2 months of age, immediately before first vaccination)
+is shaped by the complete chain of antibody events between maternal
+vaccination and early infancy. The full six-block framework is run twice,
+under two independent stratifications:
+
+- **Infant vaccination arm** (aP vs wP) — the infant's own priming history.
+- **Maternal vaccination arm** (TdaP vs TT) — what the mother received
+  during pregnancy.
+
+Both stratifications use identical blocks, models, tables, and figures, so
+the two can be compared directly. The infant-arm analysis is presented
+first (Blocks 1–6 plus a cross-arm comparison), followed by the parallel
+maternal-arm analysis.
+
+The outcome — **`r params$outcome_label` at M02** — is a functional assay
+measuring the ability of infant serum antibodies to neutralize pertussis
+toxin. Unlike total IgG titres, it captures the biologically active
+(neutralizing) fraction of the antibody response.
+
+Six sequential predictor blocks are tested, each interrogating a distinct
+biological mechanism:
+
+```{r framework-table, echo=FALSE}
+framework <- data.frame(
+  Block = paste0("Block ", 1:6),
+  Period = c(
+    "P02 and P09 (maternal)",
+    "P02 → P09 (maternal)",
+    "P09 → M00 (maternal → cord)",
+    "P09 → M00 (maternal → cord)",
+    "M00 → M02 (cord → infant)",
+    "M00 → M02 (cord → infant)"
+  ),
+  Type = c(
+    "Antibody quantity",
+    "Class switching",
+    "Antibody quantity",
+    "Class switching",
+    "Antibody quantity",
+    "Class switching"
+  ),
+  Biological_Question = c(
+    "Do maternal IgG levels before and at delivery predict infant PTNA?",
+    "Does gestational subclass polarisation predict infant PTNA?",
+    "Does the quantity transferred across the placenta predict infant PTNA?",
+    "Does subclass-selective placental transfer predict infant PTNA?",
+    "Do antibody decay rates from birth to M02 predict infant PTNA?",
+    "Does subclass-selective neonatal decay predict infant PTNA?"
+  ),
+  Expected_driver = c(
+    "Higher PT IgG1 at P09 → higher infant PTNA",
+    "Shift toward pro-inflammatory (IgG1+IgG3) → higher infant PTNA",
+    "Greater net transfer (cord > maternal) → higher infant PTNA",
+    "Preferential IgG1 transfer → higher infant PTNA",
+    "Less decay (smaller negative delta) → higher infant PTNA",
+    "Selective IgG1 preservation → higher infant PTNA"
+  ),
+  stringsAsFactors = FALSE
+)
+knitr::kable(
+  framework,
+  col.names = c("Block", "Period", "Predictor type",
+                "Biological question", "Expected direction"),
+  caption   = "Table 1. Six-block predictor framework."
+)
+```
+
+**Pro-inflammatory subclasses:** IgG1, IgG3  
+**Tolerogenic subclasses:** IgG2, IgG4  
+**Ratio:** log₁₀[(IgG1 + IgG3) / (IgG2 + IgG4)]; positive values indicate
+pro-inflammatory polarisation.
+
+---
+
+# Setup and Parameters
+
+```{r setup}
+library(data.table)
+library(tidyverse)
+library(here)
+library(RColorBrewer)
+library(broom)
+library(relaimpo)
+library(knitr)
+
+# ---- Outcome (edit here to switch to SBA or WT_IgG) ---------
+outcome_feature <- params$outcome_feature   # "WHOLE_PTNA" | "WHOLE_SBA" | "WHOLE_WT_IgG"
+outcome_label   <- params$outcome_label
+outcome_y_label <- params$outcome_y_label
+outcome_col     <- paste0(outcome_feature, "_M02")
+
+# ---- Predictor feature lists --------------------------------
+antigen_totals <- c("PT_IgG",  "FHA_IgG",  "PRN_IgG")
+pt_subclasses  <- c("PT_IgG1",  "PT_IgG2",  "PT_IgG3",  "PT_IgG4")
+fha_subclasses <- c("FHA_IgG1", "FHA_IgG2", "FHA_IgG3", "FHA_IgG4")
+prn_subclasses <- c("PRN_IgG1", "PRN_IgG2", "PRN_IgG3", "PRN_IgG4")
+all_subclasses <- c(pt_subclasses, fha_subclasses, prn_subclasses)
+predictor_features <- c(antigen_totals, all_subclasses)
+
+# ---- Visit and arm definitions ------------------------------
+PRED_VISITS <- c("P02", "P09", "M00", "M02")
+arms        <- c("TdaP", "TT")
+infant_arms <- c("aP", "wP")
+iarm_colors <- c("aP" = "dodgerblue2", "wP" = "forestgreen")
+marm_colors <- c("TdaP" = "skyblue",   "TT" = "salmon")
+
+# ---- Helper: p-value label ----------------------------------
+pvalue_to_label <- function(p) {
+  dplyr::case_when(
+    p < 0.001 ~ "***",
+    p < 0.01  ~ "**",
+    p < 0.05  ~ "*",
+    TRUE      ~ "ns"
+  )
+}
+
+# ---- Helper: ratio (log10 pro-inflam / tolerogenic) ---------
+ratio_col <- function(g1, g2, g3, g4) {
+  log10((10^g1 + 10^g3) / (10^g2 + 10^g4))
+}
+
+# ---- Helper: fit lm, return structured result (silent) ------
+run_lm <- function(outcome_col, predictors, data, label = "") {
+  f <- reformulate(predictors, response = outcome_col)
+  m <- lm(f, data = data, na.action = na.omit)
+  s <- summary(m)
+
+  tidy_coef <- tidy(m) %>%
+    mutate(
+      sig    = pvalue_to_label(p.value),
+      across(c(estimate, std.error, statistic), ~round(., 4)),
+      p.value = signif(p.value, 3)
+    ) %>%
+    rename(Predictor = term, `β` = estimate, SE = std.error,
+           t = statistic, `p` = p.value, ` ` = sig)
+
+  ri <- tryCatch(calc.relimp(m, type = "lmg"),
+                 error = function(e) NULL)
+
+ri_table <- if (!is.null(ri)) {
+    data.frame(
+      Predictor = names(ri@lmg),
+      lmg_pct   = round(ri@lmg * 100, 2),
+      stringsAsFactors = FALSE
+    ) %>% arrange(desc(lmg_pct))
+  } else NULL
+
+  invisible(list(
+    model     = m,
+    relimp    = ri,
+    label     = label,
+    R2        = round(s$r.squared,     4),
+    adj_R2    = round(s$adj.r.squared, 4),
+    n_obs     = nobs(m),
+    p_model   = pf(s$fstatistic[1], s$fstatistic[2],
+                   s$fstatistic[3], lower.tail = FALSE),
+    tidy_coef = tidy_coef,
+    ri_table  = ri_table
+  ))
+}
+
+# ---- Helper: display a run_lm result with kable -------------
+show_model <- function(res, show_relimp = TRUE) {
+  cat(sprintf(
+    "\n**n = %d &nbsp;|&nbsp; R² = %.3f &nbsp;|&nbsp; adj-R² = %.3f &nbsp;|&nbsp; p~model~ = %.3g**\n\n",
+    res$n_obs, res$R2, res$adj_R2, res$p_model
+  ))
+  print(knitr::kable(
+    res$tidy_coef,
+    caption = paste0("Coefficients — ", res$label),
+    align   = c("l", rep("r", ncol(res$tidy_coef) - 1))
+  ))
+  cat("\n")
+  if (show_relimp && !is.null(res$ri_table)) {
+    print(knitr::kable(
+        res$ri_table %>% rename(`lmg (%)` = lmg_pct),
+        caption = paste0("Relative importance (lmg) — ", res$label),
+        align   = c("l", "r")
+      ))
+    cat("\n")
+  }
+}
+
+# ---- Helper: collect R² into a one-row data frame -----------
+# `stratum` holds the level of whichever stratification is active
+# (aP/wP for infant arm, or TdaP/TT for maternal arm).
+r2_row <- function(res, stratum, block, model_name) {
+  data.frame(
+    stratum = stratum, block = block, model = model_name,
+    n_obs = res$n_obs, R2 = res$R2, adj_R2 = res$adj_R2,
+    stringsAsFactors = FALSE
+  )
+}
+
+# ---- Helper: render every stored model for one stratum level ----
+# Used by both the infant-arm and maternal-arm display sections.
+show_all_models <- function(br, lvl, ids, show_relimp = TRUE) {
+  for (id in ids) {
+    if (!is.null(br[[lvl]][[id]]))
+      show_model(br[[lvl]][[id]], show_relimp = show_relimp)
+  }
+}
+```
+
+---
+
+# Data Preparation
+
+## Load and Filter
+
+```{r data-load}
+load(file = here::here("./data/c_set.RData"))
+data_raw          <- ebaa_extra
+data_raw$arm_name <- data_raw$maternal_arm
+data_raw$arm_name <- fct_recode(data_raw$arm_name, "TT" = "TT", "TdaP" = "TdaP")
+data_raw$feature  <- factor(paste(data_raw$antigen, data_raw$analyte, sep = "_"))
+
+all_features_needed <- c(predictor_features, outcome_feature)
+
+data_long <- data_raw %>%
+  dplyr::filter(feature    %in% all_features_needed,
+                visit_name %in% PRED_VISITS,
+                arm_name   %in% arms) %>%
+  dplyr::select(subject_accession, visit_name, arm_name, infant_arm,
+                feature, log_assay_value) %>%
+  distinct(subject_accession, visit_name, feature, .keep_all = TRUE)
+```
+
+```{r data-diagnostics, results='asis'}
+cat("**Feature × Visit observation counts (after filtering)**\n\n")
+ft <- as.data.frame(table(data_long$feature, data_long$visit_name))
+colnames(ft) <- c("Feature", "Visit", "n")
+ft <- ft %>% filter(n > 0) %>%
+  pivot_wider(names_from = Visit, values_from = n, values_fill = 0)
+knitr::kable(ft, caption = "Table 2. Observations per feature × visit.") %>% print()
+```
+
+## Pivot to Wide Format
+
+Each row represents one subject. Column names follow the convention
+`{feature}_{visit}` — for example `PT_IgG1_P09` or `WHOLE_PTNA_M02`.
+
+```{r data-pivot}
+data_wide <- data_long %>%
+  pivot_wider(
+    id_cols     = c(subject_accession, arm_name, infant_arm),
+    names_from  = c(feature, visit_name),
+    values_from = log_assay_value,
+    names_sep   = "_"
+  )
+
+cat(sprintf("Wide dataset: **%d subjects × %d columns**  \n",
+            nrow(data_wide), ncol(data_wide)))
+cat(sprintf("Outcome column `%s`: **%d non-missing**\n",
+            outcome_col, sum(!is.na(data_wide[[outcome_col]]))))
+```
+
+## Compute Derived Quantities
+
+Ratios and delta (Δ) variables are computed here for all six blocks.
+
+```{r data-derive}
+data_wide <- data_wide %>%
+  mutate(
+    # ---- Ratios at each visit ----
+    PT_ratio_P02  = ratio_col(PT_IgG1_P02,  PT_IgG2_P02,  PT_IgG3_P02,  PT_IgG4_P02),
+    FHA_ratio_P02 = ratio_col(FHA_IgG1_P02, FHA_IgG2_P02, FHA_IgG3_P02, FHA_IgG4_P02),
+    PRN_ratio_P02 = ratio_col(PRN_IgG1_P02, PRN_IgG2_P02, PRN_IgG3_P02, PRN_IgG4_P02),
+    PT_ratio_P09  = ratio_col(PT_IgG1_P09,  PT_IgG2_P09,  PT_IgG3_P09,  PT_IgG4_P09),
+    FHA_ratio_P09 = ratio_col(FHA_IgG1_P09, FHA_IgG2_P09, FHA_IgG3_P09, FHA_IgG4_P09),
+    PRN_ratio_P09 = ratio_col(PRN_IgG1_P09, PRN_IgG2_P09, PRN_IgG3_P09, PRN_IgG4_P09),
+    PT_ratio_M00  = ratio_col(PT_IgG1_M00,  PT_IgG2_M00,  PT_IgG3_M00,  PT_IgG4_M00),
+    FHA_ratio_M00 = ratio_col(FHA_IgG1_M00, FHA_IgG2_M00, FHA_IgG3_M00, FHA_IgG4_M00),
+    PRN_ratio_M00 = ratio_col(PRN_IgG1_M00, PRN_IgG2_M00, PRN_IgG3_M00, PRN_IgG4_M00),
+    PT_ratio_M02  = ratio_col(PT_IgG1_M02,  PT_IgG2_M02,  PT_IgG3_M02,  PT_IgG4_M02),
+    FHA_ratio_M02 = ratio_col(FHA_IgG1_M02, FHA_IgG2_M02, FHA_IgG3_M02, FHA_IgG4_M02),
+    PRN_ratio_M02 = ratio_col(PRN_IgG1_M02, PRN_IgG2_M02, PRN_IgG3_M02, PRN_IgG4_M02),
+    # ---- Block 2: Δ ratio P02→P09 ----
+    delta_PT_ratio_P02_P09  = PT_ratio_P09  - PT_ratio_P02,
+    delta_FHA_ratio_P02_P09 = FHA_ratio_P09 - FHA_ratio_P02,
+    delta_PRN_ratio_P02_P09 = PRN_ratio_P09 - PRN_ratio_P02,
+    # ---- Block 3: Δ quantity P09→M00 ----
+    delta_PT_IgG_P09_M00   = PT_IgG_M00   - PT_IgG_P09,
+    delta_PT_IgG1_P09_M00  = PT_IgG1_M00  - PT_IgG1_P09,
+    delta_PT_IgG2_P09_M00  = PT_IgG2_M00  - PT_IgG2_P09,
+    delta_PT_IgG3_P09_M00  = PT_IgG3_M00  - PT_IgG3_P09,
+    delta_PT_IgG4_P09_M00  = PT_IgG4_M00  - PT_IgG4_P09,
+    delta_FHA_IgG_P09_M00  = FHA_IgG_M00  - FHA_IgG_P09,
+    delta_FHA_IgG1_P09_M00 = FHA_IgG1_M00 - FHA_IgG1_P09,
+    delta_FHA_IgG2_P09_M00 = FHA_IgG2_M00 - FHA_IgG2_P09,
+    delta_FHA_IgG3_P09_M00 = FHA_IgG3_M00 - FHA_IgG3_P09,
+    delta_FHA_IgG4_P09_M00 = FHA_IgG4_M00 - FHA_IgG4_P09,
+    delta_PRN_IgG_P09_M00  = PRN_IgG_M00  - PRN_IgG_P09,
+    delta_PRN_IgG1_P09_M00 = PRN_IgG1_M00 - PRN_IgG1_P09,
+    delta_PRN_IgG2_P09_M00 = PRN_IgG2_M00 - PRN_IgG2_P09,
+    delta_PRN_IgG3_P09_M00 = PRN_IgG3_M00 - PRN_IgG3_P09,
+    delta_PRN_IgG4_P09_M00 = PRN_IgG4_M00 - PRN_IgG4_P09,
+    # ---- Block 4: Δ ratio P09→M00 ----
+    delta_PT_ratio_P09_M00  = PT_ratio_M00  - PT_ratio_P09,
+    delta_FHA_ratio_P09_M00 = FHA_ratio_M00 - FHA_ratio_P09,
+    delta_PRN_ratio_P09_M00 = PRN_ratio_M00 - PRN_ratio_P09,
+    # ---- Block 5: Δ quantity M00→M02 ----
+    delta_PT_IgG_M00_M02   = PT_IgG_M02   - PT_IgG_M00,
+    delta_PT_IgG1_M00_M02  = PT_IgG1_M02  - PT_IgG1_M00,
+    delta_PT_IgG2_M00_M02  = PT_IgG2_M02  - PT_IgG2_M00,
+    delta_PT_IgG3_M00_M02  = PT_IgG3_M02  - PT_IgG3_M00,
+    delta_PT_IgG4_M00_M02  = PT_IgG4_M02  - PT_IgG4_M00,
+    delta_FHA_IgG_M00_M02  = FHA_IgG_M02  - FHA_IgG_M00,
+    delta_FHA_IgG1_M00_M02 = FHA_IgG1_M02 - FHA_IgG1_M00,
+    delta_FHA_IgG2_M00_M02 = FHA_IgG2_M02 - FHA_IgG2_M00,
+    delta_FHA_IgG3_M00_M02 = FHA_IgG3_M02 - FHA_IgG3_M00,
+    delta_FHA_IgG4_M00_M02 = FHA_IgG4_M02 - FHA_IgG4_M00,
+    delta_PRN_IgG_M00_M02  = PRN_IgG_M02  - PRN_IgG_M00,
+    delta_PRN_IgG1_M00_M02 = PRN_IgG1_M02 - PRN_IgG1_M00,
+    delta_PRN_IgG2_M00_M02 = PRN_IgG2_M02 - PRN_IgG2_M00,
+    delta_PRN_IgG3_M00_M02 = PRN_IgG3_M02 - PRN_IgG3_M00,
+    delta_PRN_IgG4_M00_M02 = PRN_IgG4_M02 - PRN_IgG4_M00,
+    # ---- Block 6: Δ ratio M00→M02 ----
+    delta_PT_ratio_M00_M02  = PT_ratio_M02  - PT_ratio_M00,
+    delta_FHA_ratio_M00_M02 = FHA_ratio_M02 - FHA_ratio_M00,
+    delta_PRN_ratio_M00_M02 = PRN_ratio_M02 - PRN_ratio_M00
+  )
+```
+
+```{r missingness-summary, results='asis'}
+check_cols <- c(
+  "PT_ratio_P02", "PT_ratio_P09", "PT_ratio_M00", "PT_ratio_M02",
+  "delta_PT_ratio_P02_P09", "delta_PT_ratio_P09_M00", "delta_PT_ratio_M00_M02",
+  "delta_PT_IgG_P09_M00",   "delta_PT_IgG_M00_M02",   outcome_col
+)
+miss_df <- data.frame(
+  Variable  = check_cols,
+  Missing_n = colSums(is.na(data_wide[, intersect(check_cols, names(data_wide))]))
+)
+knitr::kable(miss_df, caption = "Table 3. Missingness in key derived variables.",
+             row.names = FALSE) %>% print()
+```
+
+---
+
+# Run All Models
+
+The model-fitting logic is wrapped in a single function, `run_all_blocks()`,
+which is called twice — once stratifying by **infant arm** (aP vs wP) and
+once by **maternal arm** (TdaP vs TT). This guarantees both stratifications
+use byte-for-byte identical models, predictors, and storage structure. Each
+call returns a named list of result objects that the display sections below
+read from.
+
+```{r run-all-models, results='hide'}
+# ============================================================
+# run_all_blocks(): fit all six blocks for every level of a
+# stratification variable. Returns a list of storage objects.
+#   d_all        : the wide data frame
+#   strat_col    : "infant_arm" or "arm_name"
+#   strat_levels : e.g. c("aP","wP") or c("TdaP","TT")
+# ============================================================
+run_all_blocks <- function(d_all, strat_col, strat_levels) {
+
+  r2_all        <- list()
+  ratio_models  <- list()
+  relimp_b1     <- list()
+  relimp_b3     <- list()
+  relimp_b5     <- list()
+  block_results <- list()
+
+  for (lvl in strat_levels) {
+    d  <- d_all %>% dplyr::filter(.data[[strat_col]] == lvl)
+    br <- list()
+
+    # ---- BLOCK 1 ----
+    br[["1a"]] <- run_lm(outcome_col, paste0(antigen_totals, "_P02"), d, "Antigen totals @ P02")
+    br[["1b"]] <- run_lm(outcome_col, paste0(antigen_totals, "_P09"), d, "Antigen totals @ P09")
+    br[["1c"]] <- run_lm(outcome_col,
+                         c(paste0(antigen_totals, "_P02"), paste0(antigen_totals, "_P09")),
+                         d, "Antigen totals P02 + P09 combined")
+    br[["1d"]] <- run_lm(outcome_col, paste0(pt_subclasses,  "_P02"), d, "PT subclasses @ P02")
+    br[["1e"]] <- run_lm(outcome_col, paste0(pt_subclasses,  "_P09"), d, "PT subclasses @ P09")
+    br[["1f"]] <- run_lm(outcome_col, paste0(fha_subclasses, "_P02"), d, "FHA subclasses @ P02")
+    br[["1g"]] <- run_lm(outcome_col, paste0(fha_subclasses, "_P09"), d, "FHA subclasses @ P09")
+    br[["1h"]] <- run_lm(outcome_col, paste0(prn_subclasses, "_P02"), d, "PRN subclasses @ P02")
+    br[["1i"]] <- run_lm(outcome_col, paste0(prn_subclasses, "_P09"), d, "PRN subclasses @ P09")
+    br[["1j"]] <- run_lm(outcome_col, paste0(all_subclasses, "_P02"), d, "Full 12-subclass @ P02")
+    br[["1k"]] <- run_lm(outcome_col, paste0(all_subclasses, "_P09"), d, "Full 12-subclass @ P09")
+    br[["1l"]] <- run_lm(outcome_col,
+                         c(paste0(all_subclasses, "_P02"), paste0(all_subclasses, "_P09")),
+                         d, "Full 24-predictor P02 + P09")
+    relimp_b1[[lvl]] <- br[["1k"]]$relimp
+
+    for (id in paste0("1", letters[1:12]))
+      r2_all[[paste0(id, "_", lvl)]] <- r2_row(br[[id]], lvl, "B1_quantity", sub("1", "", id))
+
+    # ---- BLOCK 2 ----
+    br[["2"]] <- run_lm(outcome_col,
+                        c("delta_PT_ratio_P02_P09","delta_FHA_ratio_P02_P09",
+                          "delta_PRN_ratio_P02_P09"),
+                        d, "Δ ratio P02→P09")
+    r2_all[[paste0("B2_", lvl)]]    <- r2_row(br[["2"]], lvl, "B2_ratio_switch", "3-ratio")
+    ratio_models[[paste0("B2_", lvl)]] <- br[["2"]]$model
+
+    # ---- BLOCK 3 ----
+    b3_ant  <- paste0("delta_", antigen_totals, "_P09_M00")
+    b3_pt   <- paste0("delta_", pt_subclasses,  "_P09_M00")
+    b3_fha  <- paste0("delta_", fha_subclasses, "_P09_M00")
+    b3_prn  <- paste0("delta_", prn_subclasses, "_P09_M00")
+    b3_full <- c(b3_pt, b3_fha, b3_prn)
+    br[["3a"]] <- run_lm(outcome_col, b3_ant,  d, "Δ antigen totals P09→M00")
+    br[["3b"]] <- run_lm(outcome_col, b3_pt,   d, "Δ PT subclasses P09→M00")
+    br[["3c"]] <- run_lm(outcome_col, b3_fha,  d, "Δ FHA subclasses P09→M00")
+    br[["3d"]] <- run_lm(outcome_col, b3_prn,  d, "Δ PRN subclasses P09→M00")
+    br[["3e"]] <- run_lm(outcome_col, b3_full, d, "Δ Full 12-subclass P09→M00")
+    relimp_b3[[lvl]] <- br[["3e"]]$relimp
+    for (id in paste0("3", letters[1:5]))
+      r2_all[[paste0(id, "_", lvl)]] <- r2_row(br[[id]], lvl, "B3_transfer_qty", sub("3", "", id))
+
+    # ---- BLOCK 4 ----
+    br[["4"]] <- run_lm(outcome_col,
+                        c("delta_PT_ratio_P09_M00","delta_FHA_ratio_P09_M00",
+                          "delta_PRN_ratio_P09_M00"),
+                        d, "Δ ratio P09→M00")
+    r2_all[[paste0("B4_", lvl)]]    <- r2_row(br[["4"]], lvl, "B4_transfer_ratio", "3-ratio")
+    ratio_models[[paste0("B4_", lvl)]] <- br[["4"]]$model
+
+    # ---- BLOCK 5 ----
+    b5_ant  <- paste0("delta_", antigen_totals, "_M00_M02")
+    b5_pt   <- paste0("delta_", pt_subclasses,  "_M00_M02")
+    b5_fha  <- paste0("delta_", fha_subclasses, "_M00_M02")
+    b5_prn  <- paste0("delta_", prn_subclasses, "_M00_M02")
+    b5_full <- c(b5_pt, b5_fha, b5_prn)
+    br[["5a"]] <- run_lm(outcome_col, b5_ant,  d, "Δ antigen totals M00→M02")
+    br[["5b"]] <- run_lm(outcome_col, b5_pt,   d, "Δ PT subclasses M00→M02")
+    br[["5c"]] <- run_lm(outcome_col, b5_fha,  d, "Δ FHA subclasses M00→M02")
+    br[["5d"]] <- run_lm(outcome_col, b5_prn,  d, "Δ PRN subclasses M00→M02")
+    br[["5e"]] <- run_lm(outcome_col, b5_full, d, "Δ Full 12-subclass M00→M02")
+    relimp_b5[[lvl]] <- br[["5e"]]$relimp
+    for (id in paste0("5", letters[1:5]))
+      r2_all[[paste0(id, "_", lvl)]] <- r2_row(br[[id]], lvl, "B5_decay_qty", sub("5", "", id))
+
+    # ---- BLOCK 6 ----
+    br[["6"]] <- run_lm(outcome_col,
+                        c("delta_PT_ratio_M00_M02","delta_FHA_ratio_M00_M02",
+                          "delta_PRN_ratio_M00_M02"),
+                        d, "Δ ratio M00→M02")
+    r2_all[[paste0("B6_", lvl)]]    <- r2_row(br[["6"]], lvl, "B6_decay_ratio", "3-ratio")
+    ratio_models[[paste0("B6_", lvl)]] <- br[["6"]]$model
+
+    block_results[[lvl]] <- br
+  }
+
+  list(block_results = block_results, r2_all = r2_all,
+       ratio_models = ratio_models,
+       relimp_b1 = relimp_b1, relimp_b3 = relimp_b3, relimp_b5 = relimp_b5)
+}
+
+# ---- Call 1: stratify by INFANT arm (aP vs wP) -------------
+inf <- run_all_blocks(data_wide, "infant_arm", infant_arms)
+block_results             <- inf$block_results
+r2_all                    <- inf$r2_all
+ratio_models_by_block_arm <- inf$ratio_models
+relimp_b1_full_by_iarm    <- inf$relimp_b1
+relimp_b3_full_by_iarm    <- inf$relimp_b3
+relimp_b5_full_by_iarm    <- inf$relimp_b5
+
+# ---- Call 2: stratify by MATERNAL arm (TdaP vs TT) ---------
+mat <- run_all_blocks(data_wide, "arm_name", arms)
+block_results_m            <- mat$block_results
+r2_all_m                   <- mat$r2_all
+ratio_models_by_block_marm <- mat$ratio_models
+relimp_b1_full_by_marm     <- mat$relimp_b1
+relimp_b3_full_by_marm     <- mat$relimp_b3
+relimp_b5_full_by_marm     <- mat$relimp_b5
+```
+
+---
+
+# Block 1: Maternal Antibody Levels at P02 and P09
+
+**Biological context.** Maternal vaccination with Tdap in the third
+trimester induces a sharp rise in PT-specific IgG. The levels present in
+maternal circulation at **P09 (delivery)** represent the pool available for
+placental transfer. The levels at **P02 (pre-vaccination)** represent the
+baseline. Including both visits allows us to separate the pre-existing
+antibody background from the vaccine-induced boost, and to ask whether it
+is absolute level at delivery or the magnitude of the gestational change
+that matters most for the infant's eventual neutralisation capacity.
+
+*Predictors:* Log₁₀ antigen-specific total IgG (PT, FHA, PRN) and
+subclasses (IgG1–4) at P02 and P09. All models use `na.action = na.omit`
+so effective n varies with missingness in the predictor set.
+
+## aP infants
+
+### Antigen totals
+
+```{r b1-ap-antigen, results='asis'}
+show_model(block_results[["aP"]][["1a"]], show_relimp = TRUE)
+show_model(block_results[["aP"]][["1b"]], show_relimp = TRUE)
+show_model(block_results[["aP"]][["1c"]], show_relimp = FALSE)
+```
+
+### PT subclasses
+
+```{r b1-ap-pt, results='asis'}
+show_model(block_results[["aP"]][["1d"]])
+show_model(block_results[["aP"]][["1e"]])
+```
+
+### FHA subclasses
+
+```{r b1-ap-fha, results='asis'}
+show_model(block_results[["aP"]][["1f"]])
+show_model(block_results[["aP"]][["1g"]])
+```
+
+### PRN subclasses
+
+```{r b1-ap-prn, results='asis'}
+show_model(block_results[["aP"]][["1h"]])
+show_model(block_results[["aP"]][["1i"]])
+```
+
+### Full 12-subclass models
+
+```{r b1-ap-full, results='asis'}
+show_model(block_results[["aP"]][["1j"]])
+show_model(block_results[["aP"]][["1k"]])
+show_model(block_results[["aP"]][["1l"]], show_relimp = FALSE)
+```
+
+## wP infants
+
+### Antigen totals
+
+```{r b1-wp-antigen, results='asis'}
+show_model(block_results[["wP"]][["1a"]], show_relimp = TRUE)
+show_model(block_results[["wP"]][["1b"]], show_relimp = TRUE)
+show_model(block_results[["wP"]][["1c"]], show_relimp = FALSE)
+```
+
+### PT subclasses
+
+```{r b1-wp-pt, results='asis'}
+show_model(block_results[["wP"]][["1d"]])
+show_model(block_results[["wP"]][["1e"]])
+```
+
+### FHA subclasses
+
+```{r b1-wp-fha, results='asis'}
+show_model(block_results[["wP"]][["1f"]])
+show_model(block_results[["wP"]][["1g"]])
+```
+
+### PRN subclasses
+
+```{r b1-wp-prn, results='asis'}
+show_model(block_results[["wP"]][["1h"]])
+show_model(block_results[["wP"]][["1i"]])
+```
+
+### Full 12-subclass models
+
+```{r b1-wp-full, results='asis'}
+show_model(block_results[["wP"]][["1j"]])
+show_model(block_results[["wP"]][["1k"]])
+show_model(block_results[["wP"]][["1l"]], show_relimp = FALSE)
+```
+
+## Subclass slopes: aP vs wP (P09)
+
+```{r b1-interaction-plot, fig.cap="Figure 1. Maternal subclass IgG at P09 vs infant PTNA at M02, by antigen and infant arm. Each panel shows log-linear slopes for IgG1 (red), IgG2 (blue), IgG3 (green), IgG4 (purple)."}
+data_long_b1 <- bind_rows(
+  data_wide %>% dplyr::filter(infant_arm == "aP") %>%
+    dplyr::select(all_of(outcome_col), matches("IgG[1-4]_P09$")) %>%
+    mutate(infant_arm = "aP"),
+  data_wide %>% dplyr::filter(infant_arm == "wP") %>%
+    dplyr::select(all_of(outcome_col), matches("IgG[1-4]_P09$")) %>%
+    mutate(infant_arm = "wP")
+) %>%
+  pivot_longer(cols = matches("IgG[1-4]_P09$"),
+               names_to = c("antigen","subclass","visit"),
+               names_pattern = "(PT|FHA|PRN)_(IgG[1-4])_(P09)",
+               values_to = "subclass_value") %>%
+  drop_na()
+
+ggplot(data_long_b1,
+       aes(x = subclass_value, y = .data[[outcome_col]],
+           color = subclass, linetype = infant_arm)) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  facet_grid(antigen ~ infant_arm) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Log10 Maternal Subclass IgG at P09",
+       y = outcome_y_label, color = "Subclass", linetype = "Infant arm",
+       title = paste0("Block 1 (P09): Antigen × Subclass → ",
+                      outcome_label, " at M02")) +
+  theme_bw(base_size = 11)
+```
+
+---
+
+# Block 2: Gestational Subclass Switching (P02 → P09)
+
+**Biological context.** Beyond the absolute antibody levels, the
+*direction of class switching* during pregnancy may carry independent
+information. If vaccination biases the immune response toward
+pro-inflammatory subclasses (IgG1, IgG3), the delta ratio (P09 − P02)
+will be positive. A positive coefficient in this model means that infants
+whose mothers shifted toward pro-inflammatory subclass dominance during
+pregnancy have higher PTNA at M02 — consistent with the idea that
+functional antibody quality, not just quantity, is imprinted by the
+gestational immune environment.
+
+*Predictors:* Δ pro-inflammatory/tolerogenic ratio (log₁₀) for each
+antigen, where Δ = ratio at P09 minus ratio at P02. Positive values
+indicate a shift toward IgG1+IgG3 dominance during pregnancy.
+
+## aP infants
+
+```{r b2-ap, results='asis'}
+show_model(block_results[["aP"]][["2"]])
+```
+
+**Univariate antigen-level associations:**
+
+```{r b2-ap-univariate, results='asis'}
+univar <- lapply(c("PT","FHA","PRN"), function(ant) {
+  dc <- paste0("delta_", ant, "_ratio_P02_P09")
+  d  <- data_wide %>% dplyr::filter(infant_arm == "aP")
+  if (!dc %in% names(d)) return(NULL)
+  m  <- lm(reformulate(dc, response = outcome_col), data = d, na.action = na.omit)
+  tidy(m) %>% dplyr::filter(term != "(Intercept)") %>%
+    mutate(antigen = ant, R2 = summary(m)$r.squared,
+           sig = pvalue_to_label(p.value),
+           across(c(estimate, std.error, statistic, R2), ~round(., 4)),
+           p.value = signif(p.value, 3))
+}) %>% bind_rows()
+knitr::kable(univar, caption = "Block 2 univariate: aP infants") %>% print()
+```
+
+## wP infants
+
+```{r b2-wp, results='asis'}
+show_model(block_results[["wP"]][["2"]])
+```
+
+```{r b2-wp-univariate, results='asis'}
+univar <- lapply(c("PT","FHA","PRN"), function(ant) {
+  dc <- paste0("delta_", ant, "_ratio_P02_P09")
+  d  <- data_wide %>% dplyr::filter(infant_arm == "wP")
+  if (!dc %in% names(d)) return(NULL)
+  m  <- lm(reformulate(dc, response = outcome_col), data = d, na.action = na.omit)
+  tidy(m) %>% dplyr::filter(term != "(Intercept)") %>%
+    mutate(antigen = ant, R2 = summary(m)$r.squared,
+           sig = pvalue_to_label(p.value),
+           across(c(estimate, std.error, statistic, R2), ~round(., 4)),
+           p.value = signif(p.value, 3))
+}) %>% bind_rows()
+knitr::kable(univar, caption = "Block 2 univariate: wP infants") %>% print()
+```
+
+---
+
+# Block 3: Placental Transfer — Quantity (P09 → M00)
+
+**Biological context.** Placental transfer of IgG is an active FcRn-mediated
+process that concentrates maternal antibodies in fetal circulation. The
+quantity transferred is captured by Δ = cordblood (M00) − maternal (P09),
+measured on the log₁₀ scale. Values near zero indicate equivalent levels;
+positive values indicate the infant has *more* of that subclass than the
+mother (active concentration), which occurs for IgG1 in particular.
+A positive coefficient here means that more efficient transfer of that
+subclass is associated with higher infant PTNA at M02.
+
+*Predictors:* Δ log₁₀ IgG for each antigen/subclass (M00 − P09). Values
+are expected to cluster near zero with some positive skew for well-transferred
+subclasses.
+
+## aP infants
+
+### Antigen totals
+
+```{r b3-ap-antigen, results='asis'}
+show_model(block_results[["aP"]][["3a"]])
+```
+
+### Per-antigen subclass models
+
+```{r b3-ap-sub, results='asis'}
+show_model(block_results[["aP"]][["3b"]])
+show_model(block_results[["aP"]][["3c"]])
+show_model(block_results[["aP"]][["3d"]])
+```
+
+### Full 12-subclass
+
+```{r b3-ap-full, results='asis'}
+show_model(block_results[["aP"]][["3e"]])
+```
+
+## wP infants
+
+### Antigen totals
+
+```{r b3-wp-antigen, results='asis'}
+show_model(block_results[["wP"]][["3a"]])
+```
+
+### Per-antigen subclass models
+
+```{r b3-wp-sub, results='asis'}
+show_model(block_results[["wP"]][["3b"]])
+show_model(block_results[["wP"]][["3c"]])
+show_model(block_results[["wP"]][["3d"]])
+```
+
+### Full 12-subclass
+
+```{r b3-wp-full, results='asis'}
+show_model(block_results[["wP"]][["3e"]])
+```
+
+---
+
+# Block 4: Placental Transfer — Selectivity (P09 → M00)
+
+**Biological context.** FcRn preferentially transfers IgG1 and IgG4 over
+IgG2 and IgG3 across the placenta. If this selectivity matters for
+functional infant immunity, the change in pro-/tolerogenic ratio between
+maternal blood (P09) and cord blood (M00) — reflecting IgG1 enrichment
+or depletion during transfer — should predict infant PTNA. A positive
+coefficient means that infants who received proportionally more
+pro-inflammatory IgG1 relative to tolerogenic IgG2/IgG4 during transfer
+have higher PTNA at M02.
+
+*Predictors:* Δ ratio (M00 − P09) for PT, FHA, PRN.
+
+## aP infants
+
+```{r b4-ap, results='asis'}
+show_model(block_results[["aP"]][["4"]])
+```
+
+## wP infants
+
+```{r b4-wp, results='asis'}
+show_model(block_results[["wP"]][["4"]])
+```
+
+---
+
+# Block 5: Neonatal Antibody Decay — Quantity (M00 → M02)
+
+**Biological context.** Maternal antibodies transferred to the infant
+undergo exponential decay during the first months of life. Different IgG
+subclasses have different half-lives: IgG1 and IgG4 decay more slowly than
+IgG3. The decay quantity (Δ = M02 − M00, expected negative for all
+subclasses) captures how much has been lost by 2 months. A positive
+coefficient here means *less decay* (smaller negative or even positive
+delta) is associated with higher PTNA — i.e., better preservation of
+maternal antibody predicts better functional immunity.
+
+*Predictors:* Δ log₁₀ IgG (M02 − M00). Medians should be negative,
+reflecting net loss between birth and 2 months.
+
+## aP infants
+
+```{r b5-ap-decay-check, results='asis'}
+d_ap <- data_wide %>% dplyr::filter(infant_arm == "aP")
+decay_cols <- paste0("delta_", antigen_totals, "_M00_M02")
+decay_present <- intersect(decay_cols, names(d_ap))
+if (length(decay_present) > 0) {
+  meds <- round(apply(d_ap[, decay_present], 2,
+                      function(x) median(x, na.rm = TRUE)), 3)
+  knitr::kable(
+    data.frame(Antigen = names(meds), `Median Δ log10` = meds),
+    caption = "Antibody decay medians (M02 − M00): aP infants — negative = net loss",
+    row.names = FALSE
+  ) %>% print()
+}
+```
+
+### Antigen totals
+
+```{r b5-ap-antigen, results='asis'}
+show_model(block_results[["aP"]][["5a"]])
+```
+
+### Per-antigen subclass models
+
+```{r b5-ap-sub, results='asis'}
+show_model(block_results[["aP"]][["5b"]])
+show_model(block_results[["aP"]][["5c"]])
+show_model(block_results[["aP"]][["5d"]])
+```
+
+### Full 12-subclass
+
+```{r b5-ap-full, results='asis'}
+show_model(block_results[["aP"]][["5e"]])
+```
+
+## wP infants
+
+```{r b5-wp-decay-check, results='asis'}
+d_wp <- data_wide %>% dplyr::filter(infant_arm == "wP")
+decay_present_wp <- intersect(decay_cols, names(d_wp))
+if (length(decay_present_wp) > 0) {
+  meds_wp <- round(apply(d_wp[, decay_present_wp], 2,
+                         function(x) median(x, na.rm = TRUE)), 3)
+  knitr::kable(
+    data.frame(Antigen = names(meds_wp), `Median Δ log10` = meds_wp),
+    caption = "Antibody decay medians (M02 − M00): wP infants",
+    row.names = FALSE
+  ) %>% print()
+}
+```
+
+### Antigen totals
+
+```{r b5-wp-antigen, results='asis'}
+show_model(block_results[["wP"]][["5a"]])
+```
+
+### Per-antigen subclass models
+
+```{r b5-wp-sub, results='asis'}
+show_model(block_results[["wP"]][["5b"]])
+show_model(block_results[["wP"]][["5c"]])
+show_model(block_results[["wP"]][["5d"]])
+```
+
+### Full 12-subclass
+
+```{r b5-wp-full, results='asis'}
+show_model(block_results[["wP"]][["5e"]])
+```
+
+## Subclass decay slopes: aP vs wP
+
+```{r b5-interaction-plot, fig.cap="Figure 2. Subclass decay (M02 − M00) vs infant PTNA at M02, by antigen and infant arm. Negative x-axis values indicate net loss of that subclass."}
+data_long_b5 <- bind_rows(
+  data_wide %>% dplyr::filter(infant_arm == "aP") %>%
+    dplyr::select(all_of(outcome_col),
+                  matches("^delta_(PT|FHA|PRN)_IgG[1-4]_M00_M02$")) %>%
+    mutate(infant_arm = "aP"),
+  data_wide %>% dplyr::filter(infant_arm == "wP") %>%
+    dplyr::select(all_of(outcome_col),
+                  matches("^delta_(PT|FHA|PRN)_IgG[1-4]_M00_M02$")) %>%
+    mutate(infant_arm = "wP")
+) %>%
+  pivot_longer(cols = matches("^delta_(PT|FHA|PRN)_IgG[1-4]_M00_M02$"),
+               names_to = c("antigen","subclass"),
+               names_pattern = "^delta_(PT|FHA|PRN)_(IgG[1-4])_M00_M02$",
+               values_to = "delta_value") %>%
+  drop_na()
+
+ggplot(data_long_b5,
+       aes(x = delta_value, y = .data[[outcome_col]],
+           color = subclass, linetype = infant_arm)) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  facet_grid(antigen ~ infant_arm) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Δ Log10 Subclass IgG (M02 − M00, decay = negative)",
+       y = outcome_y_label, color = "Subclass", linetype = "Infant arm",
+       title = paste0("Block 5 (decay): Antigen × Subclass → ",
+                      outcome_label, " at M02")) +
+  theme_bw(base_size = 11)
+```
+
+---
+
+# Block 6: Neonatal Antibody Decay — Selectivity (M00 → M02)
+
+**Biological context.** If subclasses decay at different rates during the
+first two months (e.g. IgG1 more slowly than IgG3), the ratio will shift
+over this period. The Δ ratio (M02 − M00) captures this shift: a positive
+value means pro-inflammatory subclasses are *better preserved* relative to
+tolerogenic ones. A positive coefficient here means that infants in whom
+the pro-inflammatory subclass balance is maintained through the neonatal
+period have higher PTNA — indicating that subclass-selective decay, not
+just total antibody loss, shapes functional immunity.
+
+*Predictors:* Δ ratio (M02 − M00) for PT, FHA, PRN.
+
+## aP infants
+
+```{r b6-ap, results='asis'}
+show_model(block_results[["aP"]][["6"]])
+```
+
+## wP infants
+
+```{r b6-wp, results='asis'}
+show_model(block_results[["wP"]][["6"]])
+```
+
+---
+
+# Cross-Arm Comparisons (Infant Arm: aP vs wP)
+
+## R² Summary Across All Blocks
+
+```{r r2-table, results='asis'}
+r2_table <- bind_rows(r2_all) %>%
+  arrange(block, model, stratum) %>%
+  dplyr::select(stratum, block, model, n_obs, R2, adj_R2)
+
+knitr::kable(as.data.frame(r2_table),
+             caption = "Table 4. R² for all models across all blocks and infant arms.",
+             align = c("l","l","l","r","r","r")) %>% print()
+```
+
+```{r r2-wide, results='asis'}
+r2_wide <- r2_table %>%
+  pivot_wider(names_from  = stratum,
+              values_from = c(R2, adj_R2, n_obs),
+              names_sep   = "_") %>%
+  mutate(delta_R2 = round(R2_aP - R2_wP, 4)) %>%
+  arrange(block, model)
+
+knitr::kable(as.data.frame(r2_wide),
+             caption = "Table 5. R² side-by-side: aP vs wP. delta_R2 = R²(aP) − R²(wP).",
+             align = c("l","l","r","r","r","r","r","r","r")) %>% print()
+```
+
+```{r r2-barplot, fig.cap="Figure 3. R² by block and infant arm. Bars show model fit for antigen-level (total IgG) models; lines connect aP and wP arms.", fig.height=5}
+r2_antigen <- r2_table %>%
+  dplyr::filter(grepl("antigen", model)) %>%
+  mutate(block_clean = gsub("_qty|_quantity|_switch|_ratio", "", block))
+
+ggplot(r2_antigen, aes(x = block_clean, y = R2,
+                        fill = stratum, group = stratum)) +
+  geom_col(position = position_dodge(0.6), width = 0.5) +
+  geom_line(aes(color = stratum), position = position_dodge(0.6),
+            linewidth = 0.6, linetype = "dashed") +
+  scale_fill_manual(values  = iarm_colors) +
+  scale_color_manual(values = iarm_colors) +
+  labs(x = "Block", y = "R²", fill = "Infant arm", color = "Infant arm",
+       title = paste0("Explained variance (antigen-level models) — ",
+                      outcome_label)) +
+  theme_bw(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+## Ratio-Model Coefficient Comparison Plots
+
+```{r ratio-coef-plots, fig.cap="Figures 4–6. Ratio-model coefficients (Blocks 2, 4, 6) side-by-side for aP and wP. Error bars = 95% CI.", fig.height=5}
+block_labels <- c(
+  B2 = "Block 2: Δ ratio P02→P09\n(class switching during pregnancy)",
+  B4 = "Block 4: Δ ratio P09→M00\n(class-selective placental transfer)",
+  B6 = "Block 6: Δ ratio M00→M02\n(class-selective neonatal decay)"
+)
+
+for (blk in c("B2","B4","B6")) {
+  coef_rows <- lapply(infant_arms, function(iarm) {
+    key <- paste0(blk, "_", iarm)
+    if (is.null(ratio_models_by_block_arm[[key]])) return(NULL)
+    tidy(ratio_models_by_block_arm[[key]]) %>%
+      dplyr::filter(term != "(Intercept)") %>%
+      mutate(infant_arm = iarm)
+  }) %>% bind_rows()
+
+  if (nrow(coef_rows) == 0) next
+
+  p <- ggplot(coef_rows,
+              aes(x = term, y = estimate, fill = infant_arm,
+                  ymin = estimate - 1.96 * std.error,
+                  ymax = estimate + 1.96 * std.error)) +
+    geom_col(position = position_dodge(0.6), width = 0.5) +
+    geom_errorbar(position = position_dodge(0.6), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    scale_fill_manual(values = iarm_colors) +
+    labs(x     = "Pro-inflammatory/Tolerogenic Ratio",
+         y     = paste0("β (→ ", outcome_label, " M02)"),
+         title = paste0(block_labels[blk], "\n(outcome = ", outcome_label, ")"),
+         fill  = "Infant arm") +
+    theme_bw(base_size = 11)
+  print(p)
+}
+```
+
+## Relative Importance Comparison (Full 12-Subclass Models)
+
+```{r relimp-comparison, results='asis'}
+for (blk_nm in c("Block 1 (P09)", "Block 3 (transfer)", "Block 5 (decay)")) {
+  rl <- switch(blk_nm,
+    "Block 1 (P09)"       = relimp_b1_full_by_iarm,
+    "Block 3 (transfer)"  = relimp_b3_full_by_iarm,
+    "Block 5 (decay)"     = relimp_b5_full_by_iarm
+  )
+  if (is.null(rl[["aP"]]) || is.null(rl[["wP"]])) next
+  ri_compare <- merge(
+    data.frame(feature = names(rl[["aP"]]@lmg), lmg_aP = round(rl[["aP"]]@lmg*100, 2)),
+    data.frame(feature = names(rl[["wP"]]@lmg), lmg_wP = round(rl[["wP"]]@lmg*100, 2)),
+    by = "feature"
+  ) %>%
+    mutate(delta_lmg = round(lmg_aP - lmg_wP, 2)) %>%
+    arrange(desc(abs(delta_lmg)))
+  knitr::kable(
+    ri_compare,
+    caption = paste0("Relative importance (lmg %) — ", blk_nm,
+                     " full 12-subclass model. delta_lmg = aP − wP."),
+    align = c("l","r","r","r")
+  ) %>% print()
+  cat("\n")
+}
+```
+
+---
+
+---
+
+# Maternal Arm Analysis (TdaP vs TT)
+
+This section repeats the entire six-block framework, identical in every
+respect, but stratifying by **maternal vaccination arm** rather than infant
+arm. TdaP mothers received the acellular pertussis-containing booster during
+pregnancy; TT mothers received tetanus toxoid only (the comparator).
+Comparing the two isolates the contribution of maternal pertussis
+vaccination itself to the antibody chain that predicts infant PTNA. All
+models, predictors, captions, and statistics are produced by the same
+`run_all_blocks()` function used above, so the maternal results are directly
+comparable to the infant results section-for-section.
+
+Each model's caption (e.g. "Antigen totals @ P09") identifies the predictor
+set; results are grouped by block and split into TdaP and TT.
+
+## Block 1 — Maternal Antibody Levels (P02 and P09)
+
+### TdaP mothers
+
+```{r b1m-tdap, results='asis'}
+show_all_models(block_results_m, "TdaP", paste0("1", letters[1:12]))
+```
+
+### TT mothers
+
+```{r b1m-tt, results='asis'}
+show_all_models(block_results_m, "TT", paste0("1", letters[1:12]))
+```
+
+### Maternal subclass slopes: TdaP vs TT (P09)
+
+```{r b1m-interaction-plot, fig.cap="Figure M1. Maternal subclass IgG at P09 vs infant PTNA at M02, by antigen and maternal arm.", fig.height=6}
+data_long_b1m <- bind_rows(
+  data_wide %>% dplyr::filter(arm_name == "TdaP") %>%
+    dplyr::select(all_of(outcome_col), matches("IgG[1-4]_P09$")) %>%
+    mutate(maternal_arm = "TdaP"),
+  data_wide %>% dplyr::filter(arm_name == "TT") %>%
+    dplyr::select(all_of(outcome_col), matches("IgG[1-4]_P09$")) %>%
+    mutate(maternal_arm = "TT")
+) %>%
+  pivot_longer(cols = matches("IgG[1-4]_P09$"),
+               names_to = c("antigen","subclass","visit"),
+               names_pattern = "(PT|FHA|PRN)_(IgG[1-4])_(P09)",
+               values_to = "subclass_value") %>%
+  drop_na()
+
+ggplot(data_long_b1m,
+       aes(x = subclass_value, y = .data[[outcome_col]],
+           color = subclass, linetype = maternal_arm)) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  facet_grid(antigen ~ maternal_arm) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Log10 Maternal Subclass IgG at P09",
+       y = outcome_y_label, color = "Subclass", linetype = "Maternal arm",
+       title = paste0("Block 1 (P09): Antigen × Subclass → ",
+                      outcome_label, " at M02 — TdaP vs TT")) +
+  theme_bw(base_size = 11)
+```
+
+## Block 2 — Gestational Subclass Switching (P02 → P09)
+
+### TdaP mothers
+
+```{r b2m-tdap, results='asis'}
+show_all_models(block_results_m, "TdaP", "2")
+```
+
+### TT mothers
+
+```{r b2m-tt, results='asis'}
+show_all_models(block_results_m, "TT", "2")
+```
+
+## Block 3 — Placental Transfer: Quantity (P09 → M00)
+
+### TdaP mothers
+
+```{r b3m-tdap, results='asis'}
+show_all_models(block_results_m, "TdaP", paste0("3", letters[1:5]))
+```
+
+### TT mothers
+
+```{r b3m-tt, results='asis'}
+show_all_models(block_results_m, "TT", paste0("3", letters[1:5]))
+```
+
+## Block 4 — Placental Transfer: Selectivity (P09 → M00)
+
+### TdaP mothers
+
+```{r b4m-tdap, results='asis'}
+show_all_models(block_results_m, "TdaP", "4")
+```
+
+### TT mothers
+
+```{r b4m-tt, results='asis'}
+show_all_models(block_results_m, "TT", "4")
+```
+
+## Block 5 — Neonatal Antibody Decay: Quantity (M00 → M02)
+
+### TdaP mothers
+
+```{r b5m-tdap, results='asis'}
+show_all_models(block_results_m, "TdaP", paste0("5", letters[1:5]))
+```
+
+### TT mothers
+
+```{r b5m-tt, results='asis'}
+show_all_models(block_results_m, "TT", paste0("5", letters[1:5]))
+```
+
+### Maternal subclass decay slopes: TdaP vs TT
+
+```{r b5m-interaction-plot, fig.cap="Figure M2. Subclass decay (M02 − M00) vs infant PTNA at M02, by antigen and maternal arm.", fig.height=6}
+data_long_b5m <- bind_rows(
+  data_wide %>% dplyr::filter(arm_name == "TdaP") %>%
+    dplyr::select(all_of(outcome_col),
+                  matches("^delta_(PT|FHA|PRN)_IgG[1-4]_M00_M02$")) %>%
+    mutate(maternal_arm = "TdaP"),
+  data_wide %>% dplyr::filter(arm_name == "TT") %>%
+    dplyr::select(all_of(outcome_col),
+                  matches("^delta_(PT|FHA|PRN)_IgG[1-4]_M00_M02$")) %>%
+    mutate(maternal_arm = "TT")
+) %>%
+  pivot_longer(cols = matches("^delta_(PT|FHA|PRN)_IgG[1-4]_M00_M02$"),
+               names_to = c("antigen","subclass"),
+               names_pattern = "^delta_(PT|FHA|PRN)_(IgG[1-4])_M00_M02$",
+               values_to = "delta_value") %>%
+  drop_na()
+
+ggplot(data_long_b5m,
+       aes(x = delta_value, y = .data[[outcome_col]],
+           color = subclass, linetype = maternal_arm)) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 0.8) +
+  facet_grid(antigen ~ maternal_arm) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "Δ Log10 Subclass IgG (M02 − M00, decay = negative)",
+       y = outcome_y_label, color = "Subclass", linetype = "Maternal arm",
+       title = paste0("Block 5 (decay): Antigen × Subclass → ",
+                      outcome_label, " at M02 — TdaP vs TT")) +
+  theme_bw(base_size = 11)
+```
+
+## Block 6 — Neonatal Antibody Decay: Selectivity (M00 → M02)
+
+### TdaP mothers
+
+```{r b6m-tdap, results='asis'}
+show_all_models(block_results_m, "TdaP", "6")
+```
+
+### TT mothers
+
+```{r b6m-tt, results='asis'}
+show_all_models(block_results_m, "TT", "6")
+```
+
+---
+
+# Maternal Arm Comparisons (TdaP vs TT)
+
+## R² Summary Across All Blocks
+
+```{r r2m-table, results='asis'}
+r2_table_m <- bind_rows(r2_all_m) %>%
+  arrange(block, model, stratum) %>%
+  dplyr::select(stratum, block, model, n_obs, R2, adj_R2)
+
+knitr::kable(as.data.frame(r2_table_m),
+             caption = "Table M4. R² for all models across all blocks and maternal arms.",
+             align = c("l","l","l","r","r","r")) %>% print()
+```
+
+```{r r2m-wide, results='asis'}
+r2_wide_m <- r2_table_m %>%
+  pivot_wider(names_from  = stratum,
+              values_from = c(R2, adj_R2, n_obs),
+              names_sep   = "_") %>%
+  mutate(delta_R2 = round(R2_TdaP - R2_TT, 4)) %>%
+  arrange(block, model)
+
+knitr::kable(as.data.frame(r2_wide_m),
+             caption = "Table M5. R² side-by-side: TdaP vs TT. delta_R2 = R²(TdaP) − R²(TT).",
+             align = c("l","l","r","r","r","r","r","r","r")) %>% print()
+```
+
+```{r r2m-barplot, fig.cap="Figure M3. R² by block and maternal arm (antigen-level models).", fig.height=5}
+r2_antigen_m <- r2_table_m %>%
+  dplyr::filter(grepl("antigen", model)) %>%
+  mutate(block_clean = gsub("_qty|_quantity|_switch|_ratio", "", block))
+
+ggplot(r2_antigen_m, aes(x = block_clean, y = R2,
+                          fill = stratum, group = stratum)) +
+  geom_col(position = position_dodge(0.6), width = 0.5) +
+  geom_line(aes(color = stratum), position = position_dodge(0.6),
+            linewidth = 0.6, linetype = "dashed") +
+  scale_fill_manual(values  = marm_colors) +
+  scale_color_manual(values = marm_colors) +
+  labs(x = "Block", y = "R²", fill = "Maternal arm", color = "Maternal arm",
+       title = paste0("Explained variance (antigen-level models) — ",
+                      outcome_label, " — maternal arm")) +
+  theme_bw(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+## Ratio-Model Coefficient Comparison Plots
+
+```{r ratiom-coef-plots, fig.cap="Figures M4–M6. Ratio-model coefficients (Blocks 2, 4, 6) side-by-side for TdaP and TT. Error bars = 95% CI.", fig.height=5}
+block_labels_m <- c(
+  B2 = "Block 2: Δ ratio P02→P09\n(class switching during pregnancy)",
+  B4 = "Block 4: Δ ratio P09→M00\n(class-selective placental transfer)",
+  B6 = "Block 6: Δ ratio M00→M02\n(class-selective neonatal decay)"
+)
+
+for (blk in c("B2","B4","B6")) {
+  coef_rows <- lapply(arms, function(marm) {
+    key <- paste0(blk, "_", marm)
+    if (is.null(ratio_models_by_block_marm[[key]])) return(NULL)
+    tidy(ratio_models_by_block_marm[[key]]) %>%
+      dplyr::filter(term != "(Intercept)") %>%
+      mutate(maternal_arm = marm)
+  }) %>% bind_rows()
+
+  if (nrow(coef_rows) == 0) next
+
+  p <- ggplot(coef_rows,
+              aes(x = term, y = estimate, fill = maternal_arm,
+                  ymin = estimate - 1.96 * std.error,
+                  ymax = estimate + 1.96 * std.error)) +
+    geom_col(position = position_dodge(0.6), width = 0.5) +
+    geom_errorbar(position = position_dodge(0.6), width = 0.2) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    scale_fill_manual(values = marm_colors) +
+    labs(x     = "Pro-inflammatory/Tolerogenic Ratio",
+         y     = paste0("β (→ ", outcome_label, " M02)"),
+         title = paste0(block_labels_m[blk], "\n(outcome = ", outcome_label, ")"),
+         fill  = "Maternal arm") +
+    theme_bw(base_size = 11)
+  print(p)
+}
+```
+
+## Relative Importance Comparison (Full 12-Subclass Models)
+
+```{r relimpm-comparison, results='asis'}
+for (blk_nm in c("Block 1 (P09)", "Block 3 (transfer)", "Block 5 (decay)")) {
+  rl <- switch(blk_nm,
+    "Block 1 (P09)"      = relimp_b1_full_by_marm,
+    "Block 3 (transfer)" = relimp_b3_full_by_marm,
+    "Block 5 (decay)"    = relimp_b5_full_by_marm
+  )
+  if (is.null(rl[["TdaP"]]) || is.null(rl[["TT"]])) next
+  ri_compare <- merge(
+    data.frame(feature = names(rl[["TdaP"]]@lmg), lmg_TdaP = round(rl[["TdaP"]]@lmg*100, 2)),
+    data.frame(feature = names(rl[["TT"]]@lmg),   lmg_TT   = round(rl[["TT"]]@lmg*100, 2)),
+    by = "feature"
+  ) %>%
+    mutate(delta_lmg = round(lmg_TdaP - lmg_TT, 2)) %>%
+    arrange(desc(abs(delta_lmg)))
+  knitr::kable(
+    ri_compare,
+    caption = paste0("Relative importance (lmg %) — ", blk_nm,
+                     " full 12-subclass model. delta_lmg = TdaP − TT."),
+    align = c("l","r","r","r")
+  ) %>% print()
+  cat("\n")
+}
+```
+
+---
+
+# Synthesis and Interpretation
+
+*This section is intended to be completed after reviewing the results above.
+The scaffolding below provides the interpretive structure needed to integrate
+findings across all six blocks.*
+
+## 1. Which Block Explains the Most Variance?
+
+> **[To complete]** Compare R² across all blocks (Table 5 above).
+> Key question: Is the infant's PTNA at M02 more strongly determined by
+> what the mother had (Block 1), how much was transferred (Block 3), or
+> how much was preserved after birth (Block 5)? If Block 5 dominates, decay
+> kinetics are the rate-limiting step; if Block 1 dominates, the maternal
+> vaccination response is the primary determinant regardless of transfer or
+> decay efficiency.
+
+## 2. Dominant Predictors Within the Leading Block
+
+> **[To complete]** Identify the subclass(es) with the highest lmg values
+> in the full 12-subclass model of the leading block. Cross-reference with
+> the antigen-level models: is PT antigen dominant (as in the previously
+> described PTNA architecture), or does a different antigen emerge when
+> the predictors are upstream measurements (maternal serum at P09)?
+
+## 3. Are the Ratio-Based Effects (Blocks 2, 4, 6) Independent of Quantity?
+
+> **[To complete]** The ratio models test whether subclass *balance*
+> predicts PTNA independent of total level. A significant ratio predictor
+> in Block 2 means gestational class switching adds information beyond raw
+> IgG level. A significant predictor in Block 6 means subclass-selective
+> decay shapes functional outcomes independently of how much was present
+> at birth. Compare the R² of ratio models vs quantity models within each
+> period.
+
+## 4. Do aP and wP Infants Follow Different Predictive Pathways?
+
+> **[To complete]** Use the delta_R2 column in Table 5 and the relative
+> importance comparison tables to identify where the arms diverge most.
+> Interpret arm differences in light of what is known about aP vs wP
+> infant immune responses:
+>
+> - aP infants receive an acellular vaccine that induces a mixed Th1/Th2
+>   profile and may interact differently with maternally derived IgG1 vs IgG2
+> - wP infants receive a whole-cell vaccine that induces a stronger
+>   pro-inflammatory Th1 response, which may interact more strongly with
+>   maternally derived IgG1
+
+## 5. Does Maternal Vaccine (TdaP vs TT) Change the Predictive Chain?
+
+> **[To complete]** Compare the maternal-arm results (Tables M4–M5 and the
+> maternal block sections) against the infant-arm results. TT mothers
+> received no pertussis antigen, so a strong contrast is expected at the
+> source: the maternal P09 PT-IgG signal that dominates Block 1 should be
+> far weaker (or absent) in TT mothers, since their PT-specific response
+> was not boosted. Key questions:
+>
+> - Is the Block 1 P09 PT-IgG → infant PTNA association present in TdaP
+>   mothers but attenuated or null in TT mothers? That would confirm the
+>   maternal pertussis booster is what installs the predictive signal.
+> - Do the transfer and decay blocks (3–6) differ by maternal arm, or are
+>   they vaccine-independent kinetic processes that behave the same in both?
+> - Do the maternal-arm and infant-arm stratifications point to the same
+>   dominant antigen/subclass, or do they isolate different parts of the
+>   mechanism (maternal arm = supply; infant arm = downstream handling)?
+
+## 6. Mechanistic Model
+
+> **[To complete]** Assemble the cross-block findings into a narrative
+> pathway diagram:
+>
+> ```
+> Maternal vaccination
+>       ↓ (Block 1: quantity — how much is produced?)
+> Maternal IgG at delivery (P09)
+>       ↓ (Blocks 3 & 4: transfer — how much/what composition crosses the placenta?)
+> Cord blood IgG at birth (M00)
+>       ↓ (Blocks 5 & 6: decay — how much/what composition survives to M02?)
+> Infant IgG available at M02
+>       ↓
+> PTNA at M02 (functional outcome)
+> ```
+>
+> At which step is the signal most amplified or most attenuated?
+> Which subclass (IgG1? IgG3?) carries the signal most faithfully
+> through the full chain?
+
+## 7. Comparison with the M02/M05/M09 Concurrent Architecture
+
+> **[To complete]** The prior PTNA analysis (within-infant-visit analysis)
+> showed that PT_IgG1 is the dominant subclass predictor of PTNA when
+> measuring both at the same time. Does that same subclass dominate the
+> predictive pathway when the predictors are measured earlier in the causal
+> chain (maternal serum → cord → infant)? Convergence would strengthen the
+> mechanistic model; divergence would suggest that the maternal and
+> infant-period mechanisms are distinct.
+
+---
+
+*Document generated by `predict_M02_PTNA_from_maternal_v1.Rmd`.  
+Adapt `params$outcome_feature` in the YAML header to run for
+`WHOLE_SBA` or `WHOLE_WT_IgG`.*

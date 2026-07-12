@@ -1,0 +1,294 @@
+---
+title: "Figure 5 (revised) — Where predictability enters, six-block ladder"
+subtitle: |
+  Left: cross-validated R² block ladder for the three whole-organism infant
+  outcomes, with the design/clinical foundation split into design (vaccination),
+  pre-vaccination clinical, and birth clinical. Right: principal maternal-
+  production antigen (LMG) of each outcome.
+author: "Scot Zens and Anja Saso"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: kable
+    theme: readable
+params:
+  # antigens that feed the whole-organism readouts
+  anti_igg: !r c("PRN_IgG", "PT_IgG", "FHA_IgG", "FIM_IgG")
+  # outcomes (assay -> display label). All three are whole-organism functional readouts.
+  outcomes: !r c(WHOLE_WT_IgG = "Whole-cell binding (IgG)", WHOLE_SBA = "SBA", WHOLE_PTNA = "PTNA")
+  # visits used for the maternal-production / cord-transfer / concurrent frames
+  visit_outcome:   "InfMon2"
+  visit_maternal:  "MatBirth"
+  visit_cord:      "CordBlood"
+  visit_concurrent: "InfMon2"
+  # NEW: the design/clinical foundation is split into three ordered sub-blocks.
+  design_vars:      !r c("maternal_arm")
+  clin_prevax_vars: !r c("maternal_age", "maternal_bmi", "maternal_Hb", "parity", "gestational_age_vaccination")
+  clin_birth_vars:  !r c("gestational_age_birth", "delivery_mode", "birth_weight", "infant_sex", "vaccine_birth_interval_days")
+  cv_folds:         10
+  seed:             1
+  fig_out_dir:      "figures"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align = "center")
+suppressPackageStartupMessages({ library(dplyr); library(tidyr); library(ggplot2); library(knitr) })
+```
+
+```{r bootstrap, include=FALSE}
+library(here)
+if (!exists("find_proj_file", mode = "function")) {
+  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+  if (requireNamespace("here", quietly = TRUE))
+    .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand)
+  .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)), error = function(e) NA_character_)
+  if (!is.na(.ff_rmd))
+    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
+                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+  .ff_hit <- .ff_cand[file.exists(.ff_cand)]
+  if (!length(.ff_hit))
+    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+  source(.ff_hit[1], local = FALSE); rm(.ff_cand, .ff_rmd, .ff_hit)
+}
+source(find_proj_file("config/endpoints.R"),           local = FALSE, encoding = "UTF-8")
+source(find_proj_file("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8")
+source(find_proj_file("R/serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
+
+data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+```
+
+# Data assembly
+
+The modelling frame is identical to Results C–F, except the design/clinical base
+is now assembled from **three** named variable groups so the ladder can attribute
+predictability to design (vaccination), pre-vaccination clinical, and birth
+clinical separately. Antibody blocks (maternal production / cord transfer /
+concurrent) are unchanged.
+
+```{r assemble}
+ANTI_IGG <- params$anti_igg
+
+pull_wide <- function(d, visit, feats, suffix) {
+  d %>%
+    dplyr::filter(visit_name == visit, feature %in% feats) %>%
+    dplyr::distinct(subject_accession, feature, .keep_all = TRUE) %>%
+    dplyr::select(subject_accession, feature, log_assay_value) %>%
+    tidyr::pivot_wider(names_from = feature, values_from = log_assay_value) %>%
+    dplyr::rename_with(~ paste0(.x, suffix), -subject_accession)
+}
+
+mat <- pull_wide(data_raw, params$visit_maternal,   ANTI_IGG, "_mat")
+crd <- pull_wide(data_raw, params$visit_cord,       ANTI_IGG, "_cord")
+inf <- pull_wide(data_raw, params$visit_concurrent, ANTI_IGG, "_inf")
+arm <- dplyr::distinct(data_raw, subject_accession, maternal_arm)
+
+# clinical covariates: pull EVERYTHING we might need for the two clinical blocks
+clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")),
+                 error = function(e) NULL)
+want_clin <- unique(c(params$clin_prevax_vars, params$clin_birth_vars))
+if (!is.null(clin)) {
+  want_clin <- intersect(want_clin, names(clin))
+  clind <- dplyr::select(clin, subject_accession, dplyr::all_of(want_clin))
+  # light preparation so lm dummy-codes categoricals cleanly
+  for (v in intersect(c("infant_sex", "delivery_mode"), names(clind)))
+    clind[[v]] <- factor(clind[[v]])
+  if ("parity" %in% names(clind))
+    clind$parity <- factor(ifelse(clind$parity == 0, "nulliparous", "parous"))
+} else { want_clin <- character(0); clind <- NULL }
+
+# resolve the three foundation groups to variables that actually exist
+DESIGN      <- intersect(params$design_vars,      c("maternal_arm", names(clind)))
+CLIN_PREVAX <- intersect(params$clin_prevax_vars, names(clind))
+CLIN_BIRTH  <- intersect(params$clin_birth_vars,  names(clind))
+cat(sprintf("Design: %s\nPre-vaccination clinical: %s\nBirth clinical: %s\n",
+            paste(DESIGN, collapse = ", "),
+            paste(CLIN_PREVAX, collapse = ", "),
+            paste(CLIN_BIRTH,  collapse = ", ")))
+```
+
+```{r fit-helpers}
+# base-R fit utilities (identical contract to Results C–F)
+r2 <- function(form, data) tryCatch({
+  cc <- data[stats::complete.cases(data[, all.vars(form), drop = FALSE]), , drop = FALSE]
+  if (nrow(cc) < 5) return(NA_real_)
+  summary(stats::lm(form, cc))$r.squared
+}, error = function(e) NA_real_)
+
+cv_r2 <- function(form, data, K = params$cv_folds, seed = params$seed) tryCatch({
+  vars <- all.vars(form)
+  cc <- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+  if (nrow(cc) < 2 * K) return(NA_real_)
+  set.seed(seed); fold <- sample(rep_len(1:K, nrow(cc)))
+  pr <- numeric(nrow(cc))
+  for (k in 1:K) {
+    fit <- stats::lm(form, cc[fold != k, , drop = FALSE])
+    pr[fold == k] <- stats::predict(fit, cc[fold == k, , drop = FALSE])
+  }
+  yv <- cc[[vars[1]]]; 1 - sum((yv - pr)^2) / sum((yv - mean(yv))^2)
+}, error = function(e) NA_real_)
+
+mk <- function(terms) reformulate(if (length(terms)) terms else "1", "y")
+
+# Shapley/LMG within the maternal-production block, over the full foundation base.
+shapley_lmg <- function(preds, base, data, ycol = "y") {
+  vars <- c(ycol, base, preds)
+  cc <- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+  R  <- function(terms) summary(stats::lm(reformulate(if (length(terms)) terms else "1", ycol), cc))$r.squared
+  perms <- function(x) if (length(x) <= 1) list(x) else
+    do.call(c, lapply(seq_along(x), function(i) lapply(perms(x[-i]), function(p) c(x[i], p))))
+  P <- perms(preds); contrib <- stats::setNames(numeric(length(preds)), preds)
+  for (p in P) { prev <- base
+    for (v in p) { contrib[v] <- contrib[v] + (R(c(prev, v)) - R(prev)); prev <- c(prev, v) } }
+  contrib / length(P)
+}
+```
+
+```{r ladder-engine}
+# block labels, in ladder order (design/clinical foundation split three ways)
+BLOCK_LEVELS <- c("design", "+ clinical (pre-vaccination)", "+ clinical (birth)",
+                  "+ maternal production", "+ cord (transfer)", "+ concurrent (ceiling)")
+
+build_frame <- function(assay) {
+  yw <- pull_wide(data_raw, params$visit_outcome, assay, "")
+  names(yw)[names(yw) == assay] <- "y"
+  m <- yw %>%
+    dplyr::left_join(mat, "subject_accession") %>%
+    dplyr::left_join(crd, "subject_accession") %>%
+    dplyr::left_join(inf, "subject_accession") %>%
+    dplyr::left_join(arm, "subject_accession")
+  if (!is.null(clind)) m <- dplyr::left_join(m, clind, "subject_accession")
+  dplyr::filter(m, !is.na(y))
+}
+
+# one outcome -> the six cumulative CV-R2 rungs + the maternal LMG breakdown
+run_outcome <- function(assay, label) {
+  m <- build_frame(assay)
+  pres <- function(cols) cols[cols %in% names(m)]
+  design <- pres(DESIGN); prevax <- pres(CLIN_PREVAX); birth <- pres(CLIN_BIRTH)
+  mp <- pres(paste0(ANTI_IGG, "_mat"))
+  cp <- pres(paste0(ANTI_IGG, "_cord"))
+  ip <- pres(paste0(ANTI_IGG, "_inf"))
+
+  # cumulative term sets for the six rungs
+  cum <- list(design,
+              c(design, prevax),
+              c(design, prevax, birth),
+              c(design, prevax, birth, mp),
+              c(design, prevax, birth, mp, cp),
+              c(design, prevax, birth, mp, cp, ip))
+  ladder <- data.frame(
+    outcome = label,
+    block   = factor(BLOCK_LEVELS, levels = BLOCK_LEVELS),
+    n       = vapply(cum, function(t) sum(stats::complete.cases(m[, all.vars(mk(t)), drop = FALSE])), integer(1)),
+    cv_r2   = vapply(cum, function(t) cv_r2(mk(t), m), numeric(1)),
+    stringsAsFactors = FALSE)
+  ladder[["delta"]] <- c(NA, diff(ladder$cv_r2))
+
+  # maternal-production antigen shares (LMG) over the full foundation base
+  base <- c(design, prevax, birth)
+  lmg  <- if (length(mp) >= 2) shapley_lmg(mp, base, m) else stats::setNames(numeric(0), character(0))
+  lmg_df <- if (length(lmg))
+    data.frame(outcome = label,
+               antigen = sub("_IgG_mat$", "", names(lmg)),
+               lmg_r2  = as.numeric(lmg), row.names = NULL) else NULL
+  list(ladder = ladder, lmg = lmg_df)
+}
+
+res <- Map(run_outcome, names(params$outcomes), unname(params$outcomes))
+ladder_df <- dplyr::bind_rows(lapply(res, `[[`, "ladder"))
+lmg_df    <- dplyr::bind_rows(lapply(res, `[[`, "lmg"))
+
+# fix outcome + antigen ordering for the plots
+ladder_df$outcome <- factor(ladder_df$outcome, levels = unname(params$outcomes))
+lmg_df$outcome    <- factor(lmg_df$outcome,    levels = unname(params$outcomes))
+lmg_df$antigen    <- factor(lmg_df$antigen,    levels = sub("_IgG$", "", ANTI_IGG))
+
+kable(tidyr::pivot_wider(ladder_df[, c("outcome","block","cv_r2")],
+                         names_from = block, values_from = cv_r2),
+      caption = "Six-block cross-validated R² ladder (cumulative) for each whole-organism outcome.")
+```
+
+# The figure
+
+```{r palettes}
+BLOCK_COL <- c("design"                       = "#6f6f6f",
+               "+ clinical (pre-vaccination)" = "#a3a3a3",
+               "+ clinical (birth)"           = "#d0d0d0",
+               "+ maternal production"        = "#2b6098",
+               "+ cord (transfer)"            = "#5ba3c0",
+               "+ concurrent (ceiling)"       = "#d0692f")
+ANTIGEN_COL <- c(PRN = "#206090", PT = "#d04050", FHA = "#308040", FIM = "#4c9a9a")
+
+# principal antigen (largest LMG share) per outcome, for the right-panel annotation
+totals <- lmg_df %>% dplyr::group_by(outcome) %>%
+  dplyr::summarise(total = sum(lmg_r2), .groups = "drop")
+principal <- lmg_df %>% dplyr::group_by(outcome) %>%
+  dplyr::mutate(share = lmg_r2 / sum(lmg_r2)) %>%
+  dplyr::slice_max(lmg_r2, n = 1, with_ties = FALSE) %>% dplyr::ungroup() %>%
+  dplyr::left_join(totals, by = "outcome")
+```
+
+```{r left-panel}
+p_left <- ggplot(ladder_df, aes(outcome, cv_r2, fill = block)) +
+  geom_col(position = position_dodge(width = 0.82), width = 0.78,
+           colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = sprintf("%.2f", cv_r2)),
+            position = position_dodge(width = 0.82), vjust = -0.35,
+            size = 2.7, colour = "grey25") +
+  scale_fill_manual(values = BLOCK_COL, name = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.08))) +
+  labs(x = NULL, y = "Cross-validated R\u00b2",
+       title = "Where predictability enters (CV-R\u00b2 block ladder)") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold", size = 12),
+        legend.position = "bottom", axis.ticks = element_blank()) +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE))
+```
+
+```{r right-panel}
+p_right <- ggplot(lmg_df, aes(lmg_r2, outcome, fill = antigen)) +
+  geom_col(colour = "white", linewidth = 0.5) +
+  geom_text(data = principal, aes(x = total, y = outcome, label = sprintf("%s %.0f%%", antigen, 100 * share)),
+            hjust = -0.08, size = 3, colour = "grey25", inherit.aes = FALSE) +
+  scale_fill_manual(values = ANTIGEN_COL, name = "antigen") +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.22))) +
+  labs(x = "maternal production LMG R\u00b2", y = NULL,
+       title = "Principal antigen of each outcome") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold", size = 12),
+        legend.position = "bottom", axis.ticks = element_blank())
+```
+
+```{r figure5, fig.width=14.5, fig.height=5.6, fig.cap="Figure 5 (revised). Where predictability of infant whole-organism function enters. Left: cumulative cross-validated R\u00b2 for a six-block ladder \u2014 design (vaccination type), + pre-vaccination clinical, + birth clinical, + maternal production (maternal antigen at delivery), + cord transfer, + concurrent (two-month co-measured ceiling). The concurrent rung is a descriptive ceiling, not forward prediction. Right: within-outcome Shapley/LMG variance shares of the maternal-production antigens; the labelled antigen is the principal (largest-share) predictor of each outcome. Both panels exclude the concurrent block from any predictive claim."}
+if (!requireNamespace("patchwork", quietly = TRUE))
+  stop("Install `patchwork`: install.packages('patchwork').")
+library(patchwork)
+fig5 <- p_left + p_right + plot_layout(widths = c(1.55, 1.0))
+fig5
+```
+
+```{r save}
+dir.create(params$fig_out_dir, showWarnings = FALSE, recursive = TRUE)
+png_path <- file.path(params$fig_out_dir, "figure5_block_ladder_sixway.png")
+pdf_path <- file.path(params$fig_out_dir, "figure5_block_ladder_sixway.pdf")
+ggsave(png_path, fig5, width = 14.5, height = 5.6, dpi = 300, bg = "white")
+ggsave(pdf_path, fig5, width = 14.5, height = 5.6, bg = "white")
+cat("Saved:\n- ", png_path, "\n- ", pdf_path, "\n", sep = "")
+```
+
+---
+
+*Revised Figure 5. The design/clinical foundation of the block ladder is split
+into three ordered blocks — design (vaccination type), pre-vaccination clinical
+(maternal age, BMI, haemoglobin, parity, gestational age at vaccination), and
+birth clinical (gestational age at birth, delivery mode, birth weight, infant sex,
+vaccine-to-birth interval) — so the six rungs are design, + pre-vaccination
+clinical, + birth clinical, + maternal production, + cord transfer, + concurrent
+ceiling. The former "maternal (forward)" block is relabelled "maternal
+production" throughout, and the right-panel axis reads "maternal production LMG
+R²". Adjust the three `*_vars` params to move a covariate between the
+pre-vaccination and birth clinical blocks.*

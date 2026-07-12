@@ -1,0 +1,41 @@
+# Step 6 — Pathway-Network NCT by Arm {#step6}
+
+The prior analysis compared only the *subclass* network across arms and found it invariant. Here the
+arm comparison (TdaP vs TT, `r NCT_IT` permutations) is run on the **pathway-relevant** networks it
+skipped: the full **FcγR + ADCD** network, and the **focal `r FOCAL_ANTIGEN` chain** network
+(IgG1/IgG3 + both FcγRs + ADCD + outcome). Structure invariance (M) tests whether the wiring differs;
+global-strength invariance (S) tests whether overall connectivity differs.
+
+```{r step6-run, results='asis'}
+.stage(6, sprintf("pathway-network NCT by arm (it = %d)", NCT_IT))
+nct_pair <- function(nodes, label) {
+  nodes <- keep_present(nodes)
+  d1 <- arm_data(cfg$maternal_arms[1]) %>% dplyr::select(dplyr::all_of(nodes)) %>% tidyr::drop_na()
+  d2 <- arm_data(cfg$maternal_arms[2]) %>% dplyr::select(dplyr::all_of(nodes)) %>% tidyr::drop_na()
+  cat("## ", label, "\n\n", sep = "")
+  cat(sprintf("%s n = %d; %s n = %d; %d nodes.\n\n",
+              cfg$maternal_arms[1], nrow(d1), cfg$maternal_arms[2], nrow(d2), length(nodes)))
+  .info("step6 NCT %-28s n1=%d n2=%d nodes=%d", label, nrow(d1), nrow(d2), length(nodes))
+  if (nrow(d1) < NETWORK_MIN || nrow(d2) < NETWORK_MIN) {
+    cat(sprintf("*One or both arms n < %d; skipped.*\n\n", NETWORK_MIN)); return(invisible()) }
+  res <- tryCatch(NetworkComparisonTest::NCT(d1, d2, it = NCT_IT, test.edges = FALSE,
+                    test.centrality = FALSE), error = function(e) NULL)
+  if (is.null(res)) { cat("*NCT failed.*\n\n"); return(invisible()) }
+  cat(sprintf("- Network-structure invariance (M) p = %.3f\n", res$nwinv.pval))
+  cat(sprintf("- Global-strength invariance (S) p = %.3f\n\n", res$glstrinv.pval))
+}
+if (!RUN_NCT || !have_net) {
+  cat("*Step 6 skipped (", if (!have_net) "network packages absent" else "run_nct = FALSE", ").*\n\n", sep = "")
+} else {
+  nct_pair(c(OUTCOME, FCG_ALL, ADCD_ALL), "FcγR + ADCD network — TdaP vs TT")
+  nct_pair(c(chain_feats(FOCAL_ANTIGEN), OUTCOME),
+           paste0(FOCAL_ANTIGEN, " chain network — TdaP vs TT"))
+}
+```
+
+**How to read this.** A non-significant M (p > 0.05) means the pathway wiring is statistically
+indistinguishable between arms — the mechanism is the same shape in TdaP and TT infants, even where
+the earlier regressions showed different signal strengths. A significant M would flag a genuinely
+different pathway architecture in one arm. Read together with steps 2–4: non-significant arm
+interactions and invariant network structure jointly argue the immunological model is supported in
+both arms, differing in degree rather than in kind.
