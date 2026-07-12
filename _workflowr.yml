@@ -1,2 +1,2 @@
-knit_root_dir: project
+knit_root_dir: "."
 seed: 1
