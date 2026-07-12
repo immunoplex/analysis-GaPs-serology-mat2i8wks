@@ -43,7 +43,7 @@ if (!exists("cfg") || !exists("data_raw")) {
   }
   if (!exists("shared_utils")) source(.stub("R/shared_utils.R"))
   source(shared_utils("config/endpoints.R"),  encoding = "UTF-8")
-  source(shared_utils("R/C1_C1_serology_helpers.R"), encoding = "UTF-8")
+  source(shared_utils("R/C1_serology_helpers.R"), encoding = "UTF-8")
   cfg      <- get_endpoint_config("SBA")
   data_raw <- load_serology_data(shared_utils("data/c_set.RData"))
   nt       <- new_ntracker()

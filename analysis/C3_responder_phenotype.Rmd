@@ -58,12 +58,12 @@ if (!exists("shared_utils", mode = "function")) {
 }
 
 # ---- shared config + helper libraries ----
-# NOTE: the Phase 07 engine (C4_C4_within_visit_helpers.R) and the shared serology
+# NOTE: the Phase 07 engine (C4_within_visit_helpers.R) and the shared serology
 # helpers are sourced READ-ONLY and are NOT modified by this branch. The Phase 08
 # logic lives entirely in the NEW file R/C3_responder_helpers.R.
 source(shared_utils("config/endpoints.R"),               local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C1_C1_serology_helpers.R"),             local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C4_C4_within_visit_helpers.R"),         local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_serology_helpers.R"),             local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C4_within_visit_helpers.R"),         local = FALSE, encoding = "UTF-8")
 source(shared_utils("R/C3_responder_helpers.R"),   local = FALSE, encoding = "UTF-8")  # <- Phase 08 engine
 
 # ---- antibody data (recoded visits) + clinical assessments ----
@@ -125,7 +125,7 @@ RESP_FEATS <- params$responder_features
 MAT_VIS    <- params$maternal_visits
 
 # Rebuild the Phase 07 Stage A Low/High class via the NEW helper (which reuses
-# the C4_C4_within_visit_helpers engine under the hood for an identical construct).
+# the C4_within_visit_helpers engine under the hood for an identical construct).
 mat_cls <- build_maternal_responder_class(
   data_raw, MAT_VIS, RESP_FEATS,
   breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
@@ -585,7 +585,7 @@ if (!is.null(nt) && exists("nt_render", mode = "function")) {
 
 *Phase 08 branch. The maternal Low/High class is the Phase 07 Stage A construct,
 rebuilt via the new `R/C3_responder_helpers.R` (which calls the unmodified
-`R/C4_C4_within_visit_helpers.R` engine). Outcome modelled as both the continuous
+`R/C4_within_visit_helpers.R` engine). Outcome modelled as both the continuous
 responder score (linear) and the binary class (logistic). Stratifier: maternal arm
 only — no infant-arm analysis. Knit both formats with*
 `rmarkdown::render("08_maternal_responder_predictors.Rmd", output_format = "all")`.

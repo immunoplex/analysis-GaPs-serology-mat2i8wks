@@ -296,3 +296,265 @@ sink()
 
 cat("✓ Path updates complete. Log written to path_update_log.txt\n")
 cat("  Review path_update_log.txt before committing.\n")
+
+
+# ── Find all double-prefix corruptions ────────────────────────────────────────
+library(fs)
+library(stringr)
+
+target_files <- dir_ls(
+  path = c("analysis", "R", "code", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+# All known component prefixes
+prefixes <- c("C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "CK")
+prefix_pat <- paste(prefixes, collapse = "|")
+
+# Pattern: C1_C1_, C2_C2_, C0_C0_ etc — any doubled prefix
+double_pat <- paste0("(", prefix_pat, ")_\\1_")
+
+cat("=== DOUBLE-PREFIX AUDIT ===\n\n")
+
+problems <- list()
+
+for (f in target_files) {
+  lines <- readLines(f, warn = FALSE)
+  hits  <- which(str_detect(lines, double_pat))
+  if (length(hits) > 0) {
+    cat("FILE:", f, "\n")
+    for (i in hits) {
+      cat("  Line", i, ":", trimws(lines[i]), "\n")
+    }
+    cat("\n")
+    problems[[f]] <- hits
+  }
+}
+
+# Also check for the specific known corruption
+known_corruptions <- c(
+  "C1_C1_serology_helpers",
+  "C2_C2_interval_helpers",
+  "C3_C3_responder_helpers",
+  "C4_C4_within_visit_helpers",
+  "C7_C7_effector_helpers",
+  "C8_C8_subclass_balance_helpers",
+  "C0_C0_connection_transform",
+  "C0_C0_build_interval_days",
+  "C0_C0_normalise_mat_to_inf_mfi",
+  "C0_C0_db_load_functions",
+  "shared_shared_utils"
+)
+
+cat("=== KNOWN CORRUPTION PATTERNS ===\n")
+for (f in target_files) {
+  lines <- readLines(f, warn = FALSE)
+  for (pat in known_corruptions) {
+    hits <- which(str_detect(lines, fixed(pat)))
+    if (length(hits) > 0) {
+      cat("FILE:", f, "| Pattern:", pat, "| Lines:", paste(hits, collapse=", "), "\n")
+    }
+  }
+}
+
+cat("\nTotal files with problems:", length(problems), "\n")
+
+# ── Fix all double-prefix corruptions ─────────────────────────────────────────
+library(fs)
+library(stringr)
+
+target_files <- dir_ls(
+  path = c("analysis", "R", "code", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+# Exhaustive correction map: corrupted string → correct string
+corrections <- c(
+  # Helper file double-prefixes
+  "C1_C1_serology_helpers"          = "C1_serology_helpers",
+  "C2_C2_interval_helpers"          = "C2_interval_helpers",
+  "C3_C3_responder_helpers"         = "C3_responder_helpers",
+  "C4_C4_within_visit_helpers"      = "C4_within_visit_helpers",
+  "C7_C7_effector_helpers"          = "C7_effector_helpers",
+  "C8_C8_subclass_balance_helpers"  = "C8_subclass_balance_helpers",
+  
+  # Shared utils
+  "shared_shared_utils"             = "shared_utils",
+  
+  # Code file double-prefixes
+  "C0_C0_connection_transform"      = "C0_connection_transform",
+  "C0_C0_build_interval_days"       = "C0_build_interval_days",
+  "C0_C0_get_8week_interval_days"   = "C0_get_8week_interval_days",
+  "C0_C0_normalise_mat_to_inf_mfi"  = "C0_normalise_mat_to_inf_mfi",
+  "C0_C0_db_load_functions"         = "C0_db_load_functions",
+  "C0_C0_format_raw_data"           = "C0_format_raw_data",
+  
+  # Parts child document double-prefixes (if any child= calls got doubled)
+  "parts/C2_C2_chain_main"                        = "parts/C2_chain_main",
+  "parts/C3_C3_clinical_covariates"               = "parts/C3_clinical_covariates",
+  "parts/C4_C4_antigen_subclass_predictors"       = "parts/C4_antigen_subclass_predictors",
+  "parts/C1_C1_response_bubbles"                  = "parts/C1_response_bubbles",
+  "parts/C7_C7_step00_networks"                   = "parts/C7_step00_networks",
+  "parts/C7_C7_step01_pathway_by_arm"             = "parts/C7_step01_pathway_by_arm",
+  "parts/C7_C7_step02_link_regressions"           = "parts/C7_step02_link_regressions",
+  "parts/C7_C7_step03_mediation"                  = "parts/C7_step03_mediation",
+  "parts/C7_C7_step04_variance_decomp"            = "parts/C7_step04_variance_decomp",
+  "parts/C7_C7_step05_fcgr_collinearity"          = "parts/C7_step05_fcgr_collinearity",
+  "parts/C7_C7_step06_nct"                        = "parts/C7_step06_nct",
+  "parts/C7_C7_step07_fcgr3b_unique"              = "parts/C7_step07_fcgr3b_unique",
+  "parts/C7_C7_step08_agg_complement"             = "parts/C7_step08_agg_complement",
+  "parts/C7_C7_step09_arm_interactions"           = "parts/C7_step09_arm_interactions",
+  "parts/C7_C7_step10_fcgr3b_vs_adcd"            = "parts/C7_step10_fcgr3b_vs_adcd",
+  "parts/C7_C7_step11_effector_activation"        = "parts/C7_step11_effector_activation",
+  "parts/C7_C7_step12_effector_to_sba"            = "parts/C7_step12_effector_to_sba",
+  "parts/C7_C7_step13_effector_aggregate"         = "parts/C7_step13_effector_aggregate",
+  "parts/C7_C7_step14_effector_functions"         = "parts/C7_step14_effector_functions",
+  
+  # Predict file double-prefixes
+  "C4_C4_forward_prediction_PTNA"   = "C4_forward_prediction_PTNA",
+  "C4_C4_forward_prediction_SBA"    = "C4_forward_prediction_SBA",
+  "C4_C4_forward_prediction_WTIgG"  = "C4_forward_prediction_WTIgG",
+  "C4_C4_interaction_deming"        = "C4_interaction_deming"
+)
+
+cat("=== CORRECTION LOG ===\n\n")
+sink("correction_log.txt")
+cat("Correction run:", format(Sys.time()), "\n\n")
+
+files_changed <- 0
+
+for (f in target_files) {
+  lines     <- readLines(f, warn = FALSE)
+  new_lines <- lines
+  
+  for (bad in names(corrections)) {
+    good      <- corrections[bad]
+    new_lines <- str_replace_all(new_lines, fixed(bad), good)
+  }
+  
+  if (!identical(lines, new_lines)) {
+    changed_idx <- which(lines != new_lines)
+    cat("FIXED:", f, "\n")
+    for (i in changed_idx) {
+      cat("  [", i, "] WAS:", trimws(lines[i]), "\n")
+      cat("  [", i, "] NOW:", trimws(new_lines[i]), "\n")
+    }
+    cat("\n")
+    writeLines(new_lines, f)
+    files_changed <- files_changed + 1
+  }
+}
+
+cat("Total files corrected:", files_changed, "\n")
+sink()
+
+cat("✓ Corrections applied. Log written to correction_log.txt\n")
+cat("  Review correction_log.txt then run wflow_build() again.\n")
+
+#####################
+# ── Classify code/ files as runtime helpers vs build-once scripts ─────────────
+library(fs)
+library(stringr)
+
+code_files <- dir_ls("code", regexp = "\\.R$")
+
+# Check if each code/ file is sourced from any analysis Rmd or R helper
+analysis_files <- dir_ls(
+  c("analysis", "R", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+cat("=== CODE/ FILE CLASSIFICATION ===\n\n")
+
+for (cf in code_files) {
+  fname    <- path_file(cf)
+  fname_ns <- path_ext_remove(fname)  # without .R
+  
+  # Search for references to this file across all analysis files
+  refs <- character(0)
+  for (af in analysis_files) {
+    lines <- readLines(af, warn = FALSE)
+    hits  <- lines[str_detect(lines, fixed(fname_ns))]
+    if (length(hits) > 0) {
+      refs <- c(refs, paste0("  ", path_file(af), ": ", trimws(hits)))
+    }
+  }
+  
+  if (length(refs) > 0) {
+    cat("RUNTIME (sourced during knit):", fname, "\n")
+    cat(refs, sep = "\n")
+    cat("  → MOVE TO: R/\n\n")
+  } else {
+    cat("BUILD-ONCE (not sourced in Rmds):", fname, "\n")
+    cat("  → KEEP IN: code/\n\n")
+  }
+}
+
+###############################
+# ── Fix C0_connection_transform.R references after git mv ────────────────────
+# Run from project root after: git mv code/C0_connection_transform.R R/C0_connection_transform.R
+
+library(fs)
+library(stringr)
+
+target_files <- dir_ls(
+  c("analysis", "R", "code", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+# Exact fixed-string corrections — both reference styles present in the codebase
+corrections <- c(
+  # Style 1: hardcoded here() path used in C1_arm_contrast_volcano.Rmd
+  'here("./code/C0_connection_transform.R")'         = 'shared_utils("R/C0_connection_transform.R")',
+  'here::here("./code/C0_connection_transform.R")'   = 'shared_utils("R/C0_connection_transform.R")',
+  
+  # Style 2: already using shared_utils but pointing to wrong directory
+  'shared_utils("code/C0_connection_transform.R")'   = 'shared_utils("R/C0_connection_transform.R")',
+  "shared_utils('code/C0_connection_transform.R')"   = "shared_utils('R/C0_connection_transform.R')",
+  
+  # Style 3: bare here() with code/ prefix (any remaining variants)
+  '"code/C0_connection_transform.R"'                 = '"R/C0_connection_transform.R"',
+  "'code/C0_connection_transform.R'"                 = "'R/C0_connection_transform.R'",
+  
+  # Comment-only references (informational, won't break build but keep consistent)
+  "# used inside C0_C0_connection_transform.R"       = "# used inside R/C0_connection_transform.R",
+  "# used inside C0_connection_transform.R"          = "# used inside R/C0_connection_transform.R",
+  "# for the function in the C0_C0_connection_transform.R code" =
+    "# for the function in the R/C0_connection_transform.R code",
+  "# for the function in the C0_connection_transform.R code" =
+    "# for the function in the R/C0_connection_transform.R code"
+)
+
+sink("connection_transform_fix_log.txt")
+cat("Fix run:", format(Sys.time()), "\n\n")
+files_changed <- 0
+
+for (f in target_files) {
+  lines     <- readLines(f, warn = FALSE)
+  new_lines <- lines
+  
+  for (old_str in names(corrections)) {
+    new_lines <- str_replace_all(new_lines, fixed(old_str), corrections[old_str])
+  }
+  
+  if (!identical(lines, new_lines)) {
+    changed_idx <- which(lines != new_lines)
+    cat("UPDATED:", f, "\n")
+    for (i in changed_idx) {
+      cat("  [", i, "] WAS:", trimws(lines[i]), "\n")
+      cat("  [", i, "] NOW:", trimws(new_lines[i]), "\n")
+    }
+    cat("\n")
+    writeLines(new_lines, f)
+    files_changed <- files_changed + 1
+  }
+}
+
+cat("Files changed:", files_changed, "\n")
+sink()
+
+cat("✓ Done. Log: connection_transform_fix_log.txt\n")

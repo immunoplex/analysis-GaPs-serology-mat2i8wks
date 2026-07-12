@@ -1,7 +1,7 @@
 ```{r bub-setup, include=FALSE}
 # CHILD document. Assumes the master created data_raw, nt, shared_utils(),
-# and sourced config/endpoints.R + R/C1_C1_serology_helpers.R.
-source(shared_utils("R/C0_C0_connection_transform.R"), local = FALSE, encoding = "UTF-8")
+# and sourced config/endpoints.R + R/C1_serology_helpers.R.
+source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8")
 include_feature    <- BUBBLE_INCLUDE_FEATURE     # globals used by standardized_set defaults
 include_feature_wo <- BUBBLE_INCLUDE_FEATURE_WO
 have_dt  <- requireNamespace("data.table", quietly = TRUE)

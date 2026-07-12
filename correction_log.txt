@@ -1,0 +1,145 @@
+Correction run: 2026-07-12 14:34:35 
+
+FIXED: analysis/C1_arm_contrast.Rmd 
+  [ 14 ] WAS: library(data.table)    # used inside C0_C0_connection_transform.R 
+  [ 14 ] NOW: library(data.table)    # used inside C0_connection_transform.R 
+  [ 41 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"),     local = FALSE, encoding = "UTF-8") 
+  [ 41 ] NOW: source(shared_utils("R/C1_serology_helpers.R"),     local = FALSE, encoding = "UTF-8") 
+  [ 42 ] WAS: source(shared_utils("R/C0_C0_connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+  [ 42 ] NOW: source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+
+FIXED: analysis/C1_arm_contrast_forest.Rmd 
+  [ 4 ] WAS: # R/C1_C1_serology_helpers.R are sourced. The guarded block below also lets it 
+  [ 4 ] NOW: # R/C1_serology_helpers.R are sourced. The guarded block below also lets it 
+  [ 19 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  [ 19 ] NOW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+
+FIXED: analysis/C1_arm_contrast_volcano.Rmd 
+  [ 16 ] WAS: library(data.table) # for the function in the C0_C0_connection_transform.R code 
+  [ 16 ] NOW: library(data.table) # for the function in the C0_connection_transform.R code 
+  [ 185 ] WAS: source(here("./code/C0_C0_connection_transform.R"), local = TRUE) 
+  [ 185 ] NOW: source(here("./code/C0_connection_transform.R"), local = TRUE) 
+
+FIXED: analysis/C2_antibody_chain.Rmd 
+  [ 45 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  [ 45 ] NOW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  [ 965 ] WAS: *Reuses the shared pipeline (`config/endpoints.R`, `R/C1_C1_serology_helpers.R`, the global visit 
+  [ 965 ] NOW: *Reuses the shared pipeline (`config/endpoints.R`, `R/C1_serology_helpers.R`, the global visit 
+
+FIXED: analysis/C3_responder_phenotype.Rmd 
+  [ 61 ] WAS: # NOTE: the Phase 07 engine (C4_C4_within_visit_helpers.R) and the shared serology 
+  [ 61 ] NOW: # NOTE: the Phase 07 engine (C4_within_visit_helpers.R) and the shared serology 
+  [ 65 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"),             local = FALSE, encoding = "UTF-8") 
+  [ 65 ] NOW: source(shared_utils("R/C1_serology_helpers.R"),             local = FALSE, encoding = "UTF-8") 
+  [ 66 ] WAS: source(shared_utils("R/C4_C4_within_visit_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+  [ 66 ] NOW: source(shared_utils("R/C4_within_visit_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+  [ 128 ] WAS: # the C4_C4_within_visit_helpers engine under the hood for an identical construct). 
+  [ 128 ] NOW: # the C4_within_visit_helpers engine under the hood for an identical construct). 
+  [ 588 ] WAS: `R/C4_C4_within_visit_helpers.R` engine). Outcome modelled as both the continuous 
+  [ 588 ] NOW: `R/C4_within_visit_helpers.R` engine). Outcome modelled as both the continuous 
+
+FIXED: analysis/C4_forward_prediction.Rmd 
+  [ 56 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  [ 56 ] NOW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+
+FIXED: analysis/C5_concurrent_models.Rmd 
+  [ 62 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  [ 62 ] NOW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+
+FIXED: analysis/C6_responder_in_model.Rmd 
+  [ 60 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  [ 60 ] NOW: source(shared_utils("R/C1_serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  [ 61 ] WAS: source(shared_utils("R/C4_C4_within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+  [ 61 ] NOW: source(shared_utils("R/C4_within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+
+FIXED: analysis/C7_prn_pathway_figure4.Rmd 
+  [ 60 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  [ 60 ] NOW: source(shared_utils("R/C1_serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  [ 61 ] WAS: source(shared_utils("R/C4_C4_within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+  [ 61 ] NOW: source(shared_utils("R/C4_within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+  [ 63 ] WAS: source(shared_utils("R/C2_C2_interval_helpers.R"),           local = FALSE, encoding = "UTF-8")  # NEW 
+  [ 63 ] NOW: source(shared_utils("R/C2_interval_helpers.R"),           local = FALSE, encoding = "UTF-8")  # NEW 
+  [ 297 ] WAS: interval-robustness companion (Figure S) built from `R/C2_C2_interval_helpers.R`. If you 
+  [ 297 ] NOW: interval-robustness companion (Figure S) built from `R/C2_interval_helpers.R`. If you 
+
+FIXED: analysis/C8_subclass_balance.Rmd 
+  [ 36 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"),          encoding = "UTF-8") 
+  [ 36 ] NOW: source(shared_utils("R/C1_serology_helpers.R"),          encoding = "UTF-8") 
+  [ 37 ] WAS: source(shared_utils("R/C8_C8_subclass_balance_helpers.R"),  encoding = "UTF-8") 
+  [ 37 ] NOW: source(shared_utils("R/C8_subclass_balance_helpers.R"),  encoding = "UTF-8") 
+
+FIXED: analysis/CK_block_ladder.Rmd 
+  [ 57 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+  [ 57 ] NOW: source(shared_utils("R/C1_serology_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+
+FIXED: analysis/parts/C1_response_bubbles.Rmd 
+  [ 3 ] WAS: # and sourced config/endpoints.R + R/C1_C1_serology_helpers.R. 
+  [ 3 ] NOW: # and sourced config/endpoints.R + R/C1_serology_helpers.R. 
+  [ 4 ] WAS: source(shared_utils("R/C0_C0_connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+  [ 4 ] NOW: source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+
+FIXED: analysis/parts/C2_chain_main.Rmd 
+  [ 46 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"), encoding = "UTF-8") 
+  [ 46 ] NOW: source(shared_utils("R/C1_serology_helpers.R"), encoding = "UTF-8") 
+
+FIXED: analysis/parts/C4_antigen_subclass_predictors.Rmd 
+  [ 52 ] WAS: source(shared_utils("R/C1_C1_serology_helpers.R"), encoding = "UTF-8") 
+  [ 52 ] NOW: source(shared_utils("R/C1_serology_helpers.R"), encoding = "UTF-8") 
+
+FIXED: analysis/parts/C7_step14_effector_functions.Rmd 
+  [ 37 ] WAS: source(.find("R/C1_C1_serology_helpers.R"),          local=FALSE, encoding="UTF-8") 
+  [ 37 ] NOW: source(.find("R/C1_serology_helpers.R"),          local=FALSE, encoding="UTF-8") 
+
+FIXED: R/C1_serology_helpers.R 
+  [ 2 ] WAS: # R/C1_C1_serology_helpers.R 
+  [ 2 ] NOW: # R/C1_serology_helpers.R 
+
+FIXED: R/C2_interval_helpers.R 
+  [ 2 ] WAS: ## R/C2_C2_interval_helpers.R  --  Phase 10 engine 
+  [ 2 ] NOW: ## R/C2_interval_helpers.R  --  Phase 10 engine 
+  [ 25 ] WAS: ## the helper does not depend on C1_C1_serology_helpers::auc_binary()). 
+  [ 25 ] NOW: ## the helper does not depend on C1_serology_helpers::auc_binary()). 
+
+FIXED: R/C3_responder_helpers.R 
+  [ 10 ] WAS: # Phase 07 engine in R/C4_C4_within_visit_helpers.R when it is on the search path, and 
+  [ 10 ] NOW: # Phase 07 engine in R/C4_within_visit_helpers.R when it is on the search path, and 
+  [ 107 ] WAS: # pvalue_to_label lives in R/C1_C1_serology_helpers.R (the shared utility). It is 
+  [ 107 ] NOW: # pvalue_to_label lives in R/C1_serology_helpers.R (the shared utility). It is 
+  [ 109 ] WAS: # without the shared helpers; when C1_C1_serology_helpers.R is present (the normal 
+  [ 109 ] NOW: # without the shared helpers; when C1_serology_helpers.R is present (the normal 
+
+FIXED: R/C4_within_visit_helpers.R 
+  [ 2 ] WAS: # R/C4_C4_within_visit_helpers.R 
+  [ 2 ] NOW: # R/C4_within_visit_helpers.R 
+  [ 862 ] WAS: #   total-IgG delta. Reuses paired_change() from R/C1_C1_serology_helpers.R. 
+  [ 862 ] NOW: #   total-IgG delta. Reuses paired_change() from R/C1_serology_helpers.R. 
+
+FIXED: R/C7_effector_helpers.R 
+  [ 9 ] WAS: # Sourced AFTER config/endpoints.R and R/C1_C1_serology_helpers.R (it reuses 
+  [ 9 ] NOW: # Sourced AFTER config/endpoints.R and R/C1_serology_helpers.R (it reuses 
+  [ 13 ] WAS: # (04_response_bubbles.Rmd / C1_C1_serology_helpers::bubble_arm_effect): 
+  [ 13 ] NOW: # (04_response_bubbles.Rmd / C1_serology_helpers::bubble_arm_effect): 
+
+FIXED: R/C8_subclass_balance_helpers.R 
+  [ 2 ] WAS: # R/C8_C8_subclass_balance_helpers.R 
+  [ 2 ] NOW: # R/C8_subclass_balance_helpers.R 
+  [ 29 ] WAS: # Sits beside config/endpoints.R and R/C1_C1_serology_helpers.R; table fitting is 
+  [ 29 ] NOW: # Sits beside config/endpoints.R and R/C1_serology_helpers.R; table fitting is 
+
+FIXED: code/C0_build_interval_days.R 
+  [ 1 ] WAS: # C0_C0_build_interval_days.R 
+  [ 1 ] NOW: # C0_build_interval_days.R 
+  [ 114 ] WAS: message("=== C0_C0_build_interval_days.R diagnostics ===") 
+  [ 114 ] NOW: message("=== C0_build_interval_days.R diagnostics ===") 
+
+FIXED: code/C0_get_8week_interval_days.R 
+  [ 17 ] WAS: source(here::here("./code/C0_C0_db_load_functions.R")) 
+  [ 17 ] NOW: source(here::here("./code/C0_db_load_functions.R")) 
+  [ 18 ] WAS: source(here::here("./code/C0_C0_build_interval_days.R")) 
+  [ 18 ] NOW: source(here::here("./code/C0_build_interval_days.R")) 
+
+FIXED: config/endpoints.R 
+  [ 47 ] WAS: # is what the WORKING pipeline (endpoints.R + C1_C1_serology_helpers.R) uses and 
+  [ 47 ] NOW: # is what the WORKING pipeline (endpoints.R + C1_serology_helpers.R) uses and 
+
+Total files corrected: 24 

@@ -1,5 +1,5 @@
 # =====================================================================
-# R/C1_C1_serology_helpers.R
+# R/C1_serology_helpers.R
 # ---------------------------------------------------------------------
 # Shared machinery for the systems-serology analysis, sourced by every
 # analysis part. Sourcing config/endpoints.R first is required (it

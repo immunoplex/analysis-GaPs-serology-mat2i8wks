@@ -1,5 +1,5 @@
 # =====================================================================
-# R/C8_C8_subclass_balance_helpers.R
+# R/C8_subclass_balance_helpers.R
 # ---------------------------------------------------------------------
 # Functions supporting the subclass-polarisation re-analysis, refactored
 # so that COMPLEMENT (antigen-specific ADCD) proceeds through exactly the
@@ -26,7 +26,7 @@
 #   scale) are all valid on ordinal data.
 #
 # Dependencies: base R + stats. dplyr/tidyr only in build_wide_frame().
-# Sits beside config/endpoints.R and R/C1_C1_serology_helpers.R; table fitting is
+# Sits beside config/endpoints.R and R/C1_serology_helpers.R; table fitting is
 # self-contained (does not require run_lm()) for portability + testability.
 # =====================================================================
 

@@ -42,7 +42,7 @@ if (!exists("shared_utils", mode = "function")) {
   rm(.ff_cand, .ff_rmd, .ff_hit)
 }
 source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
-source(shared_utils("R/C1_C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
 data_raw <- load_serology_data(shared_utils("data/c_set.RData"))
 nt <- new_ntracker()
 
@@ -962,6 +962,6 @@ nt_render(nt, part = "PreVacc→Birth",
 
 ---
 
-*Reuses the shared pipeline (`config/endpoints.R`, `R/C1_C1_serology_helpers.R`, the global visit
+*Reuses the shared pipeline (`config/endpoints.R`, `R/C1_serology_helpers.R`, the global visit
 recode, and the N-tracker). Knit both formats with*
 `rmarkdown::render("cord_to_infmon2_analysis_refactored.Rmd", output_format = "all")`.

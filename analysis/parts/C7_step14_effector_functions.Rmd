@@ -34,7 +34,7 @@ if (!exists("cfg")) {
     source(.find("config/endpoints_additions.R"), local=FALSE, encoding="UTF-8"),
     error = function(e) NULL
   )
-  source(.find("R/C1_C1_serology_helpers.R"),          local=FALSE, encoding="UTF-8")
+  source(.find("R/C1_serology_helpers.R"),          local=FALSE, encoding="UTF-8")
   cfg  <- get_endpoint_config("SBA")  # <- change to "WT_IgG"/"PTNA" to test
   data <- load_serology_data(.find("data/c_set.RData"))
   nt   <- new_ntracker()

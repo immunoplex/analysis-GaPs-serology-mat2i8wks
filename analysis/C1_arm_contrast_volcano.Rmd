@@ -13,7 +13,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ## workflowr::wflow_build(files = here("./analysis/response_volcanos_matpm_v3.Rmd"))
-library(data.table) # for the function in the C0_C0_connection_transform.R code
+library(data.table) # for the function in the R/C0_connection_transform.R code
 library(tidyverse)  # for dplyr, ggplot2, forcats, tidyr, stringr, tibble, and magrittr pipe
 library(here)       # for here::here used in file paths
 library(reshape2)   # for reshape2::pivot_wider 
@@ -182,7 +182,7 @@ antigen.colors <- c(
 # source(here("./code/boxplot_functions.R"), local = TRUE)
 # source(here("./code/forestplot_functions.R"), local = TRUE)
 # source(here("./code/dim_reduc_functions.R"), local = TRUE)
-source(here("./code/C0_C0_connection_transform.R"), local = TRUE)
+source(shared_utils("R/C0_connection_transform.R"), local = TRUE)
 # source(here("./code/cluster_functions_b.R"), local = TRUE)
 
 include_feature <- c("DT_IgG","DT_IgG1","DT_IgG2","DT_IgG3","DT_IgG4","DT_ADCD","DT_ADNP","DT_ADCP","DT_FcgR2a","DT_FcgR3b",
