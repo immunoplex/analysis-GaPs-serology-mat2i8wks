@@ -27,7 +27,7 @@ library(htmltools)
 ##
 ## Two ways to supply it:
 ##   (a) recompute from the paired data object used in results_B
-##       (c_set.RData) and reshape to this long summary, OR
+##       (d_set.RData) and reshape to this long summary, OR
 ##   (b) read the bundled CSV (S1_data.csv) that ships with this file.
 ## Option (b) is used here so the document knits standalone; swap in
 ## your own `s1` data.frame to regenerate from source.

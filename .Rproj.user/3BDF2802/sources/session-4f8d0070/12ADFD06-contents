@@ -558,3 +558,222 @@ cat("Files changed:", files_changed, "\n")
 sink()
 
 cat("✓ Done. Log: connection_transform_fix_log.txt\n")
+
+##########################
+# ── Audit c_set and ebaa_extra references across all analysis files ────────────
+library(fs)
+library(stringr)
+
+target_files <- dir_ls(
+  c("analysis", "R", "code", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+patterns <- c("c_set", "ebaa_extra")
+
+cat("=== c_set / ebaa_extra REFERENCE AUDIT ===\n\n")
+
+for (f in target_files) {
+  lines <- tryCatch(readLines(f, warn = FALSE), error = function(e) character(0))
+  
+  file_hits <- list()
+  for (pat in patterns) {
+    hits <- which(str_detect(lines, paste0("\\b", pat, "\\b")))
+    if (length(hits) > 0) file_hits[[pat]] <- hits
+  }
+  
+  if (length(file_hits) > 0) {
+    cat("FILE:", f, "\n")
+    for (pat in names(file_hits)) {
+      for (i in file_hits[[pat]]) {
+        cat(sprintf("  [%3d] (%s) %s\n", i, pat, trimws(lines[i])))
+      }
+    }
+    cat("\n")
+  }
+}
+
+###################################
+# ── Replace c_set → d_set and ebaa_extra → ebaa_extra2 ───────────────────────
+# Safe: uses word-boundary regex for c_set, and fixed() ordering for ebaa_extra
+# Idempotent: d_set and ebaa_extra2 already-correct references are untouched
+
+library(fs)
+library(stringr)
+
+target_files <- dir_ls(
+  c("analysis", "R", "code", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+sink("dataset_replacement_log.txt")
+cat("Dataset replacement run:", format(Sys.time()), "\n\n")
+
+files_changed <- 0
+
+for (f in target_files) {
+  lines     <- tryCatch(readLines(f, warn = FALSE), error = function(e) character(0))
+  if (length(lines) == 0) next
+  new_lines <- lines
+  
+  # ── 1. ebaa_extra → ebaa_extra2 ─────────────────────────────────────────────
+  # Must do this BEFORE c_set replacement (unrelated but order is clean)
+  # Use negative lookahead equivalent: replace ebaa_extra not followed by 2
+  # str_replace_all with regex: \bebaa_extra\b(?!2)  → ebaa_extra2
+  new_lines <- str_replace_all(
+    new_lines,
+    "\\bebaa_extra\\b(?!2)",   # matches ebaa_extra only when NOT followed by 2
+    "ebaa_extra2"
+  )
+  
+  # ── 2. c_set → d_set ─────────────────────────────────────────────────────────
+  # \bc_set\b  — word boundary prevents matching inside e.g. "ac_set" (none exist
+  # in this codebase but safe practice)
+  # Also handles: c_set.RData, c_set_w_act_pentamer (leave that one — it IS c_set)
+  #
+  # Specific exclusions — these refer to the OLD c_set intentionally:
+  #   c_set_w_act_pentamer.RData  → leave as-is (it IS a c_set variant)
+  #   any line in scratch/        → not in target_files so already excluded
+  
+  # Replace c_set.RData load lines → d_set.RData
+  new_lines <- str_replace_all(
+    new_lines,
+    fixed('load(file = here::here("./data/c_set.RData"))'),
+    'load(file = here::here("./data/d_set.RData"))'
+  )
+  new_lines <- str_replace_all(
+    new_lines,
+    fixed("load(file = here::here('./data/c_set.RData'))"),
+    "load(file = here::here('./data/d_set.RData'))"
+  )
+  new_lines <- str_replace_all(
+    new_lines,
+    fixed('load(here::here("data/c_set.RData"))'),
+    'load(here::here("data/d_set.RData"))'
+  )
+  new_lines <- str_replace_all(
+    new_lines,
+    fixed("load(here::here('data/c_set.RData'))"),
+    "load(here::here('data/d_set.RData'))"
+  )
+  new_lines <- str_replace_all(
+    new_lines,
+    fixed('"./data/c_set.RData"'),
+    '"./data/d_set.RData"'
+  )
+  
+  # Replace c_set object references → d_set
+  # Word-boundary match; excludes c_set_w_act_pentamer because that has no
+  # word boundary after c_set (it continues with _w)
+  new_lines <- str_replace_all(
+    new_lines,
+    "\\bc_set\\b",
+    "d_set"
+  )
+  
+  # ── 3. Log changes ────────────────────────────────────────────────────────────
+  if (!identical(lines, new_lines)) {
+    changed_idx <- which(lines != new_lines)
+    cat("UPDATED:", f, "\n")
+    for (i in changed_idx) {
+      cat(sprintf("  [%3d] WAS: %s\n", i, trimws(lines[i])))
+      cat(sprintf("  [%3d] NOW: %s\n", i, trimws(new_lines[i])))
+    }
+    cat("\n")
+    writeLines(new_lines, f)
+    files_changed <- files_changed + 1
+  }
+}
+
+cat("Total files changed:", files_changed, "\n")
+sink()
+
+cat("✓ Done. Log: dataset_replacement_log.txt\n")
+cat("  Review log then run verification audit below.\n")
+
+############################
+# ── Post-replacement verification ─────────────────────────────────────────────
+library(fs)
+library(stringr)
+
+target_files <- dir_ls(
+  c("analysis", "R", "code", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+issues <- 0
+
+cat("=== POST-REPLACEMENT VERIFICATION ===\n\n")
+
+for (f in target_files) {
+  lines <- tryCatch(readLines(f, warn = FALSE), error = function(e) character(0))
+  
+  # c_set should be gone (c_set_w_act_pentamer is ok — check separately)
+  c_set_hits <- which(str_detect(lines, "\\bc_set\\b"))
+  # Filter out intentional c_set_w_act_pentamer references
+  c_set_hits <- c_set_hits[!str_detect(lines[c_set_hits], "c_set_w_act_pentamer")]
+  
+  # ebaa_extra without the 2 should be gone
+  ebaa_hits <- which(str_detect(lines, "\\bebaa_extra\\b(?!2)"))
+  
+  if (length(c_set_hits) > 0) {
+    cat("RESIDUAL c_set:", f, "\n")
+    for (i in c_set_hits) cat(sprintf("  [%3d] %s\n", i, trimws(lines[i])))
+    issues <- issues + length(c_set_hits)
+  }
+  
+  if (length(ebaa_hits) > 0) {
+    cat("RESIDUAL ebaa_extra:", f, "\n")
+    for (i in ebaa_hits) cat(sprintf("  [%3d] %s\n", i, trimws(lines[i])))
+    issues <- issues + length(ebaa_hits)
+  }
+}
+
+# Also verify d_set.RData exists
+if (!file_exists("data/d_set.RData")) {
+  cat("WARNING: data/d_set.RData not found in data/\n")
+  issues <- issues + 1
+} else {
+  e <- new.env()
+  load("data/d_set.RData", envir = e)
+  objs <- ls(e)
+  cat("d_set.RData confirmed. Objects:", paste(objs, collapse = ", "), "\n\n")
+  if (!"ebaa_extra2" %in% objs) {
+    cat("WARNING: ebaa_extra2 not found in d_set.RData\n")
+    issues <- issues + 1
+  } else {
+    cat("✓ ebaa_extra2 confirmed in d_set.RData\n")
+  }
+}
+
+if (issues == 0) {
+  cat("\n✓ All clear. Commit and run wflow_build()\n")
+} else {
+  cat("\n✗", issues, "issue(s) remain. Fix before building.\n")
+}
+
+##############################
+# ── Update data/README.md to document d_set as canonical ─────────────────────
+readme_addition <- '
+## Dataset Versions
+
+### Canonical dataset: `d_set.RData`
+`d_set` is the complete derived dataset used in all analyses. It supersedes
+`c_set` and contains additional ADCD timepoints (P02, P09, M00, P18) not
+present in the earlier version. All analysis files (`C1` through `CK`) load
+`d_set.RData`.
+
+Key objects in `d_set.RData`:
+- `ebaa_extra2` — full bead array dataset with extended ADCD coverage
+  (replaces `ebaa_extra` from `c_set.RData`)
+
+### Legacy dataset: `c_set.RData`
+Retained in `data/` for provenance but not used in any current analysis.
+`c_set_w_act_pentamer.RData` is similarly retained but not used.
+'
+
+cat(readme_addition, file = "data/README.md", append = TRUE)
+cat("✓ data/README.md updated\n")

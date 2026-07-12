@@ -5,8 +5,8 @@ author: "Scot Zens and Anja Saso"
 date: "`r Sys.Date()`"
 params:
   endpoint: "SBA"      # "SBA" | "WT_IgG" | "PTNA"  <-- the ONLY thing to change per endpoint
-  data_file: "data/d_set.RData"   # <-- switched from data/c_set.RData
-  data_object: "ebaa_extra2"      # <-- switched from ebaa_extra (more ADCD at maternal/cord)
+  data_file: "data/d_set.RData"   # <-- switched from data/d_set.RData
+  data_object: "ebaa_extra2"      # <-- switched from ebaa_extra2 (more ADCD at maternal/cord)
   nct_it: 1000                    # NCT permutations; set e.g. 100 for a fast pass
   run_nct: true                   # STAGE 5 (most expensive) on/off
 output:
@@ -65,7 +65,7 @@ source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8
 cfg <- get_endpoint_config(params$endpoint)
 
 # ---- load + recode the antibody data ONCE ----
-# Switched to d_set / ebaa_extra2 (same schema as c_set / ebaa_extra, with more
+# Switched to d_set / ebaa_extra2 (same schema as d_set / ebaa_extra2, with more
 # ADCD at maternal + cord blood). load_serology_data() rebuilds `feature` from
 # antigen+analyte (mixed case), calls verify_predictor_casing() internally, and
 # a benign "unmapped visit codes" warning (P05/P08) is expected. If the d_set

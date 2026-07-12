@@ -152,4 +152,4 @@ verify_new_feature_columns <- function(data_long,
 
 # Usage:
 #   source("config/endpoints_additions.R")
-#   verify_new_feature_columns(ebaa_extra)   # or data_raw
+#   verify_new_feature_columns(ebaa_extra2)   # or data_raw

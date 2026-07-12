@@ -36,7 +36,7 @@ if (!exists("cfg")) {
   )
   source(.find("R/C1_serology_helpers.R"),          local=FALSE, encoding="UTF-8")
   cfg  <- get_endpoint_config("SBA")  # <- change to "WT_IgG"/"PTNA" to test
-  data <- load_serology_data(.find("data/c_set.RData"))
+  data <- load_serology_data(.find("data/d_set.RData"))
   nt   <- new_ntracker()
 }
 if (!exists("nt_add")) nt_add <- function(...) invisible(NULL)
@@ -467,7 +467,7 @@ relationship at InfMon2. When the data arrive, flip `ADCD_READY` to `TRUE`
 
 ```{r adcd-scaffold-setup, eval=FALSE}
 # Readiness gate — keep FALSE until ADCD is confirmed at the transition visits.
-# ADCD is present in c_set.RData for all six antigens, but the longitudinal
+# ADCD is present in d_set.RData for all six antigens, but the longitudinal
 # transition readout (ADCD at PregEarly/MatBirth/CordBlood as well as InfMon2)
 # must be verified before these run; until then the section is design-only.
 ADCD_READY <- FALSE

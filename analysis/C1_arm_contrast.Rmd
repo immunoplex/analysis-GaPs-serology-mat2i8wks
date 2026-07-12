@@ -224,7 +224,7 @@ have_std <- requireNamespace("data.table", quietly = TRUE) &&
 ```{r loaddata}
 ## load_serology_data() applies VISIT_RECODE, builds the mixed-case `feature`,
 ## sets `arm_name` (TdaP/TT), and runs the mandatory casing guard.
-data <- load_serology_data(shared_utils("data/c_set.RData"))
+data <- load_serology_data(shared_utils("data/d_set.RData"))
 data$antigen  <- as.character(data$antigen)
 data$analyte  <- as.character(data$analyte)
 data$feature  <- as.character(data$feature)

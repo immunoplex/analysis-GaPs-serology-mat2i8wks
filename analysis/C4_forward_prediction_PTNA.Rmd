@@ -241,8 +241,8 @@ show_all_models <- function(br, lvl, ids, show_relimp = TRUE) {
 ## Load and Filter
 
 ```{r data-load}
-load(file = here::here("./data/c_set.RData"))
-data_raw          <- ebaa_extra
+load(file = here::here("./data/d_set.RData"))
+data_raw          <- ebaa_extra2
 data_raw$arm_name <- data_raw$maternal_arm
 data_raw$arm_name <- fct_recode(data_raw$arm_name, "TT" = "TT", "TdaP" = "TdaP")
 data_raw$feature  <- factor(paste(data_raw$antigen, data_raw$analyte, sep = "_"))
