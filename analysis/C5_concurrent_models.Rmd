@@ -34,21 +34,21 @@ library(here)
 # Finds config/, R/, parts/, data/ whether they sit beside this .Rmd, under an
 # analysis/ subfolder, or at the project root — and works even when rmarkdown
 # renders from a temp directory. Returns the first candidate that exists.
-# ---- shared path resolver: single definition in R/find_proj_file.R ----
-if (!exists("find_proj_file", mode = "function")) {
-  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
-                "analysis/R/find_proj_file.R")
+# ---- shared path resolver: single definition in R/shared_utils.R ----
+if (!exists("shared_utils", mode = "function")) {
+  .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R",
+                "analysis/R/shared_utils.R")
   if (requireNamespace("here", quietly = TRUE))
-    .ff_cand <- c(here::here("R/find_proj_file.R"),
-                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+    .ff_cand <- c(here::here("R/shared_utils.R"),
+                  here::here("analysis/R/shared_utils.R"), .ff_cand)
   .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
                       error = function(e) NA_character_)
   if (!is.na(.ff_rmd))
-    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
-                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+    .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"),
+                  file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand)
   .ff_hit <- .ff_cand[file.exists(.ff_cand)]
   if (!length(.ff_hit))
-    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+    stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.")
   source(.ff_hit[1], local = FALSE)
   rm(.ff_cand, .ff_rmd, .ff_hit)
 }
@@ -58,8 +58,8 @@ if (!exists("find_proj_file", mode = "function")) {
 # do NOT source config/endpoints_additions.R here: the concurrent part needs
 # only ANTIGENS = c("PT","FHA","PRN") (endpoints.R) for add_concurrent_ratios(),
 # and the FcG/effector vocabularies in the additions file belong to Parts 4/5.
-source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
-source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
 
 # ---- resolve the endpoint config from the single param ----
 cfg <- get_endpoint_config(params$endpoint)
@@ -69,8 +69,8 @@ cfg <- get_endpoint_config(params$endpoint)
 # ADCD at maternal + cord blood). load_serology_data() rebuilds `feature` from
 # antigen+analyte (mixed case), calls verify_predictor_casing() internally, and
 # a benign "unmapped visit codes" warning (P05/P08) is expected. If the d_set
-# file is absent this errors clearly via find_proj_file(); drop it in data/.
-.data_path <- find_proj_file(params$data_file)
+# file is absent this errors clearly via shared_utils(); drop it in data/.
+.data_path <- shared_utils(params$data_file)
 data_raw <- load_serology_data(.data_path, object_name = params$data_object)
 
 # ---- staging controls consumed by parts/03 (see that file's conc-setup) ----
@@ -112,10 +112,10 @@ summary for this endpoint.
 
 ---
 
-```{r part-concurrent, child=find_proj_file('parts/03_concurrent_networks_v2.Rmd')}
+```{r part-concurrent, child=shared_utils('parts/C7_step00_networks.Rmd')}
 # Expanded + staged concurrent within-visit part (FIM + FcγR + ADCD/ADCP/ADNP,
 # untransformed/raw, 8-week visit only). Reuses cfg, data_raw, nt,
-# find_proj_file() and the staging controls set in the bootstrap chunk above.
+# shared_utils() and the staging controls set in the bootstrap chunk above.
 ```
 
 ---

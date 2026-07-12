@@ -1,12 +1,12 @@
 ```{r bub-setup, include=FALSE}
-# CHILD document. Assumes the master created data_raw, nt, find_proj_file(),
-# and sourced config/endpoints.R + R/serology_helpers.R.
-source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8")
+# CHILD document. Assumes the master created data_raw, nt, shared_utils(),
+# and sourced config/endpoints.R + R/C1_serology_helpers.R.
+source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8")
 include_feature    <- BUBBLE_INCLUDE_FEATURE     # globals used by standardized_set defaults
 include_feature_wo <- BUBBLE_INCLUDE_FEATURE_WO
 have_dt  <- requireNamespace("data.table", quietly = TRUE)
-res_ap   <- find_proj_file(BUBBLE_RESIDUAL_AP, optional = TRUE)
-res_wp   <- find_proj_file(BUBBLE_RESIDUAL_WP, optional = TRUE)
+res_ap   <- shared_utils(BUBBLE_RESIDUAL_AP, optional = TRUE)
+res_wp   <- shared_utils(BUBBLE_RESIDUAL_WP, optional = TRUE)
 have_std <- have_dt && !is.null(res_ap) && !is.null(res_wp)
 ```
 

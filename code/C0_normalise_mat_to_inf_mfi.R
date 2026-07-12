@@ -1,4 +1,4 @@
-# normalize_mat_to_inf_mfi.R
+# C0_normalise_mat_to_inf_mfi.R
 # ===========================================================================
 # Harmonise maternal/cord test-sample MFI onto the INFANT panel's MFI scale,
 # per plate x antigen x feature x source, using the paired standard curves.

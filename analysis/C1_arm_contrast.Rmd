@@ -11,35 +11,35 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 suppressPackageStartupMessages({
-  library(data.table)    # used inside connection_transform.R
+  library(data.table)    # used inside C0_connection_transform.R
   library(tidyverse)     # dplyr, ggplot2, forcats, tidyr, stringr, tibble
 })
 have_ft <- requireNamespace("flextable", quietly = TRUE) &&
            requireNamespace("officer",  quietly = TRUE)
 if (requireNamespace("RColorBrewer", quietly = TRUE)) library(RColorBrewer)
 
-# ---- shared path resolver: single definition in R/find_proj_file.R ----
-if (!exists("find_proj_file", mode = "function")) {
-  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R",
-                "analysis/R/find_proj_file.R")
+# ---- shared path resolver: single definition in R/shared_utils.R ----
+if (!exists("shared_utils", mode = "function")) {
+  .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R",
+                "analysis/R/shared_utils.R")
   if (requireNamespace("here", quietly = TRUE))
-    .ff_cand <- c(here::here("R/find_proj_file.R"),
-                  here::here("analysis/R/find_proj_file.R"), .ff_cand)
+    .ff_cand <- c(here::here("R/shared_utils.R"),
+                  here::here("analysis/R/shared_utils.R"), .ff_cand)
   .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)),
                       error = function(e) NA_character_)
   if (!is.na(.ff_rmd))
-    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
-                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+    .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"),
+                  file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand)
   .ff_hit <- .ff_cand[file.exists(.ff_cand)]
   if (!length(.ff_hit))
-    stop("Cannot locate R/find_proj_file.R \u2014 place R/ beside this file, under analysis/, or at the project root.")
+    stop("Cannot locate R/shared_utils.R \u2014 place R/ beside this file, under analysis/, or at the project root.")
   source(.ff_hit[1], local = FALSE)
   rm(.ff_cand, .ff_rmd, .ff_hit)
 }
 
-source(find_proj_file("config/endpoints.R"),      local = FALSE, encoding = "UTF-8")
-source(find_proj_file("R/serology_helpers.R"),     local = FALSE, encoding = "UTF-8")
-source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("config/endpoints.R"),      local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_serology_helpers.R"),     local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8")
 ```
 
 ```{r engines}
@@ -215,8 +215,8 @@ include_feature <- c(
   "PT_PTNA")
 include_feature_wo <- setdiff(include_feature, igglist)   # drop total IgG for standardisation
 
-residual_file_ap <- find_proj_file("data/igg_standard_residuals_ap_matpm_prevacvacc_k.RData", optional = TRUE)
-residual_file_wp <- find_proj_file("data/igg_standard_residuals_wp_matpm_prevacvacc_k.RData", optional = TRUE)
+residual_file_ap <- shared_utils("data/igg_standard_residuals_ap_matpm_prevacvacc_k.RData", optional = TRUE)
+residual_file_wp <- shared_utils("data/igg_standard_residuals_wp_matpm_prevacvacc_k.RData", optional = TRUE)
 have_std <- requireNamespace("data.table", quietly = TRUE) &&
             !is.null(residual_file_ap) && !is.null(residual_file_wp)
 ```
@@ -224,7 +224,7 @@ have_std <- requireNamespace("data.table", quietly = TRUE) &&
 ```{r loaddata}
 ## load_serology_data() applies VISIT_RECODE, builds the mixed-case `feature`,
 ## sets `arm_name` (TdaP/TT), and runs the mandatory casing guard.
-data <- load_serology_data(find_proj_file("data/c_set.RData"))
+data <- load_serology_data(shared_utils("data/c_set.RData"))
 data$antigen  <- as.character(data$antigen)
 data$analyte  <- as.character(data$analyte)
 data$feature  <- as.character(data$feature)
@@ -319,7 +319,7 @@ if (have_ft) {
     m02_ft[[ss]] <- ft
     cat(sprintf("\n\n### %s\n\n", ss)); flextable::flextable_to_rmd(ft); cat("\n\n")
   }
-  out_dir <- tryCatch(find_proj_file("output", optional = TRUE), error = function(e) NULL)
+  out_dir <- tryCatch(shared_utils("output", optional = TRUE), error = function(e) NULL)
   if (is.null(out_dir)) out_dir <- file.path(getwd(), "output")
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
   if (length(m02_ft))

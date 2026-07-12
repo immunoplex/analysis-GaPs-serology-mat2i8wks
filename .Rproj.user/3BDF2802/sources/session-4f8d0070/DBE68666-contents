@@ -1,0 +1,417 @@
+FILE: analysis/C1_arm_contrast.Rmd 
+  Line 14 OLD: library(data.table)    # used inside connection_transform.R 
+  Line 14 NEW: library(data.table)    # used inside C0_connection_transform.R 
+  Line 21 OLD: # ---- shared path resolver: single definition in R/find_proj_file.R ---- 
+  Line 21 NEW: # ---- shared path resolver: single definition in R/shared_utils.R ---- 
+  Line 22 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 22 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 23 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", 
+  Line 23 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", 
+  Line 24 OLD: "analysis/R/find_proj_file.R") 
+  Line 24 NEW: "analysis/R/shared_utils.R") 
+  Line 26 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), 
+  Line 26 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), 
+  Line 27 OLD: here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 27 NEW: here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 31 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 31 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 32 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 32 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 35 OLD: stop("Cannot locate R/find_proj_file.R \u2014 place R/ beside this file, under analysis/, or at the project root.") 
+  Line 35 NEW: stop("Cannot locate R/shared_utils.R \u2014 place R/ beside this file, under analysis/, or at the project root.") 
+  Line 40 OLD: source(find_proj_file("config/endpoints.R"),      local = FALSE, encoding = "UTF-8") 
+  Line 40 NEW: source(shared_utils("config/endpoints.R"),      local = FALSE, encoding = "UTF-8") 
+  Line 41 OLD: source(find_proj_file("R/serology_helpers.R"),     local = FALSE, encoding = "UTF-8") 
+  Line 41 NEW: source(shared_utils("R/C1_serology_helpers.R"),     local = FALSE, encoding = "UTF-8") 
+  Line 42 OLD: source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+  Line 42 NEW: source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+  Line 218 OLD: residual_file_ap <- find_proj_file("data/igg_standard_residuals_ap_matpm_prevacvacc_k.RData", optional = TRUE) 
+  Line 218 NEW: residual_file_ap <- shared_utils("data/igg_standard_residuals_ap_matpm_prevacvacc_k.RData", optional = TRUE) 
+  Line 219 OLD: residual_file_wp <- find_proj_file("data/igg_standard_residuals_wp_matpm_prevacvacc_k.RData", optional = TRUE) 
+  Line 219 NEW: residual_file_wp <- shared_utils("data/igg_standard_residuals_wp_matpm_prevacvacc_k.RData", optional = TRUE) 
+  Line 227 OLD: data <- load_serology_data(find_proj_file("data/c_set.RData")) 
+  Line 227 NEW: data <- load_serology_data(shared_utils("data/c_set.RData")) 
+  Line 322 OLD: out_dir <- tryCatch(find_proj_file("output", optional = TRUE), error = function(e) NULL) 
+  Line 322 NEW: out_dir <- tryCatch(shared_utils("output", optional = TRUE), error = function(e) NULL) 
+
+FILE: analysis/C1_arm_contrast_forest.Rmd 
+  Line 3 OLD: # find_proj_file() already exist and that config/endpoints.R + 
+  Line 3 NEW: # shared_utils() already exist and that config/endpoints.R + 
+  Line 4 OLD: # R/serology_helpers.R are sourced. The guarded block below also lets it 
+  Line 4 NEW: # R/C1_serology_helpers.R are sourced. The guarded block below also lets it 
+  Line 8 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 8 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 10 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R") 
+  Line 10 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", "analysis/R/shared_utils.R") 
+  Line 12 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 12 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 14 OLD: if (!length(.ff_hit)) stop("Cannot locate R/find_proj_file.R.") 
+  Line 14 NEW: if (!length(.ff_hit)) stop("Cannot locate R/shared_utils.R.") 
+  Line 18 OLD: source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 18 NEW: source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 19 OLD: source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 19 NEW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 20 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData")) 
+  Line 20 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData")) 
+  Line 26 OLD: source(find_proj_file("R/infmon2_effector_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 26 NEW: source(shared_utils("R/C7_effector_helpers.R"), local = FALSE, encoding = "UTF-8") 
+
+FILE: analysis/C1_arm_contrast_volcano.Rmd 
+  Line 16 OLD: library(data.table) # for the function in the connection_transform.R code 
+  Line 16 NEW: library(data.table) # for the function in the C0_connection_transform.R code 
+  Line 185 OLD: source(here("./code/connection_transform.R"), local = TRUE) 
+  Line 185 NEW: source(here("./code/C0_connection_transform.R"), local = TRUE) 
+
+FILE: analysis/C2_antibody_chain.Rmd 
+  Line 26 OLD: # ---- shared path resolver: single definition in R/find_proj_file.R ---- 
+  Line 26 NEW: # ---- shared path resolver: single definition in R/shared_utils.R ---- 
+  Line 27 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 27 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 28 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", 
+  Line 28 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", 
+  Line 29 OLD: "analysis/R/find_proj_file.R") 
+  Line 29 NEW: "analysis/R/shared_utils.R") 
+  Line 31 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), 
+  Line 31 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), 
+  Line 32 OLD: here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 32 NEW: here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 36 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 36 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 37 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 37 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 40 OLD: stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 40 NEW: stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 44 OLD: source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 44 NEW: source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 45 OLD: source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 45 NEW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 46 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData")) 
+  Line 46 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData")) 
+  Line 965 OLD: *Reuses the shared pipeline (`config/endpoints.R`, `R/serology_helpers.R`, the global visit 
+  Line 965 NEW: *Reuses the shared pipeline (`config/endpoints.R`, `R/C1_serology_helpers.R`, the global visit 
+
+FILE: analysis/C3_responder_phenotype.Rmd 
+  Line 41 OLD: # ---- shared path resolver: single definition in R/find_proj_file.R ---- 
+  Line 41 NEW: # ---- shared path resolver: single definition in R/shared_utils.R ---- 
+  Line 42 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 42 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 43 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", 
+  Line 43 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", 
+  Line 44 OLD: "analysis/R/find_proj_file.R") 
+  Line 44 NEW: "analysis/R/shared_utils.R") 
+  Line 46 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), 
+  Line 46 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), 
+  Line 47 OLD: here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 47 NEW: here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 51 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 51 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 52 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 52 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 55 OLD: stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 55 NEW: stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 61 OLD: # NOTE: the Phase 07 engine (within_visit_helpers.R) and the shared serology 
+  Line 61 NEW: # NOTE: the Phase 07 engine (C4_within_visit_helpers.R) and the shared serology 
+  Line 63 OLD: # logic lives entirely in the NEW file R/maternal_responder_helpers.R. 
+  Line 63 NEW: # logic lives entirely in the NEW file R/C3_responder_helpers.R. 
+  Line 64 OLD: source(find_proj_file("config/endpoints.R"),               local = FALSE, encoding = "UTF-8") 
+  Line 64 NEW: source(shared_utils("config/endpoints.R"),               local = FALSE, encoding = "UTF-8") 
+  Line 65 OLD: source(find_proj_file("R/serology_helpers.R"),             local = FALSE, encoding = "UTF-8") 
+  Line 65 NEW: source(shared_utils("R/C1_serology_helpers.R"),             local = FALSE, encoding = "UTF-8") 
+  Line 66 OLD: source(find_proj_file("R/within_visit_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+  Line 66 NEW: source(shared_utils("R/C4_within_visit_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+  Line 67 OLD: source(find_proj_file("R/maternal_responder_helpers.R"),   local = FALSE, encoding = "UTF-8")  # <- Phase 08 engine 
+  Line 67 NEW: source(shared_utils("R/C3_responder_helpers.R"),   local = FALSE, encoding = "UTF-8")  # <- Phase 08 engine 
+  Line 70 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))   # applies VISIT_RECODE 
+  Line 70 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData"))   # applies VISIT_RECODE 
+  Line 71 OLD: clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")), 
+  Line 71 NEW: clin <- tryCatch(load_clinical_data(shared_utils("data/clin_assess.RData")), 
+  Line 74 OLD: .e <- new.env(); load(find_proj_file("data/clin_assess.RData"), envir = .e) 
+  Line 74 NEW: .e <- new.env(); load(shared_utils("data/clin_assess.RData"), envir = .e) 
+  Line 128 OLD: # the within_visit_helpers engine under the hood for an identical construct). 
+  Line 128 NEW: # the C4_within_visit_helpers engine under the hood for an identical construct). 
+  Line 587 OLD: rebuilt via the new `R/maternal_responder_helpers.R` (which calls the unmodified 
+  Line 587 NEW: rebuilt via the new `R/C3_responder_helpers.R` (which calls the unmodified 
+  Line 588 OLD: `R/within_visit_helpers.R` engine). Outcome modelled as both the continuous 
+  Line 588 NEW: `R/C4_within_visit_helpers.R` engine). Outcome modelled as both the continuous 
+
+FILE: analysis/C4_forward_prediction.Rmd 
+  Line 37 OLD: # ---- shared path resolver: single definition in R/find_proj_file.R ---- 
+  Line 37 NEW: # ---- shared path resolver: single definition in R/shared_utils.R ---- 
+  Line 38 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 38 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 39 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", 
+  Line 39 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", 
+  Line 40 OLD: "analysis/R/find_proj_file.R") 
+  Line 40 NEW: "analysis/R/shared_utils.R") 
+  Line 42 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), 
+  Line 42 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), 
+  Line 43 OLD: here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 43 NEW: here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 47 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 47 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 48 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 48 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 51 OLD: stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 51 NEW: stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 55 OLD: source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 55 NEW: source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 56 OLD: source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 56 NEW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 58 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))   # applies VISIT_RECODE 
+  Line 58 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData"))   # applies VISIT_RECODE 
+  Line 59 OLD: clin     <- load_clinical_data(find_proj_file("data/clin_assess.RData")) 
+  Line 59 NEW: clin     <- load_clinical_data(shared_utils("data/clin_assess.RData")) 
+
+FILE: analysis/C5_concurrent_models.Rmd 
+  Line 37 OLD: # ---- shared path resolver: single definition in R/find_proj_file.R ---- 
+  Line 37 NEW: # ---- shared path resolver: single definition in R/shared_utils.R ---- 
+  Line 38 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 38 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 39 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", 
+  Line 39 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", 
+  Line 40 OLD: "analysis/R/find_proj_file.R") 
+  Line 40 NEW: "analysis/R/shared_utils.R") 
+  Line 42 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), 
+  Line 42 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), 
+  Line 43 OLD: here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 43 NEW: here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 47 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 47 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 48 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 48 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 51 OLD: stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 51 NEW: stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 61 OLD: source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 61 NEW: source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8") 
+  Line 62 OLD: source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 62 NEW: source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 72 OLD: # file is absent this errors clearly via find_proj_file(); drop it in data/. 
+  Line 72 NEW: # file is absent this errors clearly via shared_utils(); drop it in data/. 
+  Line 73 OLD: .data_path <- find_proj_file(params$data_file) 
+  Line 73 NEW: .data_path <- shared_utils(params$data_file) 
+  Line 115 OLD: ```{r part-concurrent, child=find_proj_file('parts/03_concurrent_networks_v2.Rmd')} 
+  Line 115 NEW: ```{r part-concurrent, child=shared_utils('parts/C7_step00_networks.Rmd')} 
+  Line 118 OLD: # find_proj_file() and the staging controls set in the bootstrap chunk above. 
+  Line 118 NEW: # shared_utils() and the staging controls set in the bootstrap chunk above. 
+
+FILE: analysis/C6_responder_in_model.Rmd 
+  Line 41 OLD: # ---- shared path resolver: single definition in R/find_proj_file.R ---- 
+  Line 41 NEW: # ---- shared path resolver: single definition in R/shared_utils.R ---- 
+  Line 42 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 42 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 43 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", 
+  Line 43 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", 
+  Line 44 OLD: "analysis/R/find_proj_file.R") 
+  Line 44 NEW: "analysis/R/shared_utils.R") 
+  Line 46 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), 
+  Line 46 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), 
+  Line 47 OLD: here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 47 NEW: here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 51 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 51 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 52 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 52 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 55 OLD: stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 55 NEW: stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 59 OLD: source(find_proj_file("config/endpoints.R"),             local = FALSE, encoding = "UTF-8") 
+  Line 59 NEW: source(shared_utils("config/endpoints.R"),             local = FALSE, encoding = "UTF-8") 
+  Line 60 OLD: source(find_proj_file("R/serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  Line 60 NEW: source(shared_utils("R/C1_serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  Line 61 OLD: source(find_proj_file("R/within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+  Line 61 NEW: source(shared_utils("R/C4_within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+  Line 62 OLD: source(find_proj_file("R/maternal_responder_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 62 NEW: source(shared_utils("R/C3_responder_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 64 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))     # applies VISIT_RECODE 
+  Line 64 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData"))     # applies VISIT_RECODE 
+  Line 65 OLD: clin     <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")), error = function(e) NULL) 
+  Line 65 NEW: clin     <- tryCatch(load_clinical_data(shared_utils("data/clin_assess.RData")), error = function(e) NULL) 
+  Line 66 OLD: if (is.null(clin)) { .e <- new.env(); load(find_proj_file("data/clin_assess.RData"), envir = .e); clin <- get("clin_assess", envir = .e) } 
+  Line 66 NEW: if (is.null(clin)) { .e <- new.env(); load(shared_utils("data/clin_assess.RData"), envir = .e); clin <- get("clin_assess", envir = .e) } 
+
+FILE: analysis/C7_prn_pathway_figure4.Rmd 
+  Line 43 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 43 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 44 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R") 
+  Line 44 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", "analysis/R/shared_utils.R") 
+  Line 46 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), 
+  Line 46 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), 
+  Line 47 OLD: here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 47 NEW: here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 51 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 51 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 52 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 52 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 55 OLD: stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 55 NEW: stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 59 OLD: source(find_proj_file("config/endpoints.R"),             local = FALSE, encoding = "UTF-8") 
+  Line 59 NEW: source(shared_utils("config/endpoints.R"),             local = FALSE, encoding = "UTF-8") 
+  Line 60 OLD: source(find_proj_file("R/serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  Line 60 NEW: source(shared_utils("R/C1_serology_helpers.R"),           local = FALSE, encoding = "UTF-8") 
+  Line 61 OLD: source(find_proj_file("R/within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+  Line 61 NEW: source(shared_utils("R/C4_within_visit_helpers.R"),       local = FALSE, encoding = "UTF-8") 
+  Line 62 OLD: source(find_proj_file("R/maternal_responder_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 62 NEW: source(shared_utils("R/C3_responder_helpers.R"), local = FALSE, encoding = "UTF-8") 
+  Line 63 OLD: source(find_proj_file("R/interval_helpers.R"),           local = FALSE, encoding = "UTF-8")  # NEW 
+  Line 63 NEW: source(shared_utils("R/C2_interval_helpers.R"),           local = FALSE, encoding = "UTF-8")  # NEW 
+  Line 65 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData")) 
+  Line 65 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData")) 
+  Line 66 OLD: clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")), 
+  Line 66 NEW: clin <- tryCatch(load_clinical_data(shared_utils("data/clin_assess.RData")), 
+  Line 68 OLD: if (is.null(clin)) { .e <- new.env(); load(find_proj_file("data/clin_assess.RData"), envir = .e) 
+  Line 68 NEW: if (is.null(clin)) { .e <- new.env(); load(shared_utils("data/clin_assess.RData"), envir = .e) 
+  Line 297 OLD: interval-robustness companion (Figure S) built from `R/interval_helpers.R`. If you 
+  Line 297 NEW: interval-robustness companion (Figure S) built from `R/C2_interval_helpers.R`. If you 
+
+FILE: analysis/C8_subclass_balance.Rmd 
+  Line 34 OLD: if (!exists("find_proj_file")) source(.stub("R/find_proj_file.R")) 
+  Line 34 NEW: if (!exists("shared_utils")) source(.stub("R/shared_utils.R")) 
+  Line 35 OLD: source(find_proj_file("config/endpoints.R"),            encoding = "UTF-8") 
+  Line 35 NEW: source(shared_utils("config/endpoints.R"),            encoding = "UTF-8") 
+  Line 36 OLD: source(find_proj_file("R/serology_helpers.R"),          encoding = "UTF-8") 
+  Line 36 NEW: source(shared_utils("R/C1_serology_helpers.R"),          encoding = "UTF-8") 
+  Line 37 OLD: source(find_proj_file("R/subclass_balance_helpers.R"),  encoding = "UTF-8") 
+  Line 37 NEW: source(shared_utils("R/C8_subclass_balance_helpers.R"),  encoding = "UTF-8") 
+
+FILE: analysis/CK_block_ladder.Rmd 
+  Line 42 OLD: if (!exists("find_proj_file", mode = "function")) { 
+  Line 42 NEW: if (!exists("shared_utils", mode = "function")) { 
+  Line 43 OLD: .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R") 
+  Line 43 NEW: .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", "analysis/R/shared_utils.R") 
+  Line 45 OLD: .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand) 
+  Line 45 NEW: .ff_cand <- c(here::here("R/shared_utils.R"), here::here("analysis/R/shared_utils.R"), .ff_cand) 
+  Line 48 OLD: .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"), 
+  Line 48 NEW: .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"), 
+  Line 49 OLD: file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand) 
+  Line 49 NEW: file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand) 
+  Line 52 OLD: stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 52 NEW: stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.") 
+  Line 55 OLD: source(find_proj_file("config/endpoints.R"),           local = FALSE, encoding = "UTF-8") 
+  Line 55 NEW: source(shared_utils("config/endpoints.R"),           local = FALSE, encoding = "UTF-8") 
+  Line 56 OLD: source(find_proj_file("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8") 
+  Line 56 NEW: source(shared_utils("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8") 
+  Line 57 OLD: source(find_proj_file("R/serology_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+  Line 57 NEW: source(shared_utils("R/C1_serology_helpers.R"),         local = FALSE, encoding = "UTF-8") 
+  Line 59 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData")) 
+  Line 59 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData")) 
+  Line 88 OLD: clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")), 
+  Line 88 NEW: clin <- tryCatch(load_clinical_data(shared_utils("data/clin_assess.RData")), 
+
+FILE: analysis/parts/C1_response_bubbles.Rmd 
+  Line 2 OLD: # CHILD document. Assumes the master created data_raw, nt, find_proj_file(), 
+  Line 2 NEW: # CHILD document. Assumes the master created data_raw, nt, shared_utils(), 
+  Line 3 OLD: # and sourced config/endpoints.R + R/serology_helpers.R. 
+  Line 3 NEW: # and sourced config/endpoints.R + R/C1_serology_helpers.R. 
+  Line 4 OLD: source(find_proj_file("R/connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+  Line 4 NEW: source(shared_utils("R/C0_connection_transform.R"), local = FALSE, encoding = "UTF-8") 
+  Line 8 OLD: res_ap   <- find_proj_file(BUBBLE_RESIDUAL_AP, optional = TRUE) 
+  Line 8 NEW: res_ap   <- shared_utils(BUBBLE_RESIDUAL_AP, optional = TRUE) 
+  Line 9 OLD: res_wp   <- find_proj_file(BUBBLE_RESIDUAL_WP, optional = TRUE) 
+  Line 9 NEW: res_wp   <- shared_utils(BUBBLE_RESIDUAL_WP, optional = TRUE) 
+
+FILE: analysis/parts/C2_chain_main.Rmd 
+  Line 3 OLD: parts/01_maternal_chain.Rmd   (REFACTORED — Result #2 only) 
+  Line 3 NEW: parts/C2_chain_main.Rmd   (REFACTORED — Result #2 only) 
+  Line 44 OLD: if (!exists("find_proj_file")) source(.stub("R/find_proj_file.R")) 
+  Line 44 NEW: if (!exists("shared_utils")) source(.stub("R/shared_utils.R")) 
+  Line 45 OLD: source(find_proj_file("config/endpoints.R"),  encoding = "UTF-8") 
+  Line 45 NEW: source(shared_utils("config/endpoints.R"),  encoding = "UTF-8") 
+  Line 46 OLD: source(find_proj_file("R/serology_helpers.R"), encoding = "UTF-8") 
+  Line 46 NEW: source(shared_utils("R/C1_serology_helpers.R"), encoding = "UTF-8") 
+  Line 48 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData")) 
+  Line 48 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData")) 
+
+FILE: analysis/parts/C3_clinical_covariates.Rmd 
+  Line 3 OLD: # find_proj_file() resolver. Reuses the shared clinical helpers. 
+  Line 3 NEW: # shared_utils() resolver. Reuses the shared clinical helpers. 
+  Line 58 OLD: clin_raw  <- load_clinical_data(find_proj_file("data/clin_assess.RData")) 
+  Line 58 NEW: clin_raw  <- load_clinical_data(shared_utils("data/clin_assess.RData")) 
+
+FILE: analysis/parts/C4_antigen_subclass_predictors.Rmd 
+  Line 3 OLD: parts/04_antigen_subclass_predictors.Rmd   (REFACTORED — Result #1 only) 
+  Line 3 NEW: parts/C4_antigen_subclass_predictors.Rmd   (REFACTORED — Result #1 only) 
+  Line 50 OLD: if (!exists("find_proj_file")) source(.stub("R/find_proj_file.R")) 
+  Line 50 NEW: if (!exists("shared_utils")) source(.stub("R/shared_utils.R")) 
+  Line 51 OLD: source(find_proj_file("config/endpoints.R"),  encoding = "UTF-8") 
+  Line 51 NEW: source(shared_utils("config/endpoints.R"),  encoding = "UTF-8") 
+  Line 52 OLD: source(find_proj_file("R/serology_helpers.R"), encoding = "UTF-8") 
+  Line 52 NEW: source(shared_utils("R/C1_serology_helpers.R"), encoding = "UTF-8") 
+  Line 54 OLD: data_raw <- load_serology_data(find_proj_file("data/c_set.RData")) 
+  Line 54 NEW: data_raw <- load_serology_data(shared_utils("data/c_set.RData")) 
+
+FILE: analysis/parts/C7_step00_networks.Rmd 
+  Line 5 OLD: # Assumes cfg, data_raw, nt, find_proj_file() exist (created by the driver). 
+  Line 5 NEW: # Assumes cfg, data_raw, nt, shared_utils() exist (created by the driver). 
+
+FILE: analysis/parts/C7_step14_effector_functions.Rmd 
+  Line 37 OLD: source(.find("R/serology_helpers.R"),          local=FALSE, encoding="UTF-8") 
+  Line 37 NEW: source(.find("R/C1_serology_helpers.R"),          local=FALSE, encoding="UTF-8") 
+
+FILE: R/C1_serology_helpers.R 
+  Line 2 OLD: # R/serology_helpers.R 
+  Line 2 NEW: # R/C1_serology_helpers.R 
+
+FILE: R/C2_interval_helpers.R 
+  Line 2 OLD: ## R/interval_helpers.R  --  Phase 10 engine 
+  Line 2 NEW: ## R/C2_interval_helpers.R  --  Phase 10 engine 
+  Line 9 OLD: ## R/maternal_responder_helpers.R::elastic_net_signature(), so the existing 
+  Line 9 NEW: ## R/C3_responder_helpers.R::elastic_net_signature(), so the existing 
+  Line 25 OLD: ## the helper does not depend on serology_helpers::auc_binary()). 
+  Line 25 NEW: ## the helper does not depend on C1_serology_helpers::auc_binary()). 
+
+FILE: R/C3_responder_helpers.R 
+  Line 2 OLD: # maternal_responder_helpers.R   (Phase 08 branch) 
+  Line 2 NEW: # C3_responder_helpers.R   (Phase 08 branch) 
+  Line 10 OLD: # Phase 07 engine in R/within_visit_helpers.R when it is on the search path, and 
+  Line 10 NEW: # Phase 07 engine in R/C4_within_visit_helpers.R when it is on the search path, and 
+  Line 107 OLD: # pvalue_to_label lives in R/serology_helpers.R (the shared utility). It is 
+  Line 107 NEW: # pvalue_to_label lives in R/C1_serology_helpers.R (the shared utility). It is 
+  Line 109 OLD: # without the shared helpers; when serology_helpers.R is present (the normal 
+  Line 109 NEW: # without the shared helpers; when C1_serology_helpers.R is present (the normal 
+
+FILE: R/C4_within_visit_helpers.R 
+  Line 2 OLD: # R/within_visit_helpers.R 
+  Line 2 NEW: # R/C4_within_visit_helpers.R 
+  Line 862 OLD: #   total-IgG delta. Reuses paired_change() from R/serology_helpers.R. 
+  Line 862 NEW: #   total-IgG delta. Reuses paired_change() from R/C1_serology_helpers.R. 
+
+FILE: R/C7_effector_helpers.R 
+  Line 2 OLD: # R/infmon2_effector_helpers.R 
+  Line 2 NEW: # R/C7_effector_helpers.R 
+  Line 9 OLD: # Sourced AFTER config/endpoints.R and R/serology_helpers.R (it reuses 
+  Line 9 NEW: # Sourced AFTER config/endpoints.R and R/C1_serology_helpers.R (it reuses 
+  Line 13 OLD: # (04_response_bubbles.Rmd / serology_helpers::bubble_arm_effect): 
+  Line 13 NEW: # (04_response_bubbles.Rmd / C1_serology_helpers::bubble_arm_effect): 
+
+FILE: R/C8_subclass_balance_helpers.R 
+  Line 2 OLD: # R/subclass_balance_helpers.R 
+  Line 2 NEW: # R/C8_subclass_balance_helpers.R 
+  Line 29 OLD: # Sits beside config/endpoints.R and R/serology_helpers.R; table fitting is 
+  Line 29 NEW: # Sits beside config/endpoints.R and R/C1_serology_helpers.R; table fitting is 
+
+FILE: R/shared_utils.R 
+  Line 2 OLD: # R/find_proj_file.R 
+  Line 2 NEW: # R/shared_utils.R 
+  Line 16 OLD: find_proj_file <- function(rel, optional = FALSE) { 
+  Line 16 NEW: shared_utils <- function(rel, optional = FALSE) { 
+
+FILE: code/C0_build_interval_days.R 
+  Line 1 OLD: # build_interval_days.R 
+  Line 1 NEW: # C0_build_interval_days.R 
+  Line 114 OLD: message("=== build_interval_days.R diagnostics ===") 
+  Line 114 NEW: message("=== C0_build_interval_days.R diagnostics ===") 
+
+FILE: code/C0_get_8week_interval_days.R 
+  Line 17 OLD: source(here::here("./code/db_load_functions.R")) 
+  Line 17 NEW: source(here::here("./code/C0_db_load_functions.R")) 
+  Line 18 OLD: source(here::here("./code/build_interval_days.R")) 
+  Line 18 NEW: source(here::here("./code/C0_build_interval_days.R")) 
+
+FILE: code/C0_normalise_mat_to_inf_mfi.R 
+  Line 1 OLD: # normalize_mat_to_inf_mfi.R 
+  Line 1 NEW: # C0_normalise_mat_to_inf_mfi.R 
+
+FILE: config/endpoints.R 
+  Line 47 OLD: # is what the WORKING pipeline (endpoints.R + serology_helpers.R) uses and 
+  Line 47 NEW: # is what the WORKING pipeline (endpoints.R + C1_serology_helpers.R) uses and 
+
+Total files modified: 28 

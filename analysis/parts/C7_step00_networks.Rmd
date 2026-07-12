@@ -2,7 +2,7 @@
 # =============================================================================
 # CHILD document — CONCURRENT WITHIN-VISIT ARCHITECTURE (v2, expanded + staged)
 # -----------------------------------------------------------------------------
-# Assumes cfg, data_raw, nt, find_proj_file() exist (created by the driver).
+# Assumes cfg, data_raw, nt, shared_utils() exist (created by the driver).
 #
 # WHAT CHANGED vs v1
 #   1. Feature set expanded beyond PT/FHA/PRN subclasses:

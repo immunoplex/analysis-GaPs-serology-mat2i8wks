@@ -1,12 +1,12 @@
 ## =============================================================================
-## R/interval_helpers.R  --  Phase 10 engine
+## R/C2_interval_helpers.R  --  Phase 10 engine
 ## Vaccination -> delivery interval adjustment for the maternal responder analysis.
 ##
 ## SELF-CONTAINED by design. Depends only on: base R, stats, splines, and
 ## (optionally) glmnet / dplyr / ggplot2 / patchwork. It is sourced READ-ONLY
 ## beside the Phase 07/08 helpers and does NOT modify any of them. In particular
 ## it re-implements a forced-unpenalised elastic net rather than editing
-## R/maternal_responder_helpers.R::elastic_net_signature(), so the existing
+## R/C3_responder_helpers.R::elastic_net_signature(), so the existing
 ## pipeline is untouched.
 ##
 ## Convention throughout: w = weeks between vaccination and delivery
@@ -22,7 +22,7 @@ suppressPackageStartupMessages({
 ## ---- small internal utilities -----------------------------------------------
 
 ## Mann-Whitney AUC for a numeric score against a 0/1 outcome (self-contained so
-## the helper does not depend on serology_helpers::auc_binary()).
+## the helper does not depend on C1_serology_helpers::auc_binary()).
 .auc01 <- function(score, y01) {
   ok <- is.finite(score) & !is.na(y01)
   score <- score[ok]; y01 <- y01[ok]

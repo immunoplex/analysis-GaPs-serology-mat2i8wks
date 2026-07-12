@@ -1,29 +1,29 @@
 ```{r inf2-setup, include=FALSE}
 # CHILD document. When included from a master it assumes data_raw, nt, and
-# find_proj_file() already exist and that config/endpoints.R +
-# R/serology_helpers.R are sourced. The guarded block below also lets it
+# shared_utils() already exist and that config/endpoints.R +
+# R/C1_serology_helpers.R are sourced. The guarded block below also lets it
 # knit STANDALONE (mirrors results_B.Rmd / cord_to_infmon2's bootstrap).
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE)
 
-if (!exists("find_proj_file", mode = "function")) {
+if (!exists("shared_utils", mode = "function")) {
   library(here)
-  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+  .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", "analysis/R/shared_utils.R")
   if (requireNamespace("here", quietly = TRUE))
-    .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand)
+    .ff_cand <- c(here::here("R/shared_utils.R"), here::here("analysis/R/shared_utils.R"), .ff_cand)
   .ff_hit <- .ff_cand[file.exists(.ff_cand)]
-  if (!length(.ff_hit)) stop("Cannot locate R/find_proj_file.R.")
+  if (!length(.ff_hit)) stop("Cannot locate R/shared_utils.R.")
   source(.ff_hit[1], local = FALSE); rm(.ff_cand, .ff_hit)
 }
 if (!exists("data_raw")) {
-  source(find_proj_file("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
-  source(find_proj_file("R/serology_helpers.R"), local = FALSE, encoding = "UTF-8")
-  data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+  source(shared_utils("config/endpoints.R"),  local = FALSE, encoding = "UTF-8")
+  source(shared_utils("R/C1_serology_helpers.R"), local = FALSE, encoding = "UTF-8")
+  data_raw <- load_serology_data(shared_utils("data/c_set.RData"))
   if (exists("verify_predictor_casing", mode = "function")) verify_predictor_casing(data_raw)
 }
 if (!exists("nt")) nt <- new_ntracker()
 
 # This component's own helpers.
-source(find_proj_file("R/infmon2_effector_helpers.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C7_effector_helpers.R"), local = FALSE, encoding = "UTF-8")
 
 INF2_VISIT <- "InfMon2"   # data value (recoded M02); shown to readers as "8 weeks"
 ```

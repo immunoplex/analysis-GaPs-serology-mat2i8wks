@@ -1,6 +1,6 @@
 ```{r clin-setup, include=FALSE}
 # CHILD document. Assumes the master has created cfg, data_raw, nt, and the
-# find_proj_file() resolver. Reuses the shared clinical helpers.
+# shared_utils() resolver. Reuses the shared clinical helpers.
 clin_alpha <- 0.05   # univariate screening threshold (adjust if desired)
 ```
 
@@ -55,7 +55,7 @@ data_outcome <- data_raw %>%
   distinct(subject_accession, .keep_all = TRUE) %>%
   rename(!!cfg$outcome_col := log_assay_value)
 
-clin_raw  <- load_clinical_data(find_proj_file("data/clin_assess.RData"))
+clin_raw  <- load_clinical_data(shared_utils("data/clin_assess.RData"))
 clin_data <- prepare_clinical(data_outcome, clin_raw)
 cont_vars <- setdiff(unname(unlist(COVARIATES_NAMED)), COVARIATES_CATEGORICAL)
 

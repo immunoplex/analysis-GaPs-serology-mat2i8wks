@@ -1,5 +1,5 @@
 # =============================================================================
-# R/within_visit_helpers.R
+# R/C4_within_visit_helpers.R
 #
 # Reusable helpers for:
 #   07_within_visit_correlations_and_responder_subgroups.Rmd
@@ -859,7 +859,7 @@ profile_heatmap <- function(prof_assay, title, grp_levels = NULL,
 #   whether the transition response splits into distinct subgroups rather than a
 #   single population. PAM with silhouette-chosen k when 'cluster' is available
 #   and enough subjects exist; otherwise a transparent tertile fallback on the
-#   total-IgG delta. Reuses paired_change() from R/serology_helpers.R.
+#   total-IgG delta. Reuses paired_change() from R/C1_serology_helpers.R.
 # =============================================================================
 
 #' Subgroup detection for ONE antigen across ONE transition.

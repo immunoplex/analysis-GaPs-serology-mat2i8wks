@@ -1,6 +1,6 @@
 <!--
 =====================================================================
-parts/01_maternal_chain.Rmd   (REFACTORED — Result #2 only)
+parts/C2_chain_main.Rmd   (REFACTORED — Result #2 only)
 TITLE: Result #2 — Absolute subclass ratios at every upstream stage vs infant SBA
 ---------------------------------------------------------------------
 FOCUSED REFACTOR of the original six-block maternal chain. The original
@@ -41,11 +41,11 @@ if (!exists("cfg") || !exists("data_raw")) {
     if (optional) return(NULL)
     stop("Cannot locate '", rel, "'. Run from project root.", call. = FALSE)
   }
-  if (!exists("find_proj_file")) source(.stub("R/find_proj_file.R"))
-  source(find_proj_file("config/endpoints.R"),  encoding = "UTF-8")
-  source(find_proj_file("R/serology_helpers.R"), encoding = "UTF-8")
+  if (!exists("shared_utils")) source(.stub("R/shared_utils.R"))
+  source(shared_utils("config/endpoints.R"),  encoding = "UTF-8")
+  source(shared_utils("R/C1_serology_helpers.R"), encoding = "UTF-8")
   cfg      <- get_endpoint_config("SBA")
-  data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+  data_raw <- load_serology_data(shared_utils("data/c_set.RData"))
   nt       <- new_ntracker()
 }
 if (!exists("roles")) roles <- chain_visit_roles(cfg)

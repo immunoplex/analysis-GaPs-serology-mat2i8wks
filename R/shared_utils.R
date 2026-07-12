@@ -1,5 +1,5 @@
 # =====================================================================
-# R/find_proj_file.R
+# R/shared_utils.R
 # ---------------------------------------------------------------------
 # SINGLE source of truth for the self-locating project-file resolver.
 # Previously this ~15-line function was copy-pasted into every driver
@@ -13,7 +13,7 @@
 # nothing matches.
 # =====================================================================
 
-find_proj_file <- function(rel, optional = FALSE) {
+shared_utils <- function(rel, optional = FALSE) {
   cand <- character(0)
   if (requireNamespace("here", quietly = TRUE))
     cand <- c(cand, here::here(rel), here::here("analysis", rel))

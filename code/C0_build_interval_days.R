@@ -1,4 +1,4 @@
-# build_interval_days.R
+# C0_build_interval_days.R
 #
 # Computes the exact number of days between the cord-blood sample (C00)
 # and the infant 8-week sample (B20) for each subject in the GaPs database.
@@ -111,7 +111,7 @@ n_paired <- nrow(INTERVAL_DAYS_BY_SUBJECT)
 n_na     <- sum(is.na(INTERVAL_DAYS_BY_SUBJECT$interval_days))
 n_neg    <- sum(INTERVAL_DAYS_BY_SUBJECT$interval_days <= 0, na.rm = TRUE)
 
-message("=== build_interval_days.R diagnostics ===")
+message("=== C0_build_interval_days.R diagnostics ===")
 message(sprintf("C00 rows:               %d", n_cord))
 message(sprintf("B20 rows:               %d", n_b20))
 message(sprintf("Paired subjects:        %d", n_paired))

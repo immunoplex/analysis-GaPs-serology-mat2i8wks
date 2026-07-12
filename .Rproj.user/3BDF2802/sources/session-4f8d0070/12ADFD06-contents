@@ -199,3 +199,95 @@ for (f in all_files) {
 }
 sink()
 cat("✓ Written to content_comparison.txt\n")
+
+####################################
+# ── Update internal source() paths and child= references ─────────────────────
+# Run from project root after refactor_moves.sh
+
+library(fs)
+library(stringr)
+
+# Map of old path fragments → new path fragments
+# Order matters: more specific patterns first
+path_map <- c(
+  # R helper renames
+  "serology_helpers"              = "C1_serology_helpers",
+  "interval_helpers"              = "C2_interval_helpers",
+  "maternal_responder_helpers"    = "C3_responder_helpers",
+  "within_visit_helpers"          = "C4_within_visit_helpers",
+  "infmon2_effector_helpers"      = "C7_effector_helpers",
+  "subclass_balance_helpers"      = "C8_subclass_balance_helpers",
+  "find_proj_file"                = "shared_utils",
+  
+  # Parts renames — child document references
+  "parts/01_maternal_chain\\.Rmd"                    = "parts/C2_chain_main.Rmd",
+  "parts/02_clinical_covariates\\.Rmd"               = "parts/C3_clinical_covariates.Rmd",
+  "parts/03_concurrent_networks_v2\\.Rmd"            = "parts/C7_step00_networks.Rmd",
+  "parts/03_step1_full_pathway_by_arm\\.Rmd"         = "parts/C7_step01_pathway_by_arm.Rmd",
+  "parts/03_step2_link_regressions_by_arm\\.Rmd"     = "parts/C7_step02_link_regressions.Rmd",
+  "parts/03_step3_mediation_by_arm\\.Rmd"            = "parts/C7_step03_mediation.Rmd",
+  "parts/03_step4_variance_decomposition_by_arm\\.Rmd" = "parts/C7_step04_variance_decomp.Rmd",
+  "parts/03_step5_fcgr_collinearity\\.Rmd"           = "parts/C7_step05_fcgr_collinearity.Rmd",
+  "parts/03_step6_pathway_nct_by_arm\\.Rmd"          = "parts/C7_step06_nct.Rmd",
+  "parts/03_step7_fcgr3b_unique_role\\.Rmd"          = "parts/C7_step07_fcgr3b_unique.Rmd",
+  "parts/03_step8_aggregate_complement\\.Rmd"        = "parts/C7_step08_agg_complement.Rmd",
+  "parts/03_step9_arm_interaction_tests\\.Rmd"       = "parts/C7_step09_arm_interactions.Rmd",
+  "parts/03_step10_fcgr3b_vs_adcd\\.Rmd"            = "parts/C7_step10_fcgr3b_vs_adcd.Rmd",
+  "parts/03_step11_effector_activation\\.Rmd"        = "parts/C7_step11_effector_activation.Rmd",
+  "parts/03_step12_effector_to_sba\\.Rmd"            = "parts/C7_step12_effector_to_sba.Rmd",
+  "parts/03_step13_effector_aggregate\\.Rmd"         = "parts/C7_step13_effector_aggregate.Rmd",
+  "parts/04_antigen_subclass_predictors\\.Rmd"       = "parts/C4_antigen_subclass_predictors.Rmd",
+  "parts/04_response_bubbles\\.Rmd"                  = "parts/C1_response_bubbles.Rmd",
+  "parts/05_effector_functions\\.Rmd"                = "parts/C7_step14_effector_functions.Rmd",
+  
+  # config renames (none needed — filenames unchanged)
+  
+  # code renames
+  "build_interval_days"           = "C0_build_interval_days",
+  "normalize_mat_to_inf_mfi"      = "C0_normalise_mat_to_inf_mfi",
+  "db_load_functions"             = "C0_db_load_functions",
+  "connection_transform"          = "C0_connection_transform"
+)
+
+# Find all Rmd and R files in analysis/, R/, code/, config/
+target_files <- dir_ls(
+  path = c("analysis", "R", "code", "config"),
+  recurse = TRUE,
+  regexp = "\\.(Rmd|R)$"
+)
+
+cat("=== PATH UPDATE LOG ===\n\n")
+sink("path_update_log.txt")
+
+changes_made <- 0
+
+for (filepath in target_files) {
+  lines    <- readLines(filepath, warn = FALSE)
+  new_lines <- lines
+  
+  for (old_pat in names(path_map)) {
+    new_pat   <- path_map[old_pat]
+    new_lines <- str_replace_all(new_lines, old_pat, new_pat)
+  }
+  
+  if (!identical(lines, new_lines)) {
+    # Show what changed
+    changed_idx <- which(lines != new_lines)
+    cat("FILE:", filepath, "\n")
+    for (i in changed_idx) {
+      cat("  Line", i, "OLD:", trimws(lines[i]), "\n")
+      cat("  Line", i, "NEW:", trimws(new_lines[i]), "\n")
+    }
+    cat("\n")
+    
+    # Write back
+    writeLines(new_lines, filepath)
+    changes_made <- changes_made + 1
+  }
+}
+
+cat("Total files modified:", changes_made, "\n")
+sink()
+
+cat("✓ Path updates complete. Log written to path_update_log.txt\n")
+cat("  Review path_update_log.txt before committing.\n")

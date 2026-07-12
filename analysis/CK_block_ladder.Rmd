@@ -39,24 +39,24 @@ suppressPackageStartupMessages({ library(dplyr); library(tidyr); library(ggplot2
 
 ```{r bootstrap, include=FALSE}
 library(here)
-if (!exists("find_proj_file", mode = "function")) {
-  .ff_cand <- c("R/find_proj_file.R", "../R/find_proj_file.R", "analysis/R/find_proj_file.R")
+if (!exists("shared_utils", mode = "function")) {
+  .ff_cand <- c("R/shared_utils.R", "../R/shared_utils.R", "analysis/R/shared_utils.R")
   if (requireNamespace("here", quietly = TRUE))
-    .ff_cand <- c(here::here("R/find_proj_file.R"), here::here("analysis/R/find_proj_file.R"), .ff_cand)
+    .ff_cand <- c(here::here("R/shared_utils.R"), here::here("analysis/R/shared_utils.R"), .ff_cand)
   .ff_rmd <- tryCatch(dirname(knitr::current_input(dir = TRUE)), error = function(e) NA_character_)
   if (!is.na(.ff_rmd))
-    .ff_cand <- c(file.path(.ff_rmd, "R/find_proj_file.R"),
-                  file.path(dirname(.ff_rmd), "R/find_proj_file.R"), .ff_cand)
+    .ff_cand <- c(file.path(.ff_rmd, "R/shared_utils.R"),
+                  file.path(dirname(.ff_rmd), "R/shared_utils.R"), .ff_cand)
   .ff_hit <- .ff_cand[file.exists(.ff_cand)]
   if (!length(.ff_hit))
-    stop("Cannot locate R/find_proj_file.R — place R/ beside this file, under analysis/, or at the project root.")
+    stop("Cannot locate R/shared_utils.R — place R/ beside this file, under analysis/, or at the project root.")
   source(.ff_hit[1], local = FALSE); rm(.ff_cand, .ff_rmd, .ff_hit)
 }
-source(find_proj_file("config/endpoints.R"),           local = FALSE, encoding = "UTF-8")
-source(find_proj_file("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8")
-source(find_proj_file("R/serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
+source(shared_utils("config/endpoints.R"),           local = FALSE, encoding = "UTF-8")
+source(shared_utils("config/endpoints_additions.R"), local = FALSE, encoding = "UTF-8")
+source(shared_utils("R/C1_serology_helpers.R"),         local = FALSE, encoding = "UTF-8")
 
-data_raw <- load_serology_data(find_proj_file("data/c_set.RData"))
+data_raw <- load_serology_data(shared_utils("data/c_set.RData"))
 ```
 
 # Data assembly
@@ -85,7 +85,7 @@ inf <- pull_wide(data_raw, params$visit_concurrent, ANTI_IGG, "_inf")
 arm <- dplyr::distinct(data_raw, subject_accession, maternal_arm)
 
 # clinical covariates: pull EVERYTHING we might need for the two clinical blocks
-clin <- tryCatch(load_clinical_data(find_proj_file("data/clin_assess.RData")),
+clin <- tryCatch(load_clinical_data(shared_utils("data/clin_assess.RData")),
                  error = function(e) NULL)
 want_clin <- unique(c(params$clin_prevax_vars, params$clin_birth_vars))
 if (!is.null(clin)) {

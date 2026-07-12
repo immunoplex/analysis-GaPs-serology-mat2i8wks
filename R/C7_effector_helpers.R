@@ -1,16 +1,16 @@
 # =====================================================================
-# R/infmon2_effector_helpers.R
+# R/C7_effector_helpers.R
 # ---------------------------------------------------------------------
 # 8-weeks (infant baseline) maternal-vaccination-effect component:
 # whole-bacterium assays (SBA, WT_IgG, PTNA) + antibody effector
 # functions (ADCD, ADCP, ADNP) tested for TdaP-vs-TT differences and
 # rendered as a Figure-2C/D-style forest plot.
 #
-# Sourced AFTER config/endpoints.R and R/serology_helpers.R (it reuses
+# Sourced AFTER config/endpoints.R and R/C1_serology_helpers.R (it reuses
 # ANTIGEN_ORDER, MATERNAL_ARMS, pvalue_to_label(), and the nt tracker).
 #
 # The statistical test is IDENTICAL to the response-bubble grid
-# (04_response_bubbles.Rmd / serology_helpers::bubble_arm_effect):
+# (04_response_bubbles.Rmd / C1_serology_helpers::bubble_arm_effect):
 #   * Wilcoxon rank-sum of TT vs TdaP on log_assay_value (exact = FALSE)
 #   * multiplicity via Benjamini-Hochberg within each assay class (default)
 # For the forest plot we additionally take the point estimate + interval
