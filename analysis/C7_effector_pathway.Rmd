@@ -33,7 +33,7 @@ library(htmltools)
 ## your own `s1` data.frame to regenerate from source.
 ## ---------------------------------------------------------------------------
 
-s1 <- read.csv("S1_data.csv", stringsAsFactors = FALSE)
+s1 <- read.csv(here::here("data/S1_data.csv"), stringsAsFactors = FALSE)
 
 ## Fixed display order ---------------------------------------------------------
 stage_levels  <- c("Maternal production", "Placental transfer", "Postnatal decay")
