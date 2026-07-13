@@ -1,3 +1,9 @@
 # Keep the local data/ directory out of version control.
 # Anchored to the repository root (/gaps_system_serology).
 /data/
+analysis/docs/
+analysis/site_libs/
+analysis/*_files/
+analysis/*_cache/
+analysis/*.html
+*.Rproj

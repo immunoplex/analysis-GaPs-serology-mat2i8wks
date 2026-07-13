@@ -1,5 +1,5 @@
 name: "GaPs Systems Serology Pipeline"
-output_dir: docs
+output_dir: ../docs
 navbar:
   title: "GaPs Mat→Infant Serology"
   left:
@@ -26,7 +26,7 @@ navbar:
         - text: "C4 · WT IgG prediction"
           href: C4_forward_prediction_WTIgG.html
         - text: "C4 · Interaction & Deming"
-          href: C4_interaction_deming.html
+          href: C4_forward_prediction.html
         - text: "C5 · Concurrent Models (Results F)"
           href: C5_concurrent_models.html
         - text: "C6 · Responder in Model (Results J)"

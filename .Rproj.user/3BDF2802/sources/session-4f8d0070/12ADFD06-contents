@@ -777,3 +777,174 @@ Retained in `data/` for provenance but not used in any current analysis.
 
 cat(readme_addition, file = "data/README.md", append = TRUE)
 cat("✓ data/README.md updated\n")
+
+##############################
+# ── Apply the run_lm fix to all three C4 files ────────────────────────────────
+library(fs)
+library(stringr)
+
+c4_files <- c(
+  "analysis/C4_forward_prediction_PTNA.Rmd",
+  "analysis/C4_forward_prediction_SBA.Rmd",
+  "analysis/C4_forward_prediction_WTIgG.Rmd"
+)
+
+for (f in c4_files) {
+  lines     <- readLines(f, warn = FALSE)
+  new_lines <- lines
+  
+  # 1. Add compute_relimp = FALSE to function signature
+  new_lines <- str_replace(
+    new_lines,
+    fixed('run_lm <- function(outcome_col, predictors, data, label = "") {'),
+    'run_lm <- function(outcome_col, predictors, data, label = "",\n                   compute_relimp = FALSE) {'
+  )
+  
+  # 2. Replace the calc.relimp call with gated version
+  new_lines <- str_replace(
+    new_lines,
+    fixed('  ri <- tryCatch(calc.relimp(m, type = "lmg"),\n                 error = function(e) NULL)'),
+    '  ri <- if (compute_relimp && length(predictors) <= 15) {\n    message("[relimp] ", label, " [", format(Sys.time(), "%H:%M:%S"), "]")\n    tryCatch(calc.relimp(m, type = "lmg"), error = function(e) NULL)\n  } else NULL'
+  )
+  
+  # 3. Add compute_relimp = TRUE to the three storing calls
+  new_lines <- str_replace(
+    new_lines,
+    fixed('    br[["1k"]] <- run_lm(outcome_col, paste0(all_subclasses, "_P09"), d, "Full 12-subclass @ P09")'),
+    '    br[["1k"]] <- run_lm(outcome_col, paste0(all_subclasses, "_P09"), d, "Full 12-subclass @ P09", compute_relimp = TRUE)'
+  )
+  new_lines <- str_replace(
+    new_lines,
+    fixed('    br[["3e"]] <- run_lm(outcome_col, b3_full, d, "Δ Full 12-subclass P09→M00")'),
+    '    br[["3e"]] <- run_lm(outcome_col, b3_full, d, "Δ Full 12-subclass P09→M00", compute_relimp = TRUE)'
+  )
+  new_lines <- str_replace(
+    new_lines,
+    fixed('    br[["5e"]] <- run_lm(outcome_col, b5_full, d, "Δ Full 12-subclass M00→M02")'),
+    '    br[["5e"]] <- run_lm(outcome_col, b5_full, d, "Δ Full 12-subclass M00→M02", compute_relimp = TRUE)'
+  )
+  
+  # 4. Add loop progress messages
+  new_lines <- str_replace(
+    new_lines,
+    fixed('  for (lvl in strat_levels) {\n    d  <- d_all'),
+    '  for (lvl in strat_levels) {\n    message("\\n=== Stratum: ", strat_col, " = ", lvl, " [", format(Sys.time(), "%H:%M:%S"), "] ===")\n    d  <- d_all'
+  )
+  
+  if (!identical(lines, new_lines)) {
+    writeLines(new_lines, f)
+    cat("✓ Updated:", f, "\n")
+  } else {
+    cat("⚠ No changes made to:", f, "— check string matching\n")
+  }
+}
+
+#################################
+# ── Apply identical fix to C4_SBA and C4_WTIgG ────────────────────────────────
+
+other_c4 <- c(
+  "analysis/C4_forward_prediction_SBA.Rmd",
+  "analysis/C4_forward_prediction_WTIgG.Rmd"
+)
+
+for (f in other_c4) {
+  lines <- readLines(f, warn = FALSE)
+  
+  start_line <- grep("ri <- tryCatch\\(calc\\.relimp", lines)
+  
+  if (length(start_line) != 1) {
+    cat("⚠ Skipping", f, "— tryCatch line not found uniquely. Found at:",
+        paste(start_line, collapse=", "), "\n")
+    next
+  }
+  
+  # Check it is not already gated
+  if (any(grepl("if \\(compute_relimp\\)", lines))) {
+    cat("✓ Already fixed:", f, "\n")
+    next
+  }
+  
+  new_block <- c(
+    "  ri <- if (compute_relimp) {",
+    "    message(\"[relimp] \", label, \" [\", format(Sys.time(), \"%H:%M:%S\"), \"]\")",
+    "    tryCatch(calc.relimp(m, type = \"lmg\"), error = function(e) NULL)",
+    "  } else NULL"
+  )
+  
+  lines_new <- c(
+    lines[1:(start_line - 1)],
+    new_block,
+    lines[(start_line + 2):length(lines)]
+  )
+  
+  writeLines(lines_new, f)
+  cat("✓ Fixed:", f, "\n")
+}
+
+# ── Verify all three files ─────────────────────────────────────────────────────
+all_c4 <- c(
+  "analysis/C4_forward_prediction_PTNA.Rmd",
+  "analysis/C4_forward_prediction_SBA.Rmd",
+  "analysis/C4_forward_prediction_WTIgG.Rmd"
+)
+
+cat("\n=== VERIFICATION: all three C4 files ===\n\n")
+for (f in all_c4) {
+  lines <- readLines(f, warn = FALSE)
+  hits  <- grep("calc.relimp|compute_relimp", lines)
+  cat("FILE:", basename(f), "\n")
+  for (i in hits) cat(sprintf("  [%3d] %s\n", i, trimws(lines[i])))
+  cat("\n")
+}
+
+####################################
+# ── Confirm one calc.relimp call is fast enough to proceed ────────────────────
+library(here); library(tidyverse); library(relaimpo); library(broom)
+
+load(here::here("data/d_set.RData"))
+
+data_raw          <- ebaa_extra2
+data_raw$arm_name <- data_raw$maternal_arm
+data_raw$feature  <- factor(paste(data_raw$antigen, data_raw$analyte, sep = "_"))
+
+all_subclasses <- c("PT_IgG1","PT_IgG2","PT_IgG3","PT_IgG4",
+                    "FHA_IgG1","FHA_IgG2","FHA_IgG3","FHA_IgG4",
+                    "PRN_IgG1","PRN_IgG2","PRN_IgG3","PRN_IgG4")
+
+data_long <- data_raw %>%
+  dplyr::filter(
+    feature    %in% c(all_subclasses, "WHOLE_PTNA"),
+    visit_name %in% c("P02","P09","M00","M02"),
+    arm_name   %in% c("TdaP","TT")
+  ) %>%
+  dplyr::select(subject_accession, visit_name, arm_name,
+                infant_arm, feature, log_assay_value) %>%
+  distinct(subject_accession, visit_name, feature, .keep_all = TRUE)
+
+data_wide <- data_long %>%
+  pivot_wider(
+    id_cols     = c(subject_accession, arm_name, infant_arm),
+    names_from  = c(feature, visit_name),
+    values_from = log_assay_value,
+    names_sep   = "_"
+  )
+
+d_ap       <- data_wide %>% dplyr::filter(infant_arm == "aP")
+predictors <- intersect(paste0(all_subclasses, "_P09"), names(d_ap))
+outcome    <- "WHOLE_PTNA_M02"
+
+cat("Predictors available:", length(predictors), "\n")
+cat("Subjects:", nrow(d_ap), "\n\n")
+
+m  <- lm(reformulate(predictors, response = outcome),
+         data = d_ap, na.action = na.omit)
+cat("Model n =", nobs(m), "\n")
+
+cat("Timing one calc.relimp() call...\n")
+t0      <- proc.time()
+ri      <- tryCatch(calc.relimp(m, type = "lmg"), error = function(e) e)
+elapsed <- (proc.time() - t0)[["elapsed"]]
+
+cat(sprintf("One call:       %5.1f seconds\n",        elapsed))
+cat(sprintf("6 calls total:  %5.1f seconds (~%.0f min)\n",
+            elapsed * 6, elapsed * 6 / 60))

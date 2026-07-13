@@ -54,11 +54,11 @@ s1 <- s1 %>%
 ## Benjamini-Hochberg within each stage x antigen family (across the five
 ## series), pooled arm only -- exactly the family used for the grid stars.
 pooled_q <- s1 %>%
-  filter(arm == "Pooled", !is.na(p_signedrank)) %>%
-  group_by(transition, antigen) %>%
-  mutate(q = p.adjust(p_signedrank, method = "BH")) %>%
-  ungroup() %>%
-  select(transition, antigen, series, median_dlog10, q)
+  dplyr::filter(arm == "Pooled", !is.na(p_signedrank)) %>%
+  dplyr::group_by(transition, antigen) %>%
+  dplyr::mutate(q = p.adjust(p_signedrank, method = "BH")) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(transition, antigen, series, median_dlog10, q)
 
 stars <- function(q) ifelse(is.na(q), "",
                      ifelse(q < 0.001, "***",
@@ -67,13 +67,13 @@ stars <- function(q) ifelse(is.na(q), "",
 
 ## Arm proportions per cell (Tdap over TT) for the in-cell bars.
 arm_wide <- s1 %>%
-  filter(arm %in% c("TdaP", "TT")) %>%
-  select(transition, antigen, series, arm, pct_inc, pct_dec) %>%
+  dplyr::filter(arm %in% c("TdaP", "TT")) %>%
+  dplyr::select(transition, antigen, series, arm, pct_inc, pct_dec) %>%
   pivot_wider(names_from = arm, values_from = c(pct_inc, pct_dec))
 
 cells <- pooled_q %>%
   left_join(arm_wide, by = c("transition", "antigen", "series")) %>%
-  mutate(star = stars(q))
+  dplyr::mutate(star = stars(q))
 ```
 
 ```{r render, results='asis'}

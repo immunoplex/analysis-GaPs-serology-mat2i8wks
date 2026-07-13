@@ -3,7 +3,7 @@
     "path": "~/R-git/gaps_system_serology/analysis/index.Rmd",
     "project_path": "analysis/index.Rmd",
     "type": "r_markdown",
-    "hash": "1760830593",
+    "hash": "2609611933",
     "contents": "",
     "dirty": false,
     "created": 1783875576376.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled2",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "47,62",
-        "scrollLine": "21"
+        "cursorPosition": "38,24",
+        "scrollLine": "29"
     },
     "folds": "",
-    "lastKnownWriteTime": 1783880703,
+    "lastKnownWriteTime": 1783954286,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1783880703415,
+    "last_content_update": 1783954286338,
     "read_only": false,
     "read_only_alternatives": []
 }

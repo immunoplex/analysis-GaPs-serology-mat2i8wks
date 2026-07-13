@@ -152,7 +152,8 @@ ratio_col <- function(g1, g2, g3, g4) {
 }
 
 # ---- Helper: fit lm, return structured result (silent) ------
-run_lm <- function(outcome_col, predictors, data, label = "") {
+run_lm <- function(outcome_col, predictors, data, label = "",
+                   compute_relimp = FALSE) {
   f <- reformulate(predictors, response = outcome_col)
   m <- lm(f, data = data, na.action = na.omit)
   s <- summary(m)
@@ -166,8 +167,10 @@ run_lm <- function(outcome_col, predictors, data, label = "") {
     rename(Predictor = term, `β` = estimate, SE = std.error,
            t = statistic, `p` = p.value, ` ` = sig)
 
-  ri <- tryCatch(calc.relimp(m, type = "lmg"),
-                 error = function(e) NULL)
+  ri <- if (compute_relimp) {
+    message("[relimp] ", label, " [", format(Sys.time(), "%H:%M:%S"), "]")
+    tryCatch(calc.relimp(m, type = "lmg"), error = function(e) NULL)
+  } else NULL
 
 ri_table <- if (!is.null(ri)) {
     data.frame(
@@ -413,7 +416,7 @@ run_all_blocks <- function(d_all, strat_col, strat_levels) {
     br[["1h"]] <- run_lm(outcome_col, paste0(prn_subclasses, "_P02"), d, "PRN subclasses @ P02")
     br[["1i"]] <- run_lm(outcome_col, paste0(prn_subclasses, "_P09"), d, "PRN subclasses @ P09")
     br[["1j"]] <- run_lm(outcome_col, paste0(all_subclasses, "_P02"), d, "Full 12-subclass @ P02")
-    br[["1k"]] <- run_lm(outcome_col, paste0(all_subclasses, "_P09"), d, "Full 12-subclass @ P09")
+    br[["1k"]] <- run_lm(outcome_col, paste0(all_subclasses, "_P09"), d, "Full 12-subclass @ P09", compute_relimp = TRUE)
     br[["1l"]] <- run_lm(outcome_col,
                          c(paste0(all_subclasses, "_P02"), paste0(all_subclasses, "_P09")),
                          d, "Full 24-predictor P02 + P09")
@@ -440,7 +443,7 @@ run_all_blocks <- function(d_all, strat_col, strat_levels) {
     br[["3b"]] <- run_lm(outcome_col, b3_pt,   d, "Δ PT subclasses P09→M00")
     br[["3c"]] <- run_lm(outcome_col, b3_fha,  d, "Δ FHA subclasses P09→M00")
     br[["3d"]] <- run_lm(outcome_col, b3_prn,  d, "Δ PRN subclasses P09→M00")
-    br[["3e"]] <- run_lm(outcome_col, b3_full, d, "Δ Full 12-subclass P09→M00")
+    br[["3e"]] <- run_lm(outcome_col, b3_full, d, "Δ Full 12-subclass P09→M00", compute_relimp = TRUE)
     relimp_b3[[lvl]] <- br[["3e"]]$relimp
     for (id in paste0("3", letters[1:5]))
       r2_all[[paste0(id, "_", lvl)]] <- r2_row(br[[id]], lvl, "B3_transfer_qty", sub("3", "", id))
@@ -463,7 +466,7 @@ run_all_blocks <- function(d_all, strat_col, strat_levels) {
     br[["5b"]] <- run_lm(outcome_col, b5_pt,   d, "Δ PT subclasses M00→M02")
     br[["5c"]] <- run_lm(outcome_col, b5_fha,  d, "Δ FHA subclasses M00→M02")
     br[["5d"]] <- run_lm(outcome_col, b5_prn,  d, "Δ PRN subclasses M00→M02")
-    br[["5e"]] <- run_lm(outcome_col, b5_full, d, "Δ Full 12-subclass M00→M02")
+    br[["5e"]] <- run_lm(outcome_col, b5_full, d, "Δ Full 12-subclass M00→M02", compute_relimp = TRUE)
     relimp_b5[[lvl]] <- br[["5e"]]$relimp
     for (id in paste0("5", letters[1:5]))
       r2_all[[paste0(id, "_", lvl)]] <- r2_row(br[[id]], lvl, "B5_decay_qty", sub("5", "", id))

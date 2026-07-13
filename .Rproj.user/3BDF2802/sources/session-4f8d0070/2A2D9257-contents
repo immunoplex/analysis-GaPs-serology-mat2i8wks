@@ -36,7 +36,7 @@ block-ladder summary (CK), matching the manuscript sections exactly.
 | [C4a](C4_forward_prediction_PTNA.html) | Results D–E | Forward prediction → PTNA |
 | [C4b](C4_forward_prediction_SBA.html) | Results D–E | Forward prediction → SBA |
 | [C4c](C4_forward_prediction_WTIgG.html) | Results D–E | Forward prediction → WT IgG binding |
-| [C4d](C4_interaction_deming.html) | Results E | Arm interaction & Deming EIV regression | prediction: maternal IgG → infant function |
+| [C4d](C4_forward_prediction.html) | Results E | Arm interaction & Deming EIV regression | prediction: maternal IgG → infant function |
 | [C5](C5_concurrent_models.html) | Results F | Concurrent infant models |
 | [C6](C6_responder_in_model.html) | Results J | Responder phenotype as predictor of infant function |
 | [C7](C7_effector_pathway.html) | Results H | Effector pathway: IgG1 → FcγR → ADCD → SBA |

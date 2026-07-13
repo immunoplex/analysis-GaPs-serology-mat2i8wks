@@ -1,3 +1,0 @@
-# Keep the local data/ directory out of version control.
-# Anchored to the repository root (/gaps_system_serology).
-/data/
