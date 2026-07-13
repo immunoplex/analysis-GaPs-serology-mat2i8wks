@@ -1,0 +1,3242 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Scot Zens" />
+
+<meta name="date" content="2026-07-13" />
+
+<title>Maternal Pre-Vaccination → At Birth: Within-Mother Antibody Change</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/readable.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Maternal Pre-Vaccination → At Birth:
+Within-Mother Antibody Change</h1>
+<h3 class="subtitle">Paired within-subject change (maternal pre-vacc →
+maternal at birth) — missing data structure, direction, and per-antigen
+/ per-analyte distributions</h3>
+<h4 class="author">Scot Zens</h4>
+<h4 class="date">2026-07-13</h4>
+
+</div>
+
+
+<div id="the-question" class="section level1">
+<h1>The Question</h1>
+<p>Maternal antibody is measured at an <strong>early-pregnancy,
+pre-vaccination visit</strong> (<code>PregEarly</code>) and again
+<strong>at birth/delivery</strong> (<code>MatBirth</code>). Between
+these two visits the mother receives the study vaccine (a
+pertussis-containing TdaP or the TT control), which is expected to
+<strong>boost</strong> vaccine-targeted antibody. Whether a given
+feature is higher or lower by delivery depends on the <strong>interval
+between vaccination and birth</strong>: a short interval may catch
+antibody still rising, while a longer interval may capture post-peak
+waning. Direction is therefore <strong>not assumed</strong> and is
+expected to vary by antigen and by analyte.</p>
+<p><strong>Convention:</strong> delta = log10 value at <strong>maternal
+birth</strong> − log10 value at <strong>maternal pre-vacc</strong>.
+Positive delta = an <em>increase</em> by delivery; negative delta = a
+<em>decrease</em> by delivery.</p>
+</div>
+<div id="data-and-coverage" class="section level1">
+<h1>Data and Coverage</h1>
+<p>Features with at least one paired subject: <strong>47</strong>; with
+≥ 10 paired: <strong>47</strong>.</p>
+<table>
+<caption>Table 1. Per-feature coverage: subjects with PregEarly, with
+MatBirth, and with BOTH (the n used). Features with n paired = 0 were
+not measured at one visit and are excluded from all change
+analyses.</caption>
+<thead>
+<tr class="header">
+<th align="left">Feature</th>
+<th align="right">n PregEarly</th>
+<th align="right">n MatBirth</th>
+<th align="right">n paired (both)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">DT_IgG</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">283</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_IgG</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">283</td>
+</tr>
+<tr class="odd">
+<td align="left">FIM_IgG</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">283</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">283</td>
+</tr>
+<tr class="odd">
+<td align="left">PT_IgG</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">283</td>
+</tr>
+<tr class="even">
+<td align="left">TT_IgG</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">283</td>
+</tr>
+<tr class="odd">
+<td align="left">DT_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">DT_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">FHA_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">IPV1_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV2_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">IPV2_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">IPV3_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">PT_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">PT_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">TT_IgG1</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">TT_IgG4</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">DT_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="even">
+<td align="left">IPV2_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="odd">
+<td align="left">PT_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="even">
+<td align="left">TT_IgG3</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+</tr>
+<tr class="odd">
+<td align="left">DT_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="even">
+<td align="left">IPV2_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="even">
+<td align="left">PENTAMER_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="even">
+<td align="left">PT_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="odd">
+<td align="left">TT_ADCD</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+</tr>
+<tr class="even">
+<td align="left">DT_IgG2</td>
+<td align="right">252</td>
+<td align="right">235</td>
+<td align="right">231</td>
+</tr>
+<tr class="odd">
+<td align="left">FHA_IgG2</td>
+<td align="right">252</td>
+<td align="right">235</td>
+<td align="right">231</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG2</td>
+<td align="right">252</td>
+<td align="right">235</td>
+<td align="right">231</td>
+</tr>
+<tr class="odd">
+<td align="left">PT_IgG2</td>
+<td align="right">252</td>
+<td align="right">235</td>
+<td align="right">231</td>
+</tr>
+<tr class="even">
+<td align="left">TT_IgG2</td>
+<td align="right">252</td>
+<td align="right">235</td>
+<td align="right">231</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_IgG2</td>
+<td align="right">234</td>
+<td align="right">217</td>
+<td align="right">213</td>
+</tr>
+<tr class="even">
+<td align="left">IPV2_IgG2</td>
+<td align="right">234</td>
+<td align="right">217</td>
+<td align="right">213</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_IgG2</td>
+<td align="right">234</td>
+<td align="right">217</td>
+<td align="right">213</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="missing-data-sources-structure-and-implications"
+class="section level1">
+<h1>Missing Data: Sources, Structure, and Implications</h1>
+<p>Not all subjects contribute equally to every feature’s paired
+analysis, and the reasons differ in important ways. Understanding the
+missing-data structure is essential before interpreting the change
+estimates: subjects who are missing at one or both visits may differ
+systematically from those with complete data, and the pattern of
+missingness itself reveals aspects of the assay design that affect what
+questions can be answered.</p>
+<div id="why-paired-counts-differ-across-features"
+class="section level2">
+<h2>Why paired counts differ across features</h2>
+<p>There are four distinct sources of missingness in this dataset, each
+with a different cause and a different implication for bias:</p>
+<p><strong>Type A — Analyte never assayed at one visit (structural panel
+gap).</strong> Some analytes may not have been run at one of the two
+visits at all, giving n = 0 there. This is a design decision, not
+subject dropout, and is <strong>not correctable</strong> from the
+existing data: no paired change can be computed for those analytes. (See
+Table 1 for which features have n paired = 0.)</p>
+<p><strong>Type B — One visit’s panel run on a smaller sub-cohort than
+the other.</strong> For features measured at both visits, the number of
+observations at the two visits can differ if a panel was rolled out to
+different subject batches. The per-analyte step-down below shows the
+structure:</p>
+<table>
+<caption>Table 2. Per-analyte-group sample sizes at the earlier
+(PregEarly) and later (MatBirth) visit. Each row is a set of features
+sharing the same coverage. The gap (MatBirth minus PregEarly) quantifies
+subjects present at the later visit but not the earlier one for that
+analyte group — subjects who cannot contribute to any paired change
+analysis for those features.</caption>
+<colgroup>
+<col width="23%" />
+<col width="9%" />
+<col width="16%" />
+<col width="15%" />
+<col width="14%" />
+<col width="20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Analyte group</th>
+<th align="right">N features</th>
+<th align="right">Typical n PregEarly</th>
+<th align="right">Typical n MatBirth</th>
+<th align="right">Typical n paired</th>
+<th align="right">MatBirth minus PregEarly</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Total IgG (antigen-specific)</td>
+<td align="right">6</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">283</td>
+<td align="right">-29</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1 and IgG4</td>
+<td align="right">16</td>
+<td align="right">264</td>
+<td align="right">247</td>
+<td align="right">243</td>
+<td align="right">-17</td>
+</tr>
+<tr class="odd">
+<td align="left">Other</td>
+<td align="right">9</td>
+<td align="right">262</td>
+<td align="right">240</td>
+<td align="right">234</td>
+<td align="right">-22</td>
+</tr>
+<tr class="even">
+<td align="left">IgG2 — core antigens</td>
+<td align="right">5</td>
+<td align="right">252</td>
+<td align="right">235</td>
+<td align="right">231</td>
+<td align="right">-17</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG3</td>
+<td align="right">8</td>
+<td align="right">246</td>
+<td align="right">241</td>
+<td align="right">237</td>
+<td align="right">-5</td>
+</tr>
+<tr class="even">
+<td align="left">IgG2 — IPV antigens</td>
+<td align="right">3</td>
+<td align="right">234</td>
+<td align="right">217</td>
+<td align="right">213</td>
+<td align="right">-17</td>
+</tr>
+</tbody>
+</table>
+<p>Any stepped structure here reflects which analyte panels were run on
+which subject batches, rather than subject dropout. Where one analyte is
+available on fewer subjects than another, the smaller subset may differ
+systematically (e.g. earlier-enrolled or a specific plate batch);
+confirm before pooling those features with the better-covered ones.
+<em>Specifics to be read from the rendered Table 2.</em></p>
+<p><strong>Type C — Dropout (subjects with a value at one visit but not
+the other).</strong> Subjects present at one visit but missing the other
+contribute to that visit’s cross-sectional n but not to the paired
+change. The size of this group is the gap between each visit’s n and the
+paired n in Table 1.</p>
+<p><strong>Type D — Feature-level NA within otherwise assayed
+subjects.</strong> A subject may attend both visits yet still be dropped
+from a feature’s paired analysis if the value failed QC at one visit
+(insufficient volume, assay failure). This is the difference between the
+per-visit n and the paired n not explained by Type B/C.</p>
+</div>
+<div id="visualising-missingness-structure" class="section level2">
+<h2>Visualising missingness structure</h2>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-miss-heatmap-1.png" alt="Figure M1. Coverage heatmap: number of subjects with a valid measurement at the earlier and later visit for every well-covered feature (n &gt;= 10 paired). Features are grouped by analyte type and ordered by earlier-visit n within group. Any step-down in coverage by analyte group (Type B missingness) is visible here." width="1056" />
+<p class="caption">
+Figure M1. Coverage heatmap: number of subjects with a valid measurement
+at the earlier and later visit for every well-covered feature (n &gt;=
+10 paired). Features are grouped by analyte type and ordered by
+earlier-visit n within group. Any step-down in coverage by analyte group
+(Type B missingness) is visible here.
+</p>
+</div>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-miss-waterfall-1.png" alt="Figure M2. Paired analysis waterfall: for each well-covered feature, overlapping bars show n subjects at the earlier visit (dark blue), at the later visit (medium blue), and paired at both (light blue). The gap between the later-visit bar and the paired bar is Type B+C+D missingness. Features ordered by n paired." width="960" />
+<p class="caption">
+Figure M2. Paired analysis waterfall: for each well-covered feature,
+overlapping bars show n subjects at the earlier visit (dark blue), at
+the later visit (medium blue), and paired at both (light blue). The gap
+between the later-visit bar and the paired bar is Type B+C+D
+missingness. Features ordered by n paired.
+</p>
+</div>
+</div>
+<div id="subject-level-missingness-patterns" class="section level2">
+<h2>Subject-level missingness patterns</h2>
+<p>The per-feature view above (Figures M1–M2) is computed from the
+coverage summary. To see missingness <em>at the subject level</em> we
+use the paired dataset directly: each subject contributes a known set of
+features to the paired change analysis, and the <strong>number of
+features a subject contributes</strong> reveals which assay batches they
+were part of. A subject who received the full panel contributes up to
+10+ features; a subject in an early, total-IgG-only batch contributes
+far fewer.</p>
+<p>One limitation to state plainly: the paired dataset contains only
+subjects who achieved <strong>at least one</strong> valid earlier↔︎later
+visit pairing. Subjects who attended only one visit, or whose every
+measurement failed pairing, do not appear here at all — quantifying that
+group requires the per-visit raw records and is not attempted in this
+document. The per-feature coverage gaps in Table 1 (e.g. later-visit n
+exceeding earlier-visit n) are the aggregate footprint of those
+subjects.</p>
+<table>
+<caption>Table 3. Number of subjects contributing at least one paired
+feature to each analyte group. Derived from the paired dataset only. The
+drop from Total IgG down through the subclasses mirrors any
+earlier-visit assay batch step-down in Table 2: fewer subjects had
+cord-blood subclass panels run, so fewer can contribute paired subclass
+features.</caption>
+<thead>
+<tr class="header">
+<th align="left">Analyte group</th>
+<th align="right">N subjects contributing ≥ 1 paired feature</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Total IgG</td>
+<td align="right">283</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="right">243</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG4</td>
+<td align="right">243</td>
+</tr>
+<tr class="even">
+<td align="left">IgG3</td>
+<td align="right">237</td>
+</tr>
+<tr class="odd">
+<td align="left">Other</td>
+<td align="right">234</td>
+</tr>
+<tr class="even">
+<td align="left">IgG2</td>
+<td align="right">231</td>
+</tr>
+</tbody>
+</table>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-miss-subject-1.png" alt="Figure M3. Per-subject paired-feature coverage. Each bar is one subject; height = number of distinct features that subject contributes to the paired change analysis, sorted descending. The flat plateaus reflect the assay batch structure: subjects either received a given panel or did not, producing discrete coverage levels rather than a smooth gradient." width="960" />
+<p class="caption">
+Figure M3. Per-subject paired-feature coverage. Each bar is one subject;
+height = number of distinct features that subject contributes to the
+paired change analysis, sorted descending. The flat plateaus reflect the
+assay batch structure: subjects either received a given panel or did
+not, producing discrete coverage levels rather than a smooth gradient.
+</p>
+</div>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-miss-analyte-reach-1.png" alt="Figure M4. Number of subjects contributing at least one paired feature, by analyte group. The step-down from Total IgG through the IgG subclasses is the subject-level signature of any assay batch rollout (Type B missingness): if a panel was run on fewer samples at one visit, progressively fewer subjects can contribute that paired feature." width="768" />
+<p class="caption">
+Figure M4. Number of subjects contributing at least one paired feature,
+by analyte group. The step-down from Total IgG through the IgG
+subclasses is the subject-level signature of any assay batch rollout
+(Type B missingness): if a panel was run on fewer samples at one visit,
+progressively fewer subjects can contribute that paired feature.
+</p>
+</div>
+</div>
+<div id="implications-of-the-missingness-structure-for-change-estimates"
+class="section level2">
+<h2>Implications of the missingness structure for change estimates</h2>
+<p><em>Brief notes — to be expanded after reviewing the rendered tables
+and figures.</em></p>
+<ul>
+<li><strong>Batch / sub-cohort structure (Table 2, Figures
+M1–M4).</strong> If different analytes were run on different subject
+batches, the subjects contributing to one analyte’s paired analysis may
+not be the same population as another’s; check before pooling across
+analytes.</li>
+<li><strong>Paired loss with both visits present (Type D).</strong>
+Subjects with both visit records but a missing paired value warrant a
+look: do they cluster by site, collection date, or maternal arm, and do
+their available single-visit values differ from the paired group?</li>
+<li><strong>Per-visit-only subjects (Type C).</strong> These inflate the
+cross-sectional n at one visit relative to what is available for the
+paired change analysis.</li>
+</ul>
+</div>
+</div>
+<div id="direction-of-change-across-all-features"
+class="section level1">
+<h1>Direction of Change Across All Features</h1>
+<ul>
+<li>Across the <strong>47</strong> well-covered features,
+<strong>17</strong> are <em>mostly increasing</em>, <strong>6</strong>
+are <em>mostly decreasing</em>, and <strong>24</strong> are
+<em>mixed</em> (no clear net direction).</li>
+<li>Pooling all subject×feature observations, <strong>56.1%</strong>
+show an increase (median delta = <strong>+0.019</strong> log10).</li>
+<li>Of the <strong>6</strong> total-antigen IgG features,
+<strong>4</strong> are <em>mostly increasing</em>.</li>
+<li>Per subject (mean delta across all their features),
+<strong>71.2%</strong> have a net positive shift (median per-subject
+offset = <strong>+0.097</strong> log10).</li>
+<li>Analytes with <strong>zero observations at one or both
+visits</strong> cannot contribute to this change analysis (see Table
+1).</li>
+</ul>
+<blockquote>
+<p><strong>Verdict:</strong> The change is <strong>concentrated, not
+uniform</strong>: 17 features increase, 6 decrease, and 24 are mixed,
+but 71.2% of mothers show a net positive shift. The increases
+concentrate in ADCD, IgG1, IgG and in the antigens FHA, PT, PRN, IPV1
+(see Tables 5–6); the per-arm split, and the tetanus/diphtheria toxoid
+responses specifically, are in Tables 7–9 and Figure A1 and discussed in
+the Interpretation section below.</p>
+</blockquote>
+<table style="width:100%;">
+<caption>Table 4. Per-feature paired change (later vs earlier visit),
+sorted by % increasing. Positive delta = increase.</caption>
+<colgroup>
+<col width="9%" />
+<col width="12%" />
+<col width="6%" />
+<col width="5%" />
+<col width="6%" />
+<col width="7%" />
+<col width="7%" />
+<col width="8%" />
+<col width="7%" />
+<col width="9%" />
+<col width="8%" />
+<col width="10%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">feature</th>
+<th align="left">class</th>
+<th align="left">antigen</th>
+<th align="left">analyte</th>
+<th align="right">n_paired</th>
+<th align="right">% increase</th>
+<th align="right">% decrease</th>
+<th align="right">median delta</th>
+<th align="right">mean delta</th>
+<th align="right">p signed-rank</th>
+<th align="right">p sign-test</th>
+<th align="left">direction</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">FHA_IgG</td>
+<td align="left">Total IgG</td>
+<td align="left">FHA</td>
+<td align="left">IgG</td>
+<td align="right">283</td>
+<td align="right">74.6</td>
+<td align="right">25.4</td>
+<td align="right">0.138</td>
+<td align="right">0.534</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">FHA</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">74.5</td>
+<td align="right">25.5</td>
+<td align="right">0.292</td>
+<td align="right">0.568</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">PT_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">PT</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">72.8</td>
+<td align="right">25.9</td>
+<td align="right">0.148</td>
+<td align="right">0.310</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG</td>
+<td align="left">Total IgG</td>
+<td align="left">PRN</td>
+<td align="left">IgG</td>
+<td align="right">283</td>
+<td align="right">72.4</td>
+<td align="right">27.6</td>
+<td align="right">0.142</td>
+<td align="right">0.652</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">IPV3</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">70.5</td>
+<td align="right">26.1</td>
+<td align="right">0.054</td>
+<td align="right">0.122</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">PT_IgG</td>
+<td align="left">Total IgG</td>
+<td align="left">PT</td>
+<td align="left">IgG</td>
+<td align="right">283</td>
+<td align="right">70.3</td>
+<td align="right">29.7</td>
+<td align="right">0.161</td>
+<td align="right">0.484</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV2_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">IPV2</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">69.2</td>
+<td align="right">26.5</td>
+<td align="right">0.046</td>
+<td align="right">0.223</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">PT_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">PT</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">68.4</td>
+<td align="right">29.1</td>
+<td align="right">0.121</td>
+<td align="right">0.301</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV1</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">67.9</td>
+<td align="right">26.7</td>
+<td align="right">0.111</td>
+<td align="right">0.288</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">PRN</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">67.9</td>
+<td align="right">30.9</td>
+<td align="right">0.100</td>
+<td align="right">0.394</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV2_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV2</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">67.1</td>
+<td align="right">32.9</td>
+<td align="right">0.077</td>
+<td align="right">0.225</td>
+<td align="right">0.00e+00</td>
+<td align="right">1.00e-07</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">FHA</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">66.7</td>
+<td align="right">31.2</td>
+<td align="right">0.103</td>
+<td align="right">0.244</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">IPV1</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">65.4</td>
+<td align="right">27.4</td>
+<td align="right">0.057</td>
+<td align="right">0.258</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">PRN</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">64.5</td>
+<td align="right">32.5</td>
+<td align="right">0.054</td>
+<td align="right">0.321</td>
+<td align="right">0.00e+00</td>
+<td align="right">7.00e-07</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">DT_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">DT</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">62.0</td>
+<td align="right">35.0</td>
+<td align="right">0.066</td>
+<td align="right">0.232</td>
+<td align="right">0.00e+00</td>
+<td align="right">3.48e-05</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">IPV3_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV3</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">61.3</td>
+<td align="right">37.9</td>
+<td align="right">0.030</td>
+<td align="right">0.093</td>
+<td align="right">0.00e+00</td>
+<td align="right">2.92e-04</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="odd">
+<td align="left">FIM_IgG</td>
+<td align="left">Total IgG</td>
+<td align="left">FIM</td>
+<td align="left">IgG</td>
+<td align="right">283</td>
+<td align="right">60.8</td>
+<td align="right">38.5</td>
+<td align="right">0.042</td>
+<td align="right">0.072</td>
+<td align="right">3.63e-05</td>
+<td align="right">2.05e-04</td>
+<td align="left">mostly increase</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">PRN</td>
+<td align="left">IgG2</td>
+<td align="right">231</td>
+<td align="right">59.7</td>
+<td align="right">38.5</td>
+<td align="right">0.025</td>
+<td align="right">0.132</td>
+<td align="right">0.00e+00</td>
+<td align="right">1.39e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">PT_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">PT</td>
+<td align="left">IgG2</td>
+<td align="right">231</td>
+<td align="right">59.7</td>
+<td align="right">27.7</td>
+<td align="right">0.036</td>
+<td align="right">0.136</td>
+<td align="right">0.00e+00</td>
+<td align="right">2.00e-07</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">PRN_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">PRN</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">59.3</td>
+<td align="right">29.2</td>
+<td align="right">0.013</td>
+<td align="right">0.059</td>
+<td align="right">0.00e+00</td>
+<td align="right">7.00e-07</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">TT_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">TT</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">59.3</td>
+<td align="right">37.4</td>
+<td align="right">0.032</td>
+<td align="right">0.060</td>
+<td align="right">5.14e-05</td>
+<td align="right">6.62e-04</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">DT_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">DT</td>
+<td align="left">IgG2</td>
+<td align="right">231</td>
+<td align="right">58.9</td>
+<td align="right">29.9</td>
+<td align="right">0.033</td>
+<td align="right">0.173</td>
+<td align="right">0.00e+00</td>
+<td align="right">3.30e-06</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">FHA_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">FHA</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">58.6</td>
+<td align="right">38.8</td>
+<td align="right">0.044</td>
+<td align="right">0.178</td>
+<td align="right">0.00e+00</td>
+<td align="right">2.40e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">TT_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">TT</td>
+<td align="left">IgG2</td>
+<td align="right">231</td>
+<td align="right">58.4</td>
+<td align="right">40.7</td>
+<td align="right">0.016</td>
+<td align="right">0.049</td>
+<td align="right">4.08e-05</td>
+<td align="right">8.07e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">DT_IgG</td>
+<td align="left">Total IgG</td>
+<td align="left">DT</td>
+<td align="left">IgG</td>
+<td align="right">283</td>
+<td align="right">58.0</td>
+<td align="right">42.0</td>
+<td align="right">0.041</td>
+<td align="right">0.293</td>
+<td align="right">8.00e-07</td>
+<td align="right">8.79e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">PT_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">PT</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">55.7</td>
+<td align="right">35.0</td>
+<td align="right">0.042</td>
+<td align="right">0.074</td>
+<td align="right">7.00e-07</td>
+<td align="right">1.02e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV1</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">54.9</td>
+<td align="right">38.8</td>
+<td align="right">0.014</td>
+<td align="right">0.049</td>
+<td align="right">1.42e-05</td>
+<td align="right">1.28e-02</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">DT_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">DT</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">54.7</td>
+<td align="right">37.4</td>
+<td align="right">0.023</td>
+<td align="right">0.238</td>
+<td align="right">4.05e-05</td>
+<td align="right">6.03e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV2_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV2</td>
+<td align="left">IgG2</td>
+<td align="right">213</td>
+<td align="right">53.5</td>
+<td align="right">32.4</td>
+<td align="right">0.011</td>
+<td align="right">0.026</td>
+<td align="right">9.40e-06</td>
+<td align="right">1.09e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">DT_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">DT</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">51.0</td>
+<td align="right">46.5</td>
+<td align="right">0.007</td>
+<td align="right">0.239</td>
+<td align="right">1.08e-04</td>
+<td align="right">5.16e-01</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">PRN</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">49.4</td>
+<td align="right">48.1</td>
+<td align="right">0.000</td>
+<td align="right">0.036</td>
+<td align="right">1.80e-01</td>
+<td align="right">8.95e-01</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">PT_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">PT</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">48.6</td>
+<td align="right">30.0</td>
+<td align="right">0.000</td>
+<td align="right">0.072</td>
+<td align="right">0.00e+00</td>
+<td align="right">1.39e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">TT_IgG1</td>
+<td align="left">IgG subclass</td>
+<td align="left">TT</td>
+<td align="left">IgG1</td>
+<td align="right">243</td>
+<td align="right">48.6</td>
+<td align="right">51.4</td>
+<td align="right">-0.008</td>
+<td align="right">0.015</td>
+<td align="right">7.23e-01</td>
+<td align="right">7.00e-01</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">TT_IgG</td>
+<td align="left">Total IgG</td>
+<td align="left">TT</td>
+<td align="left">IgG</td>
+<td align="right">283</td>
+<td align="right">48.1</td>
+<td align="right">51.9</td>
+<td align="right">-0.011</td>
+<td align="right">0.028</td>
+<td align="right">8.47e-01</td>
+<td align="right">5.52e-01</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV1</td>
+<td align="left">IgG2</td>
+<td align="right">213</td>
+<td align="right">47.4</td>
+<td align="right">31.9</td>
+<td align="right">0.000</td>
+<td align="right">0.015</td>
+<td align="right">2.31e-03</td>
+<td align="right">1.36e-02</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">DT_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">DT</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">46.8</td>
+<td align="right">40.5</td>
+<td align="right">0.000</td>
+<td align="right">0.027</td>
+<td align="right">5.52e-02</td>
+<td align="right">3.31e-01</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">TT_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">TT</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">45.3</td>
+<td align="right">43.2</td>
+<td align="right">0.000</td>
+<td align="right">0.018</td>
+<td align="right">5.39e-01</td>
+<td align="right">7.81e-01</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">FHA</td>
+<td align="left">IgG2</td>
+<td align="right">231</td>
+<td align="right">45.0</td>
+<td align="right">33.3</td>
+<td align="right">0.000</td>
+<td align="right">0.374</td>
+<td align="right">1.14e-02</td>
+<td align="right">5.30e-02</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_IgG2</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV3</td>
+<td align="left">IgG2</td>
+<td align="right">213</td>
+<td align="right">44.6</td>
+<td align="right">38.0</td>
+<td align="right">0.000</td>
+<td align="right">0.017</td>
+<td align="right">9.19e-02</td>
+<td align="right">3.27e-01</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">IPV2_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV2</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">43.0</td>
+<td align="right">55.7</td>
+<td align="right">-0.025</td>
+<td align="right">-0.043</td>
+<td align="right">2.00e-01</td>
+<td align="right">5.78e-02</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV3</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">40.1</td>
+<td align="right">58.2</td>
+<td align="right">-0.022</td>
+<td align="right">-0.047</td>
+<td align="right">3.24e-02</td>
+<td align="right">5.81e-03</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">FHA</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">39.5</td>
+<td align="right">55.6</td>
+<td align="right">-0.026</td>
+<td align="right">-0.087</td>
+<td align="right">9.98e-04</td>
+<td align="right">1.22e-02</td>
+<td align="left">mostly decrease</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV2_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV2</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">39.5</td>
+<td align="right">32.1</td>
+<td align="right">0.000</td>
+<td align="right">0.011</td>
+<td align="right">5.73e-02</td>
+<td align="right">1.97e-01</td>
+<td align="left">mostly decrease</td>
+</tr>
+<tr class="even">
+<td align="left">TT_IgG3</td>
+<td align="left">IgG subclass</td>
+<td align="left">TT</td>
+<td align="left">IgG3</td>
+<td align="right">237</td>
+<td align="right">38.8</td>
+<td align="right">58.2</td>
+<td align="right">-0.012</td>
+<td align="right">-0.018</td>
+<td align="right">6.52e-05</td>
+<td align="right">2.92e-03</td>
+<td align="left">mostly decrease</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV3_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV3</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">37.4</td>
+<td align="right">30.5</td>
+<td align="right">0.000</td>
+<td align="right">-0.020</td>
+<td align="right">8.28e-02</td>
+<td align="right">2.13e-01</td>
+<td align="left">mostly decrease</td>
+</tr>
+<tr class="even">
+<td align="left">IPV1_IgG4</td>
+<td align="left">IgG subclass</td>
+<td align="left">IPV1</td>
+<td align="left">IgG4</td>
+<td align="right">243</td>
+<td align="right">35.4</td>
+<td align="right">30.9</td>
+<td align="right">0.000</td>
+<td align="right">-0.013</td>
+<td align="right">7.56e-01</td>
+<td align="right">4.31e-01</td>
+<td align="left">mostly decrease</td>
+</tr>
+<tr class="odd">
+<td align="left">PENTAMER_ADCD</td>
+<td align="left">Effector function</td>
+<td align="left">PENTAMER</td>
+<td align="left">ADCD</td>
+<td align="right">234</td>
+<td align="right">30.3</td>
+<td align="right">20.5</td>
+<td align="right">0.000</td>
+<td align="right">0.006</td>
+<td align="right">1.34e-01</td>
+<td align="right">4.33e-02</td>
+<td align="left">mostly decrease</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Table 5. Per-analyte summary across all antigens. Each row
+pools all antigens for that analyte type. Ordered by median delta (most
+negative first).</caption>
+<colgroup>
+<col width="5%" />
+<col width="7%" />
+<col width="14%" />
+<col width="14%" />
+<col width="5%" />
+<col width="15%" />
+<col width="19%" />
+<col width="17%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Analyte</th>
+<th align="right">N features</th>
+<th align="right">N mostly increasing</th>
+<th align="right">N mostly decreasing</th>
+<th align="right">N mixed</th>
+<th align="right">Median delta (log10)</th>
+<th align="right">Mean % subjects increasing</th>
+<th align="left">Overall direction</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">IgG3</td>
+<td align="right">8</td>
+<td align="right">0</td>
+<td align="right">1</td>
+<td align="right">7</td>
+<td align="right">0.000</td>
+<td align="right">48.4</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">IgG4</td>
+<td align="right">8</td>
+<td align="right">0</td>
+<td align="right">4</td>
+<td align="right">4</td>
+<td align="right">0.000</td>
+<td align="right">46.7</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG2</td>
+<td align="right">8</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">8</td>
+<td align="right">0.014</td>
+<td align="right">53.4</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">ADCD</td>
+<td align="right">9</td>
+<td align="right">7</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">0.054</td>
+<td align="right">60.3</td>
+<td align="left">predominantly increasing</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="right">8</td>
+<td align="right">6</td>
+<td align="right">0</td>
+<td align="right">2</td>
+<td align="right">0.088</td>
+<td align="right">63.9</td>
+<td align="left">predominantly increasing</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="right">6</td>
+<td align="right">4</td>
+<td align="right">0</td>
+<td align="right">2</td>
+<td align="right">0.090</td>
+<td align="right">64.0</td>
+<td align="left">predominantly increasing</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="visualising-direction-and-magnitude-of-change"
+class="section level1">
+<h1>Visualising Direction and Magnitude of Change</h1>
+<div id="figure-1-feature-level-lollipop" class="section level2">
+<h2>Figure 1 — Feature-level lollipop</h2>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-lollipop-1.png" alt="Figure 1. Percent of subjects increasing (later visit &gt; earlier visit), by feature, coloured by feature class. Dashed line = 50% (no net direction). Features to the right increase in most subjects; features to the left decrease in most subjects." width="672" />
+<p class="caption">
+Figure 1. Percent of subjects increasing (later visit &gt; earlier
+visit), by feature, coloured by feature class. Dashed line = 50% (no net
+direction). Features to the right increase in most subjects; features to
+the left decrease in most subjects.
+</p>
+</div>
+</div>
+<div id="figure-2-delta-distributions-by-feature-class"
+class="section level2">
+<h2>Figure 2 — Delta distributions by feature class</h2>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-delta-class-1.png" alt="Figure 2. Distribution of per-subject delta (later − earlier visit) by feature class. Zero = no change." width="672" />
+<p class="caption">
+Figure 2. Distribution of per-subject delta (later − earlier visit) by
+feature class. Zero = no change.
+</p>
+</div>
+</div>
+<div id="figure-3-per-subject-average-shift" class="section level2">
+<h2>Figure 3 — Per-subject average shift</h2>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-subject-offset-1.png" alt="Figure 3. Per-subject mean delta across all features. A distribution clearly displaced from zero would indicate a subject-level (sample/plate) offset; a distribution straddling zero indicates feature-structured rather than uniform change." width="672" />
+<p class="caption">
+Figure 3. Per-subject mean delta across all features. A distribution
+clearly displaced from zero would indicate a subject-level
+(sample/plate) offset; a distribution straddling zero indicates
+feature-structured rather than uniform change.
+</p>
+</div>
+</div>
+<div id="figure-4-per-antigen-histograms-analytes-pooled"
+class="section level2">
+<h2>Figure 4 — Per-antigen histograms (analytes pooled)</h2>
+<p>Each panel pools all analytes measured for that antigen. The dashed
+line marks zero; the red line marks the antigen-level median delta.
+Antigens are ordered from the most negative (strongest decay) to the
+most positive (strongest increase) median.</p>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-per-antigen-1.png" alt="Figure 4. Per-subject delta distributions by antigen (all analytes pooled within each antigen). Dashed = zero; red = antigen median. Ordered by median delta (most negative first)." width="1152" />
+<p class="caption">
+Figure 4. Per-subject delta distributions by antigen (all analytes
+pooled within each antigen). Dashed = zero; red = antigen median.
+Ordered by median delta (most negative first).
+</p>
+</div>
+<table>
+<caption>Table 6. Per-antigen summary of change (later vs earlier
+visit), ordered by median delta (most negative first). Each row pools
+all analytes available for that antigen.</caption>
+<colgroup>
+<col width="7%" />
+<col width="9%" />
+<col width="17%" />
+<col width="17%" />
+<col width="7%" />
+<col width="18%" />
+<col width="21%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Antigen</th>
+<th align="right">N features</th>
+<th align="right">N mostly increasing</th>
+<th align="right">N mostly decreasing</th>
+<th align="right">N mixed</th>
+<th align="right">Median delta (log10)</th>
+<th align="left">Overall direction</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="right">6</td>
+<td align="right">0</td>
+<td align="right">1</td>
+<td align="right">5</td>
+<td align="right">-0.004</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">IPV3</td>
+<td align="right">5</td>
+<td align="right">2</td>
+<td align="right">1</td>
+<td align="right">2</td>
+<td align="right">0.000</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">PENTAMER</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="right">0.000</td>
+<td align="left">predominantly decreasing</td>
+</tr>
+<tr class="even">
+<td align="left">IPV2</td>
+<td align="right">5</td>
+<td align="right">2</td>
+<td align="right">1</td>
+<td align="right">2</td>
+<td align="right">0.011</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">IPV1</td>
+<td align="right">5</td>
+<td align="right">2</td>
+<td align="right">1</td>
+<td align="right">2</td>
+<td align="right">0.014</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">DT</td>
+<td align="right">6</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="right">5</td>
+<td align="right">0.028</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN</td>
+<td align="right">6</td>
+<td align="right">3</td>
+<td align="right">0</td>
+<td align="right">3</td>
+<td align="right">0.040</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">FIM</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="right">0</td>
+<td align="right">0.042</td>
+<td align="left">predominantly increasing</td>
+</tr>
+<tr class="odd">
+<td align="left">FHA</td>
+<td align="right">6</td>
+<td align="right">3</td>
+<td align="right">1</td>
+<td align="right">2</td>
+<td align="right">0.074</td>
+<td align="left">mixed</td>
+</tr>
+<tr class="even">
+<td align="left">PT</td>
+<td align="right">6</td>
+<td align="right">3</td>
+<td align="right">0</td>
+<td align="right">3</td>
+<td align="right">0.082</td>
+<td align="left">mixed</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="per-analyte-histograms-figures-5a5f" class="section level1">
+<h1>Per-Analyte Histograms: Figures 5a–5f</h1>
+<p>Each figure in this section fixes <strong>one analyte</strong> (IgG,
+IgG1, IgG2, IgG3, IgG4, or WHOLE_WT_IgG) and shows a separate histogram
+panel for each antigen measured with that analyte. This layout isolates
+whether an analyte behaves consistently across antigens, or whether the
+direction of change is antigen-specific. Features are ordered within
+each figure by their median delta (most decreasing left/top, most
+increasing right/bottom).</p>
+<p><strong>Note:</strong> analytes with zero observations at one or both
+visits (e.g. effector-function, FcR-binding, or B-memory assays, where
+applicable) cannot contribute to this paired change analysis and do not
+appear below.</p>
+<div id="figure-5a-total-igg-antigen-specific" class="section level2">
+<h2>Figure 5a — Total IgG (antigen-specific)</h2>
+<p>Total antigen-specific IgG, by antigen.</p>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-5a-1.png" alt="Figure 5a. Per-subject delta distributions for total antigen-specific IgG features (one panel per antigen, ordered by median delta)." width="960" />
+<p class="caption">
+Figure 5a. Per-subject delta distributions for total antigen-specific
+IgG features (one panel per antigen, ordered by median delta).
+</p>
+</div>
+</div>
+<div id="figure-5b-igg1" class="section level2">
+<h2>Figure 5b — IgG1</h2>
+<p>IgG1 by antigen. IgG1 is the dominant IgG subclass in serum and is
+efficiently transferred across the placenta.</p>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-5b-1.png" alt="Figure 5b. Per-subject delta distributions for IgG1 features by antigen (ordered by median delta)." width="1152" />
+<p class="caption">
+Figure 5b. Per-subject delta distributions for IgG1 features by antigen
+(ordered by median delta).
+</p>
+</div>
+</div>
+<div id="figure-5c-igg2" class="section level2">
+<h2>Figure 5c — IgG2</h2>
+<p>IgG2 by antigen. IgG2 is enriched in responses to polysaccharide
+antigens and is transferred across the placenta less efficiently than
+IgG1.</p>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-5c-1.png" alt="Figure 5c. Per-subject delta distributions for IgG2 features by antigen (ordered by median delta)." width="1152" />
+<p class="caption">
+Figure 5c. Per-subject delta distributions for IgG2 features by antigen
+(ordered by median delta).
+</p>
+</div>
+</div>
+<div id="figure-5d-igg3" class="section level2">
+<h2>Figure 5d — IgG3</h2>
+<p>IgG3 by antigen. IgG3 has the shortest serum half-life of the IgG
+subclasses (~7 days vs ~21 days for IgG1).</p>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-5d-1.png" alt="Figure 5d. Per-subject delta distributions for IgG3 features by antigen (ordered by median delta)." width="1152" />
+<p class="caption">
+Figure 5d. Per-subject delta distributions for IgG3 features by antigen
+(ordered by median delta).
+</p>
+</div>
+</div>
+<div id="figure-5e-igg4" class="section level2">
+<h2>Figure 5e — IgG4</h2>
+<p>IgG4 by antigen. IgG4 is typically the lowest-abundance IgG subclass
+and is elevated by chronic/repeated antigen exposure.</p>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/fig-5e-1.png" alt="Figure 5e. Per-subject delta distributions for IgG4 features by antigen (ordered by median delta)." width="1152" />
+<p class="caption">
+Figure 5e. Per-subject delta distributions for IgG4 features by antigen
+(ordered by median delta).
+</p>
+</div>
+</div>
+<div id="figure-5f-whole_wt_igg" class="section level2">
+<h2>Figure 5f — WHOLE_WT_IgG</h2>
+<p>WHOLE_WT_IgG: a single whole-cell lysate total-IgG measurement
+integrating broadly across antigens.</p>
+<pre><code>## NULL</code></pre>
+</div>
+</div>
+<div id="stratified-by-maternal-arm-tdap-vs-tt" class="section level1">
+<h1>Stratified by maternal arm (TdaP vs TT)</h1>
+<p>The combined (pooled) results above are retained unchanged. This
+section ADDS the per-arm breakdown of the <em>same</em> PregEarly →
+MatBirth production change, computed live from the loaded data. It
+exists to answer one specific question: <strong>do the tetanus (TT) and
+diphtheria (DT) toxoid antigens — which are vaccine components — show a
+within-arm rise in IgG and IgG1 from early pregnancy to
+delivery?</strong></p>
+<div id="direction-summary-by-arm" class="section level2">
+<h2>Direction summary by arm</h2>
+<table>
+<caption>Table 7. Direction summary by maternal arm. An arm-specific
+difference points toward vaccine-driven (biological) heterogeneity; an
+arm-shared pattern points to a shared technical or developmental
+effect.</caption>
+<colgroup>
+<col width="11%" />
+<col width="11%" />
+<col width="34%" />
+<col width="42%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">arm_name</th>
+<th align="right">features</th>
+<th align="right">% feats mostly increasing</th>
+<th align="right">median of feature median-deltas</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">TdaP</td>
+<td align="right">47</td>
+<td align="right">66.0</td>
+<td align="right">0.168</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="right">47</td>
+<td align="right">4.3</td>
+<td align="right">0.000</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="the-toxoid-check-tt-and-dt-by-arm" class="section level2">
+<h2>The toxoid check: TT and DT, by arm</h2>
+<table>
+<caption>Table 8. Tetanus (TT) and diphtheria (DT) antigen-specific
+total IgG and IgG1 production change (PregEarly -&gt; MatBirth), pooled
+and by maternal arm. A positive median delta with a small p is a genuine
+within-arm rise; a near-zero delta sitting on an already-high PregEarly
+median is a ceiling effect, not an absent response.</caption>
+<colgroup>
+<col width="7%" />
+<col width="7%" />
+<col width="6%" />
+<col width="7%" />
+<col width="16%" />
+<col width="15%" />
+<col width="12%" />
+<col width="12%" />
+<col width="13%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Antigen</th>
+<th align="left">Analyte</th>
+<th align="left">Arm</th>
+<th align="right">n pairs</th>
+<th align="right">median PregEarly</th>
+<th align="right">median MatBirth</th>
+<th align="right">median delta</th>
+<th align="right">% increasing</th>
+<th align="right">p signed-rank</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">IgG</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">-0.971</td>
+<td align="right">-0.506</td>
+<td align="right">0.041</td>
+<td align="right">58.0</td>
+<td align="right">8.00e-07</td>
+</tr>
+<tr class="even">
+<td align="left">DT</td>
+<td align="left">IgG</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">-0.997</td>
+<td align="right">-0.181</td>
+<td align="right">0.680</td>
+<td align="right">80.0</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">IgG</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">-0.955</td>
+<td align="right">-0.939</td>
+<td align="right">-0.028</td>
+<td align="right">39.2</td>
+<td align="right">1.65e-03</td>
+</tr>
+<tr class="even">
+<td align="left">DT</td>
+<td align="left">IgG1</td>
+<td align="left">Pooled</td>
+<td align="right">243</td>
+<td align="right">2.221</td>
+<td align="right">2.723</td>
+<td align="right">0.007</td>
+<td align="right">51.0</td>
+<td align="right">1.08e-04</td>
+</tr>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">IgG1</td>
+<td align="left">TdaP</td>
+<td align="right">112</td>
+<td align="right">2.247</td>
+<td align="right">3.007</td>
+<td align="right">0.549</td>
+<td align="right">80.4</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">DT</td>
+<td align="left">IgG1</td>
+<td align="left">TT</td>
+<td align="right">131</td>
+<td align="right">2.198</td>
+<td align="right">2.164</td>
+<td align="right">-0.038</td>
+<td align="right">26.0</td>
+<td align="right">1.10e-06</td>
+</tr>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="left">IgG</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">0.874</td>
+<td align="right">0.871</td>
+<td align="right">-0.011</td>
+<td align="right">48.1</td>
+<td align="right">8.47e-01</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">IgG</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">0.917</td>
+<td align="right">0.841</td>
+<td align="right">-0.042</td>
+<td align="right">41.5</td>
+<td align="right">2.18e-02</td>
+</tr>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="left">IgG</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">0.848</td>
+<td align="right">0.906</td>
+<td align="right">0.030</td>
+<td align="right">53.6</td>
+<td align="right">1.53e-02</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">IgG1</td>
+<td align="left">Pooled</td>
+<td align="right">243</td>
+<td align="right">3.483</td>
+<td align="right">3.480</td>
+<td align="right">-0.008</td>
+<td align="right">48.6</td>
+<td align="right">7.23e-01</td>
+</tr>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="left">IgG1</td>
+<td align="left">TdaP</td>
+<td align="right">112</td>
+<td align="right">3.507</td>
+<td align="right">3.461</td>
+<td align="right">-0.034</td>
+<td align="right">40.2</td>
+<td align="right">3.59e-02</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">IgG1</td>
+<td align="left">TT</td>
+<td align="right">131</td>
+<td align="right">3.472</td>
+<td align="right">3.517</td>
+<td align="right">0.014</td>
+<td align="right">55.7</td>
+<td align="right">1.77e-02</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Toxoid verdict (computed from the loaded data):</strong></p>
+</blockquote>
+<ul>
+<li><strong>Tetanus (TT)</strong> — PregEarly baseline median (pooled,
+total IgG) 0.87 log10. Total-IgG production median delta: TdaP -0.042,
+TT +0.030. IgG1 production median delta: TdaP -0.034, TT +0.014.</li>
+<li><strong>Diphtheria (DT)</strong> — PregEarly baseline median
+(pooled, total IgG) -0.97 log10. Total-IgG production median delta: TdaP
++0.680, TT -0.028. IgG1 production median delta: TdaP +0.549, TT
+-0.038.</li>
+</ul>
+<p>Interpret each delta against its PregEarly baseline. A near-zero
+delta on top of an already-high baseline is a <strong>ceiling
+effect</strong> — mothers were already tetanus/diphtheria-immune from
+prior vaccination, so a booster moves the log10 value little. A
+near-zero delta on a <strong>low</strong> baseline would instead be a
+true non-response, worth checking (assay dynamic range, antigen coating,
+or which toxoids each arm’s vaccine actually contains: tetanus is in
+both TdaP and TT, whereas diphtheria is expected only where the
+comparator is Td rather than tetanus-only).</p>
+</div>
+<div id="full-per-antigen-production-change-igg-and-igg1-by-arm"
+class="section level2">
+<h2>Full per-antigen production change (IgG and IgG1), by arm</h2>
+<table>
+<caption>Table 9. Per-antigen production change for total IgG and IgG1,
+by arm (six vaccine antigens in canonical order PT, FHA, PRN, FIM, TT,
+DT).</caption>
+<thead>
+<tr class="header">
+<th align="left">Analyte</th>
+<th align="left">Antigen</th>
+<th align="left">Arm</th>
+<th align="right">n</th>
+<th align="right">median delta</th>
+<th align="right">% inc</th>
+<th align="right">p signed-rank</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">PT</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">0.161</td>
+<td align="right">70.3</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">PT</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">1.078</td>
+<td align="right">95.4</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">PT</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">-0.004</td>
+<td align="right">49.0</td>
+<td align="right">5.67e-01</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">FHA</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">0.138</td>
+<td align="right">74.6</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">FHA</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">1.213</td>
+<td align="right">95.4</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">FHA</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">0.015</td>
+<td align="right">56.9</td>
+<td align="right">2.71e-01</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">PRN</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">0.142</td>
+<td align="right">72.4</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">PRN</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">1.563</td>
+<td align="right">95.4</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">PRN</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">0.006</td>
+<td align="right">52.9</td>
+<td align="right">7.90e-01</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">FIM</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">0.042</td>
+<td align="right">60.8</td>
+<td align="right">3.63e-05</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">FIM</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">0.114</td>
+<td align="right">66.2</td>
+<td align="right">3.30e-06</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">FIM</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">0.015</td>
+<td align="right">56.2</td>
+<td align="right">3.14e-01</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">TT</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">-0.011</td>
+<td align="right">48.1</td>
+<td align="right">8.47e-01</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">TT</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">-0.042</td>
+<td align="right">41.5</td>
+<td align="right">2.18e-02</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">TT</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">0.030</td>
+<td align="right">53.6</td>
+<td align="right">1.53e-02</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">DT</td>
+<td align="left">Pooled</td>
+<td align="right">283</td>
+<td align="right">0.041</td>
+<td align="right">58.0</td>
+<td align="right">8.00e-07</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG</td>
+<td align="left">DT</td>
+<td align="left">TdaP</td>
+<td align="right">130</td>
+<td align="right">0.680</td>
+<td align="right">80.0</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">IgG</td>
+<td align="left">DT</td>
+<td align="left">TT</td>
+<td align="right">153</td>
+<td align="right">-0.028</td>
+<td align="right">39.2</td>
+<td align="right">1.65e-03</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">PT</td>
+<td align="left">Pooled</td>
+<td align="right">243</td>
+<td align="right">0.148</td>
+<td align="right">72.8</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="left">PT</td>
+<td align="left">TdaP</td>
+<td align="right">112</td>
+<td align="right">0.681</td>
+<td align="right">96.4</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">PT</td>
+<td align="left">TT</td>
+<td align="right">131</td>
+<td align="right">0.007</td>
+<td align="right">52.7</td>
+<td align="right">8.13e-01</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="left">FHA</td>
+<td align="left">Pooled</td>
+<td align="right">243</td>
+<td align="right">0.292</td>
+<td align="right">74.5</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">FHA</td>
+<td align="left">TdaP</td>
+<td align="right">112</td>
+<td align="right">1.298</td>
+<td align="right">97.3</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="left">FHA</td>
+<td align="left">TT</td>
+<td align="right">131</td>
+<td align="right">0.018</td>
+<td align="right">55.0</td>
+<td align="right">2.69e-01</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">PRN</td>
+<td align="left">Pooled</td>
+<td align="right">243</td>
+<td align="right">0.100</td>
+<td align="right">67.9</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="left">PRN</td>
+<td align="left">TdaP</td>
+<td align="right">112</td>
+<td align="right">0.958</td>
+<td align="right">95.5</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">PRN</td>
+<td align="left">TT</td>
+<td align="right">131</td>
+<td align="right">-0.008</td>
+<td align="right">44.3</td>
+<td align="right">3.81e-01</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="left">TT</td>
+<td align="left">Pooled</td>
+<td align="right">243</td>
+<td align="right">-0.008</td>
+<td align="right">48.6</td>
+<td align="right">7.23e-01</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">TT</td>
+<td align="left">TdaP</td>
+<td align="right">112</td>
+<td align="right">-0.034</td>
+<td align="right">40.2</td>
+<td align="right">3.59e-02</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="left">TT</td>
+<td align="left">TT</td>
+<td align="right">131</td>
+<td align="right">0.014</td>
+<td align="right">55.7</td>
+<td align="right">1.77e-02</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">DT</td>
+<td align="left">Pooled</td>
+<td align="right">243</td>
+<td align="right">0.007</td>
+<td align="right">51.0</td>
+<td align="right">1.08e-04</td>
+</tr>
+<tr class="even">
+<td align="left">IgG1</td>
+<td align="left">DT</td>
+<td align="left">TdaP</td>
+<td align="right">112</td>
+<td align="right">0.549</td>
+<td align="right">80.4</td>
+<td align="right">0.00e+00</td>
+</tr>
+<tr class="odd">
+<td align="left">IgG1</td>
+<td align="left">DT</td>
+<td align="left">TT</td>
+<td align="right">131</td>
+<td align="right">-0.038</td>
+<td align="right">26.0</td>
+<td align="right">1.10e-06</td>
+</tr>
+</tbody>
+</table>
+<div class="figure">
+<img src="C2_antibody_chain_files/figure-html/by-arm-fig-1.png" alt="Figure A1. Production change (median delta log10, MatBirth - PregEarly) for the six vaccine antigens, total IgG and IgG1, by maternal arm. Point size = percent of mothers increasing. Positive = rise from early pregnancy to delivery. The TT and DT rows show whether the toxoid antigens move within each arm." width="960" />
+<p class="caption">
+Figure A1. Production change (median delta log10, MatBirth - PregEarly)
+for the six vaccine antigens, total IgG and IgG1, by maternal arm. Point
+size = percent of mothers increasing. Positive = rise from early
+pregnancy to delivery. The TT and DT rows show whether the toxoid
+antigens move within each arm.
+</p>
+</div>
+</div>
+</div>
+<div id="interpretation" class="section level1">
+<h1>Interpretation</h1>
+<p><em>All quantities in this section are computed from the current data
+at knit time (from <code>feat_summary</code>, <code>analyte_sum</code>,
+<code>prod_all</code>, the per-arm summaries and the headline
+diagnostics). Nothing here is hardcoded, so the narrative always matches
+the tables and figures above.</em></p>
+<p>From early pregnancy (<code>PregEarly</code>) to delivery
+(<code>MatBirth</code>) the mother receives the study vaccine, so the
+expected signal is a vaccine-induced rise in antibody to the vaccine
+antigens, concentrated in the isotype a protein-antigen booster
+recruits.</p>
+<div id="overview" class="section level2">
+<h2>Overview</h2>
+<p>Across the <strong>47</strong> well-covered features,
+<strong>17</strong> are mostly increasing, <strong>6</strong> mostly
+decreasing, and <strong>24</strong> mixed. The pooled median change is
+<strong>+0.019</strong> log10, while <strong>71.2%</strong> of mothers
+show a net positive mean shift across their features (median per-subject
+offset <strong>+0.097</strong> log10). A near-zero pooled median
+combined with most subjects tilting positive is the signature of a
+response concentrated in a subset of features (the vaccine targets) and
+flat elsewhere — averaging the two washes out at the feature level but
+still tilts most individual mothers positive.</p>
+</div>
+<div id="what-the-data-show-by-analyte" class="section level2">
+<h2>What the data show, by analyte</h2>
+<p>Analytes <strong>predominantly increasing</strong>: ADCD, IgG1, IgG.
+Flat or mixed overall: IgG3, IgG4, IgG2.</p>
+<ul>
+<li><strong>Total IgG</strong> — top rises: PT (median +0.16, 70% up);
+PRN (median +0.14, 72% up); FHA (median +0.14, 75% up); FIM (median
++0.04, 61% up).</li>
+<li><strong>IgG1</strong> — top rises: FHA (median +0.29, 74% up); PT
+(median +0.15, 73% up); IPV1 (median +0.11, 68% up); PRN (median +0.10,
+68% up).</li>
+</ul>
+<p>A protein-antigen booster preferentially recruits IgG1, so a signal
+concentrated in total IgG and IgG1 with little movement in IgG2/IgG4 is
+the immunologically expected pattern rather than a missing signal.</p>
+</div>
+<div id="focus-bordetella-pertussis-antigens" class="section level2">
+<h2>Focus: <em>Bordetella pertussis</em> antigens</h2>
+<p>Mapping the change onto the acellular-pertussis components present in
+the data:</p>
+<ul>
+<li><strong>PT</strong> — total IgG +0.16 (70% up); IgG1 +0.15 (73%
+up)</li>
+<li><strong>FHA</strong> — total IgG +0.14 (75% up); IgG1 +0.29 (74%
+up)</li>
+<li><strong>PRN</strong> — total IgG +0.14 (72% up); IgG1 +0.10 (68%
+up)</li>
+<li><strong>FIM</strong> — total IgG +0.04 (61% up)</li>
+</ul>
+<p>IgG1 against the pertussis antigens is the subclass most efficiently
+transferred across the placenta (see the companion
+<code>MatBirth -&gt; CordBlood</code> analysis), so a vaccine that loads
+this compartment is loading the one the placenta transfers best — the
+mechanistic basis for maternal vaccination protecting the newborn.</p>
+</div>
+<div id="by-maternal-arm" class="section level2">
+<h2>By maternal arm</h2>
+<p>Features mostly increasing by arm: <strong>TdaP 66%</strong> vs
+<strong>TT 4.3%</strong> (Table 7). An arm-specific increase points to a
+vaccine-driven (biological) effect rather than a shared technical or
+developmental drift.</p>
+<p>Toxoid antigens, by arm (does tetanus/diphtheria IgG rise from
+PregEarly to MatBirth?):</p>
+<ul>
+<li><strong>TT</strong> — total-IgG Δ: TdaP -0.042, TT +0.030 (PregEarly
+baseline median 0.87); IgG1 Δ: TdaP -0.034, TT +0.014</li>
+<li><strong>DT</strong> — total-IgG Δ: TdaP +0.680, TT -0.028 (PregEarly
+baseline median -0.97); IgG1 Δ: TdaP +0.549, TT -0.038</li>
+</ul>
+<p>Read each toxoid Δ against its PregEarly baseline: a small Δ on an
+already-high baseline is a ceiling effect (pre-existing
+tetanus/diphtheria immunity), not an absent response; a small Δ on a low
+baseline would be a genuine non-response worth investigating.</p>
+</div>
+<div id="scale-and-comparability" class="section level2">
+<h2>Scale and comparability</h2>
+<p>Both <code>PregEarly</code> and <code>MatBirth</code> subclass values
+are normalized bead-array values (maternal samples placed on a common
+assay scale); total IgG comes from a separate ELISA path and is not
+affected by that normalization. Where the total-IgG and IgG1 signals
+agree for the same antigens (compare the per-antigen lines above), the
+change is more likely biological than a scaling artifact of either
+platform.</p>
+</div>
+<div id="what-would-confirm-or-refine-this-interpretation"
+class="section level2">
+<h2>What would confirm or refine this interpretation</h2>
+<ul>
+<li><strong>Relate the per-mother boost to the vaccine-to-delivery
+interval</strong> — where the mean exceeds the median for an antigen (a
+right-skewed response), mothers vaccinated longer before delivery or
+with lower baseline titres are expected to show the largest rises.</li>
+<li><strong>Read Figure A1 and Tables 8–9</strong> to separate the TdaP
+boost from the TT baseline antigen by antigen and analyte, rather than
+relying on the pooled medians.</li>
+<li><strong>Check the vaccine formulation actually used</strong> against
+any antigen whose response is muted, to confirm it reflects vaccine
+composition rather than assay coverage.</li>
+</ul>
+</div>
+</div>
+<div id="participant-accounting" class="section level1">
+<h1>Participant Accounting</h1>
+<table>
+<caption>Table 10. Per-feature paired availability (n PregEarly / n
+MatBirth / n used).</caption>
+<colgroup>
+<col width="8%" />
+<col width="13%" />
+<col width="19%" />
+<col width="9%" />
+<col width="6%" />
+<col width="9%" />
+<col width="31%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Section</th>
+<th align="left">Stratum</th>
+<th align="left">Model</th>
+<th align="right">N entered</th>
+<th align="right">N used</th>
+<th align="right">N dropped</th>
+<th align="left">Dropped due to (NA driver)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">DT_IgG</td>
+<td align="left">paired availability</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">29</td>
+<td align="left">PregEarly n=312, MatBirth n=283</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">FHA_IgG</td>
+<td align="left">paired availability</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">29</td>
+<td align="left">PregEarly n=312, MatBirth n=283</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">FIM_IgG</td>
+<td align="left">paired availability</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">29</td>
+<td align="left">PregEarly n=312, MatBirth n=283</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">PRN_IgG</td>
+<td align="left">paired availability</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">29</td>
+<td align="left">PregEarly n=312, MatBirth n=283</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">PT_IgG</td>
+<td align="left">paired availability</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">29</td>
+<td align="left">PregEarly n=312, MatBirth n=283</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">TT_IgG</td>
+<td align="left">paired availability</td>
+<td align="right">312</td>
+<td align="right">283</td>
+<td align="right">29</td>
+<td align="left">PregEarly n=312, MatBirth n=283</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">DT_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">DT_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">FHA_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">FHA_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV1_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">IPV1_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV2_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">IPV2_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV3_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">IPV3_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">PRN_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">PRN_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">PT_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">PT_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">TT_IgG1</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">TT_IgG4</td>
+<td align="left">paired availability</td>
+<td align="right">264</td>
+<td align="right">243</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=264, MatBirth n=247</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">DT_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">FHA_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV1_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">IPV2_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV3_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">PRN_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">PT_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">TT_IgG3</td>
+<td align="left">paired availability</td>
+<td align="right">246</td>
+<td align="right">237</td>
+<td align="right">9</td>
+<td align="left">PregEarly n=246, MatBirth n=241</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">DT_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">FHA_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV1_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">IPV2_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV3_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">PENTAMER_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">PRN_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">PT_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">TT_ADCD</td>
+<td align="left">paired availability</td>
+<td align="right">262</td>
+<td align="right">234</td>
+<td align="right">28</td>
+<td align="left">PregEarly n=262, MatBirth n=240</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">DT_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">252</td>
+<td align="right">231</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=252, MatBirth n=235</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">FHA_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">252</td>
+<td align="right">231</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=252, MatBirth n=235</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">PRN_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">252</td>
+<td align="right">231</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=252, MatBirth n=235</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">PT_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">252</td>
+<td align="right">231</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=252, MatBirth n=235</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">TT_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">252</td>
+<td align="right">231</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=252, MatBirth n=235</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV1_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">234</td>
+<td align="right">213</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=234, MatBirth n=217</td>
+</tr>
+<tr class="even">
+<td align="left">Coverage</td>
+<td align="left">IPV2_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">234</td>
+<td align="right">213</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=234, MatBirth n=217</td>
+</tr>
+<tr class="odd">
+<td align="left">Coverage</td>
+<td align="left">IPV3_IgG2</td>
+<td align="left">paired availability</td>
+<td align="right">234</td>
+<td align="right">213</td>
+<td align="right">21</td>
+<td align="left">PregEarly n=234, MatBirth n=217</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Reuses the shared pipeline (<code>config/endpoints.R</code>,
+<code>R/C1_serology_helpers.R</code>, the global visit recode, and the
+N-tracker). Knit both formats with</em>
+<code>rmarkdown::render("cord_to_infmon2_analysis_refactored.Rmd", output_format = "all")</code>.</p>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

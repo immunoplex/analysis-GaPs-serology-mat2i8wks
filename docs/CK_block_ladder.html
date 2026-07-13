@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Scot Zens and Anja Saso" />
+
+<meta name="date" content="2026-07-13" />
+
+<title>Figure 5 (revised) — Where predictability enters, six-block ladder</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/readable.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Figure 5 (revised) — Where predictability
+enters, six-block ladder</h1>
+<h3 class="subtitle"><p>Left: cross-validated R² block ladder for the
+three whole-organism infant outcomes, with the design/clinical
+foundation split into design (vaccination), pre-vaccination clinical,
+and birth clinical. Right: principal maternal- production antigen (LMG)
+of each outcome.</p></h3>
+<h4 class="author">Scot Zens and Anja Saso</h4>
+<h4 class="date">2026-07-13</h4>
+
+</div>
+
+
+<div id="data-assembly" class="section level1">
+<h1>Data assembly</h1>
+<p>The modelling frame is identical to Results C–F, except the
+design/clinical base is now assembled from <strong>three</strong> named
+variable groups so the ladder can attribute predictability to design
+(vaccination), pre-vaccination clinical, and birth clinical separately.
+Antibody blocks (maternal production / cord transfer / concurrent) are
+unchanged.</p>
+<pre class="r"><code>ANTI_IGG &lt;- params$anti_igg
+
+pull_wide &lt;- function(d, visit, feats, suffix) {
+  d %&gt;%
+    dplyr::filter(visit_name == visit, feature %in% feats) %&gt;%
+    dplyr::distinct(subject_accession, feature, .keep_all = TRUE) %&gt;%
+    dplyr::select(subject_accession, feature, log_assay_value) %&gt;%
+    tidyr::pivot_wider(names_from = feature, values_from = log_assay_value) %&gt;%
+    dplyr::rename_with(~ paste0(.x, suffix), -subject_accession)
+}
+
+mat &lt;- pull_wide(data_raw, params$visit_maternal,   ANTI_IGG, &quot;_mat&quot;)
+crd &lt;- pull_wide(data_raw, params$visit_cord,       ANTI_IGG, &quot;_cord&quot;)
+inf &lt;- pull_wide(data_raw, params$visit_concurrent, ANTI_IGG, &quot;_inf&quot;)
+arm &lt;- dplyr::distinct(data_raw, subject_accession, maternal_arm)
+
+# clinical covariates: pull EVERYTHING we might need for the two clinical blocks
+clin &lt;- tryCatch(load_clinical_data(shared_utils(&quot;data/clin_assess.RData&quot;)),
+                 error = function(e) NULL)
+want_clin &lt;- unique(c(params$clin_prevax_vars, params$clin_birth_vars))
+if (!is.null(clin)) {
+  want_clin &lt;- intersect(want_clin, names(clin))
+  clind &lt;- dplyr::select(clin, subject_accession, dplyr::all_of(want_clin))
+  # light preparation so lm dummy-codes categoricals cleanly
+  for (v in intersect(c(&quot;infant_sex&quot;, &quot;delivery_mode&quot;), names(clind)))
+    clind[[v]] &lt;- factor(clind[[v]])
+  if (&quot;parity&quot; %in% names(clind))
+    clind$parity &lt;- factor(ifelse(clind$parity == 0, &quot;nulliparous&quot;, &quot;parous&quot;))
+} else { want_clin &lt;- character(0); clind &lt;- NULL }
+
+# resolve the three foundation groups to variables that actually exist
+DESIGN      &lt;- intersect(params$design_vars,      c(&quot;maternal_arm&quot;, names(clind)))
+CLIN_PREVAX &lt;- intersect(params$clin_prevax_vars, names(clind))
+CLIN_BIRTH  &lt;- intersect(params$clin_birth_vars,  names(clind))
+cat(sprintf(&quot;Design: %s\nPre-vaccination clinical: %s\nBirth clinical: %s\n&quot;,
+            paste(DESIGN, collapse = &quot;, &quot;),
+            paste(CLIN_PREVAX, collapse = &quot;, &quot;),
+            paste(CLIN_BIRTH,  collapse = &quot;, &quot;)))</code></pre>
+<pre><code>## Design: maternal_arm
+## Pre-vaccination clinical: maternal_age, maternal_bmi, maternal_Hb, parity, gestational_age_vaccination
+## Birth clinical: gestational_age_birth, delivery_mode, birth_weight, infant_sex, vaccine_birth_interval_days</code></pre>
+<pre class="r"><code># base-R fit utilities (identical contract to Results C–F)
+r2 &lt;- function(form, data) tryCatch({
+  cc &lt;- data[stats::complete.cases(data[, all.vars(form), drop = FALSE]), , drop = FALSE]
+  if (nrow(cc) &lt; 5) return(NA_real_)
+  summary(stats::lm(form, cc))$r.squared
+}, error = function(e) NA_real_)
+
+cv_r2 &lt;- function(form, data, K = params$cv_folds, seed = params$seed) tryCatch({
+  vars &lt;- all.vars(form)
+  cc &lt;- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+  if (nrow(cc) &lt; 2 * K) return(NA_real_)
+  set.seed(seed); fold &lt;- sample(rep_len(1:K, nrow(cc)))
+  pr &lt;- numeric(nrow(cc))
+  for (k in 1:K) {
+    fit &lt;- stats::lm(form, cc[fold != k, , drop = FALSE])
+    pr[fold == k] &lt;- stats::predict(fit, cc[fold == k, , drop = FALSE])
+  }
+  yv &lt;- cc[[vars[1]]]; 1 - sum((yv - pr)^2) / sum((yv - mean(yv))^2)
+}, error = function(e) NA_real_)
+
+mk &lt;- function(terms) reformulate(if (length(terms)) terms else &quot;1&quot;, &quot;y&quot;)
+
+# Shapley/LMG within the maternal-production block, over the full foundation base.
+shapley_lmg &lt;- function(preds, base, data, ycol = &quot;y&quot;) {
+  vars &lt;- c(ycol, base, preds)
+  cc &lt;- data[stats::complete.cases(data[, vars, drop = FALSE]), , drop = FALSE]
+  R  &lt;- function(terms) summary(stats::lm(reformulate(if (length(terms)) terms else &quot;1&quot;, ycol), cc))$r.squared
+  perms &lt;- function(x) if (length(x) &lt;= 1) list(x) else
+    do.call(c, lapply(seq_along(x), function(i) lapply(perms(x[-i]), function(p) c(x[i], p))))
+  P &lt;- perms(preds); contrib &lt;- stats::setNames(numeric(length(preds)), preds)
+  for (p in P) { prev &lt;- base
+    for (v in p) { contrib[v] &lt;- contrib[v] + (R(c(prev, v)) - R(prev)); prev &lt;- c(prev, v) } }
+  contrib / length(P)
+}</code></pre>
+<pre class="r"><code># block labels, in ladder order (design/clinical foundation split three ways)
+BLOCK_LEVELS &lt;- c(&quot;design&quot;, &quot;+ clinical (pre-vaccination)&quot;, &quot;+ clinical (birth)&quot;,
+                  &quot;+ maternal production&quot;, &quot;+ cord (transfer)&quot;, &quot;+ concurrent (ceiling)&quot;)
+
+build_frame &lt;- function(assay) {
+  yw &lt;- pull_wide(data_raw, params$visit_outcome, assay, &quot;&quot;)
+  names(yw)[names(yw) == assay] &lt;- &quot;y&quot;
+  m &lt;- yw %&gt;%
+    dplyr::left_join(mat, &quot;subject_accession&quot;) %&gt;%
+    dplyr::left_join(crd, &quot;subject_accession&quot;) %&gt;%
+    dplyr::left_join(inf, &quot;subject_accession&quot;) %&gt;%
+    dplyr::left_join(arm, &quot;subject_accession&quot;)
+  if (!is.null(clind)) m &lt;- dplyr::left_join(m, clind, &quot;subject_accession&quot;)
+  dplyr::filter(m, !is.na(y))
+}
+
+# one outcome -&gt; the six cumulative CV-R2 rungs + the maternal LMG breakdown
+run_outcome &lt;- function(assay, label) {
+  m &lt;- build_frame(assay)
+  pres &lt;- function(cols) cols[cols %in% names(m)]
+  design &lt;- pres(DESIGN); prevax &lt;- pres(CLIN_PREVAX); birth &lt;- pres(CLIN_BIRTH)
+  mp &lt;- pres(paste0(ANTI_IGG, &quot;_mat&quot;))
+  cp &lt;- pres(paste0(ANTI_IGG, &quot;_cord&quot;))
+  ip &lt;- pres(paste0(ANTI_IGG, &quot;_inf&quot;))
+
+  # cumulative term sets for the six rungs
+  cum &lt;- list(design,
+              c(design, prevax),
+              c(design, prevax, birth),
+              c(design, prevax, birth, mp),
+              c(design, prevax, birth, mp, cp),
+              c(design, prevax, birth, mp, cp, ip))
+  ladder &lt;- data.frame(
+    outcome = label,
+    block   = factor(BLOCK_LEVELS, levels = BLOCK_LEVELS),
+    n       = vapply(cum, function(t) sum(stats::complete.cases(m[, all.vars(mk(t)), drop = FALSE])), integer(1)),
+    cv_r2   = vapply(cum, function(t) cv_r2(mk(t), m), numeric(1)),
+    stringsAsFactors = FALSE)
+  ladder[[&quot;delta&quot;]] &lt;- c(NA, diff(ladder$cv_r2))
+
+  # maternal-production antigen shares (LMG) over the full foundation base
+  base &lt;- c(design, prevax, birth)
+  lmg  &lt;- if (length(mp) &gt;= 2) shapley_lmg(mp, base, m) else stats::setNames(numeric(0), character(0))
+  lmg_df &lt;- if (length(lmg))
+    data.frame(outcome = label,
+               antigen = sub(&quot;_IgG_mat$&quot;, &quot;&quot;, names(lmg)),
+               lmg_r2  = as.numeric(lmg), row.names = NULL) else NULL
+  list(ladder = ladder, lmg = lmg_df)
+}
+
+res &lt;- Map(run_outcome, names(params$outcomes), unname(params$outcomes))
+ladder_df &lt;- dplyr::bind_rows(lapply(res, `[[`, &quot;ladder&quot;))
+lmg_df    &lt;- dplyr::bind_rows(lapply(res, `[[`, &quot;lmg&quot;))
+
+# fix outcome + antigen ordering for the plots
+ladder_df$outcome &lt;- factor(ladder_df$outcome, levels = unname(params$outcomes))
+lmg_df$outcome    &lt;- factor(lmg_df$outcome,    levels = unname(params$outcomes))
+lmg_df$antigen    &lt;- factor(lmg_df$antigen,    levels = sub(&quot;_IgG$&quot;, &quot;&quot;, ANTI_IGG))
+
+kable(tidyr::pivot_wider(ladder_df[, c(&quot;outcome&quot;,&quot;block&quot;,&quot;cv_r2&quot;)],
+                         names_from = block, values_from = cv_r2),
+      caption = &quot;Six-block cross-validated R² ladder (cumulative) for each whole-organism outcome.&quot;)</code></pre>
+<table>
+<caption>Six-block cross-validated R² ladder (cumulative) for each
+whole-organism outcome.</caption>
+<colgroup>
+<col width="17%" />
+<col width="6%" />
+<col width="19%" />
+<col width="13%" />
+<col width="15%" />
+<col width="12%" />
+<col width="15%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">outcome</th>
+<th align="right">design</th>
+<th align="right">+ clinical (pre-vaccination)</th>
+<th align="right">+ clinical (birth)</th>
+<th align="right">+ maternal production</th>
+<th align="right">+ cord (transfer)</th>
+<th align="right">+ concurrent (ceiling)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Whole-cell binding (IgG)</td>
+<td align="right">0.1957818</td>
+<td align="right">0.1868709</td>
+<td align="right">0.1230417</td>
+<td align="right">0.2325587</td>
+<td align="right">0.2383167</td>
+<td align="right">0.3446858</td>
+</tr>
+<tr class="even">
+<td align="left">SBA</td>
+<td align="right">0.3440042</td>
+<td align="right">0.3296231</td>
+<td align="right">0.2879785</td>
+<td align="right">0.5862075</td>
+<td align="right">0.6097680</td>
+<td align="right">0.6977143</td>
+</tr>
+<tr class="odd">
+<td align="left">PTNA</td>
+<td align="right">0.2877662</td>
+<td align="right">0.3038825</td>
+<td align="right">0.2632392</td>
+<td align="right">0.4228243</td>
+<td align="right">0.4400377</td>
+<td align="right">0.4290770</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="the-figure" class="section level1">
+<h1>The figure</h1>
+<pre class="r"><code>BLOCK_COL &lt;- c(&quot;design&quot;                       = &quot;#6f6f6f&quot;,
+               &quot;+ clinical (pre-vaccination)&quot; = &quot;#a3a3a3&quot;,
+               &quot;+ clinical (birth)&quot;           = &quot;#d0d0d0&quot;,
+               &quot;+ maternal production&quot;        = &quot;#2b6098&quot;,
+               &quot;+ cord (transfer)&quot;            = &quot;#5ba3c0&quot;,
+               &quot;+ concurrent (ceiling)&quot;       = &quot;#d0692f&quot;)
+ANTIGEN_COL &lt;- c(PRN = &quot;#206090&quot;, PT = &quot;#d04050&quot;, FHA = &quot;#308040&quot;, FIM = &quot;#4c9a9a&quot;)
+
+# principal antigen (largest LMG share) per outcome, for the right-panel annotation
+totals &lt;- lmg_df %&gt;% dplyr::group_by(outcome) %&gt;%
+  dplyr::summarise(total = sum(lmg_r2), .groups = &quot;drop&quot;)
+principal &lt;- lmg_df %&gt;% dplyr::group_by(outcome) %&gt;%
+  dplyr::mutate(share = lmg_r2 / sum(lmg_r2)) %&gt;%
+  dplyr::slice_max(lmg_r2, n = 1, with_ties = FALSE) %&gt;% dplyr::ungroup() %&gt;%
+  dplyr::left_join(totals, by = &quot;outcome&quot;)</code></pre>
+<pre class="r"><code>p_left &lt;- ggplot(ladder_df, aes(outcome, cv_r2, fill = block)) +
+  geom_col(position = position_dodge(width = 0.82), width = 0.78,
+           colour = &quot;white&quot;, linewidth = 0.3) +
+  geom_text(aes(label = sprintf(&quot;%.2f&quot;, cv_r2)),
+            position = position_dodge(width = 0.82), vjust = -0.35,
+            size = 2.7, colour = &quot;grey25&quot;) +
+  scale_fill_manual(values = BLOCK_COL, name = NULL) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.08))) +
+  labs(x = NULL, y = &quot;Cross-validated R\u00b2&quot;,
+       title = &quot;Where predictability enters (CV-R\u00b2 block ladder)&quot;) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(face = &quot;bold&quot;, size = 12),
+        legend.position = &quot;bottom&quot;, axis.ticks = element_blank()) +
+  guides(fill = guide_legend(nrow = 1, byrow = TRUE))</code></pre>
+<pre class="r"><code>p_right &lt;- ggplot(lmg_df, aes(lmg_r2, outcome, fill = antigen)) +
+  geom_col(colour = &quot;white&quot;, linewidth = 0.5) +
+  geom_text(data = principal, aes(x = total, y = outcome, label = sprintf(&quot;%s %.0f%%&quot;, antigen, 100 * share)),
+            hjust = -0.08, size = 3, colour = &quot;grey25&quot;, inherit.aes = FALSE) +
+  scale_fill_manual(values = ANTIGEN_COL, name = &quot;antigen&quot;) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.22))) +
+  labs(x = &quot;maternal production LMG R\u00b2&quot;, y = NULL,
+       title = &quot;Principal antigen of each outcome&quot;) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(face = &quot;bold&quot;, size = 12),
+        legend.position = &quot;bottom&quot;, axis.ticks = element_blank())</code></pre>
+<pre class="r"><code>if (!requireNamespace(&quot;patchwork&quot;, quietly = TRUE))
+  stop(&quot;Install `patchwork`: install.packages(&#39;patchwork&#39;).&quot;)
+library(patchwork)
+fig5 &lt;- p_left + p_right + plot_layout(widths = c(1.55, 1.0))
+fig5</code></pre>
+<div class="figure" style="text-align: center">
+<img src="CK_block_ladder_files/figure-html/figure5-1.png" alt="Figure 5 (revised). Where predictability of infant whole-organism function enters. Left: cumulative cross-validated R² for a six-block ladder — design (vaccination type), + pre-vaccination clinical, + birth clinical, + maternal production (maternal antigen at delivery), + cord transfer, + concurrent (two-month co-measured ceiling). The concurrent rung is a descriptive ceiling, not forward prediction. Right: within-outcome Shapley/LMG variance shares of the maternal-production antigens; the labelled antigen is the principal (largest-share) predictor of each outcome. Both panels exclude the concurrent block from any predictive claim." width="1392" />
+<p class="caption">
+Figure 5 (revised). Where predictability of infant whole-organism
+function enters. Left: cumulative cross-validated R² for a six-block
+ladder — design (vaccination type), + pre-vaccination clinical, + birth
+clinical, + maternal production (maternal antigen at delivery), + cord
+transfer, + concurrent (two-month co-measured ceiling). The concurrent
+rung is a descriptive ceiling, not forward prediction. Right:
+within-outcome Shapley/LMG variance shares of the maternal-production
+antigens; the labelled antigen is the principal (largest-share)
+predictor of each outcome. Both panels exclude the concurrent block from
+any predictive claim.
+</p>
+</div>
+<pre class="r"><code>dir.create(params$fig_out_dir, showWarnings = FALSE, recursive = TRUE)
+png_path &lt;- file.path(params$fig_out_dir, &quot;figure5_block_ladder_sixway.png&quot;)
+pdf_path &lt;- file.path(params$fig_out_dir, &quot;figure5_block_ladder_sixway.pdf&quot;)
+ggsave(png_path, fig5, width = 14.5, height = 5.6, dpi = 300, bg = &quot;white&quot;)
+ggsave(pdf_path, fig5, width = 14.5, height = 5.6, bg = &quot;white&quot;)
+cat(&quot;Saved:\n- &quot;, png_path, &quot;\n- &quot;, pdf_path, &quot;\n&quot;, sep = &quot;&quot;)</code></pre>
+<pre><code>## Saved:
+## - figures/figure5_block_ladder_sixway.png
+## - figures/figure5_block_ladder_sixway.pdf</code></pre>
+<hr />
+<p><em>Revised Figure 5. The design/clinical foundation of the block
+ladder is split into three ordered blocks — design (vaccination type),
+pre-vaccination clinical (maternal age, BMI, haemoglobin, parity,
+gestational age at vaccination), and birth clinical (gestational age at
+birth, delivery mode, birth weight, infant sex, vaccine-to-birth
+interval) — so the six rungs are design, + pre-vaccination clinical, +
+birth clinical, + maternal production, + cord transfer, + concurrent
+ceiling. The former “maternal (forward)” block is relabelled “maternal
+production” throughout, and the right-panel axis reads “maternal
+production LMG R²”. Adjust the three <code>*_vars</code> params to move
+a covariate between the pre-vaccination and birth clinical
+blocks.</em></p>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

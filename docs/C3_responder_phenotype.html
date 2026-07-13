@@ -1,0 +1,2942 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Scot Zens and Anja Saso" />
+
+<meta name="date" content="2026-07-13" />
+
+<title>Phase 08 (Part A) — Decomposition and Predictors of the Maternal Low vs High Responder Categories</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/readable.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Phase 08 (Part A) — Decomposition and
+Predictors of the Maternal Low vs High Responder Categories</h1>
+<h3 class="subtitle"><p>Do clinical covariates or a maternal serological
+signature predict which mothers are LOW vs HIGH responders? Stratified
+on the maternal arm (TdaP vs TT) only — no infant-arm analysis.</p></h3>
+<h4 class="author">Scot Zens and Anja Saso</h4>
+<h4 class="date">2026-07-13</h4>
+
+</div>
+
+
+<hr />
+<div id="analytical-framework" class="section level1">
+<h1>Analytical Framework</h1>
+<p>Phase 07 Stage A split mothers into <strong>Low</strong> and
+<strong>High</strong> responders from their binding antibody across the
+two maternal draws (PregEarly + MatBirth; features PT_IgG, FHA_IgG,
+PRN_IgG). This branch asks a single question about that split:</p>
+<blockquote>
+<p><strong>Is there a consistent clinical covariate or maternal
+serological signature that predicts which mothers are Low vs High
+responders?</strong></p>
+</blockquote>
+<p>Two facts shape the whole analysis:</p>
+<ol style="list-style-type: decimal">
+<li><strong>The responder class is almost the vaccine arm.</strong> In
+Phase 07 the maternal Low/High split tracked the arm closely (TdaP
+mostly High, TT mostly Low). So the genuinely informative question is
+not “does anything predict the class” (the arm does) but <strong>“does
+anything predict it beyond the arm, and within an arm”</strong> —
+e.g. among vaccinated (TdaP) mothers, who still responds poorly?</li>
+<li><strong>Infant priming (aP/wP) is not relevant here.</strong> This
+is a question about mothers; there is <strong>no infant-arm
+stratification anywhere</strong> in this document. The only stratifier
+is the <strong>maternal arm (TdaP vs TT)</strong>.</li>
+</ol>
+<p>The analysis runs in three parts:</p>
+<ul>
+<li><strong>Part A — the arm baseline.</strong> How much of the Low/High
+split is just the arm? This sets the bar every other predictor must
+clear.</li>
+<li><strong>Part B — clinical covariates.</strong> The ten
+<code>clin_assess</code> covariates, screened univariately (continuous +
+tertile forms) against the responder <strong>score</strong> (linear) and
+the Low/High <strong>class</strong> (logistic), overall and within each
+arm, then a maternal-arm-adjusted multivariable model.</li>
+<li><strong>Part C — serological signature.</strong> A maternal-serology
+feature matrix (all antigen × analyte features at the maternal visits,
+<strong>excluding the 3 features that define the score</strong>),
+screened by univariate AUC and modelled with an arm-adjusted elastic net
+(cross-validated AUC), with a clean pre-vaccination (PregEarly) baseline
+model.</li>
+</ul>
+<pre class="r"><code>RESP_FEATS &lt;- params$responder_features
+MAT_VIS    &lt;- params$maternal_visits
+
+# Rebuild the Phase 07 Stage A Low/High class via the NEW helper (which reuses
+# the C4_within_visit_helpers engine under the hood for an identical construct).
+mat_cls &lt;- build_maternal_responder_class(
+  data_raw, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
+
+arm_tbl &lt;- subject_maternal_arm(data_raw)
+mat &lt;- merge(mat_cls, arm_tbl, by = &quot;subject_accession&quot;)
+mat &lt;- mat[mat$arm_name %in% c(&quot;TdaP&quot;, &quot;TT&quot;), , drop = FALSE]
+mat$arm_name &lt;- factor(mat$arm_name, levels = c(&quot;TT&quot;, &quot;TdaP&quot;))   # TT = reference
+
+# Optional participant log (best-effort; this branch does not depend on the
+# tracker API, so any signature mismatch is caught and ignored).
+if (!is.null(nt) &amp;&amp; exists(&quot;nt_log_manual&quot;, mode = &quot;function&quot;)) {
+  nt &lt;- tryCatch(
+    nt_log_manual(nt, &quot;Mothers with Low/High class + arm&quot;, nrow(mat), stratum = &quot;all&quot;),
+    error = function(e1) tryCatch(
+      nt_log_manual(nt, &quot;Mothers with Low/High class + arm&quot;, nrow(mat)),
+      error = function(e2) nt))
+}</code></pre>
+<hr />
+</div>
+<div id="decomposition-of-the-responder-score-categories"
+class="section level1">
+<h1>Decomposition of the responder score categories</h1>
+<p>The Low/High split is the mean Blom-standardised maternal response
+across the <strong>three defining features</strong> (PT_IgG, FHA_IgG,
+PRN_IgG) at the maternal visits (PregEarly, MatBirth). All three of PT,
+FHA and PRN enter the score; no ACT or PENTAMER feature does (neither is
+measured in this dataset, and both are explicitly excluded from every
+serology step below). This section decomposes the categories into the
+contribution of each defining antigen, so the High/Low classes can be
+read in terms of the antibodies that build them.</p>
+<pre class="r"><code>.blom_d &lt;- function(x) { r &lt;- rank(x, na.last = &quot;keep&quot;); n &lt;- sum(!is.na(x)); stats::qnorm((r - 3/8) / (n + 1/4)) }
+dec &lt;- data_raw %&gt;%
+  dplyr::filter(visit_name %in% MAT_VIS, as.character(feature) %in% RESP_FEATS) %&gt;%
+  dplyr::group_by(subject_accession, feature, visit_name) %&gt;%
+  dplyr::summarise(v = mean(log_assay_value, na.rm = TRUE), .groups = &quot;drop&quot;) %&gt;%
+  dplyr::mutate(key = paste(feature, visit_name, sep = &quot;@&quot;)) %&gt;%
+  dplyr::group_by(key) %&gt;% dplyr::mutate(z = .blom_d(v)) %&gt;% dplyr::ungroup() %&gt;%
+  dplyr::group_by(subject_accession, feature) %&gt;%
+  dplyr::summarise(antigen_z = mean(z, na.rm = TRUE), .groups = &quot;drop&quot;)
+decm &lt;- dec %&gt;% dplyr::inner_join(mat_cls[, c(&quot;subject_accession&quot;, &quot;responder&quot;, &quot;score&quot;)],
+                                  by = &quot;subject_accession&quot;)
+per_ant &lt;- decm %&gt;% dplyr::group_by(feature) %&gt;%
+  dplyr::summarise(
+    n         = sum(is.finite(antigen_z)),
+    mean_Low  = round(mean(antigen_z[responder == &quot;Low&quot;],  na.rm = TRUE), 3),
+    mean_High = round(mean(antigen_z[responder == &quot;High&quot;], na.rm = TRUE), 3),
+    diff      = round(mean(antigen_z[responder == &quot;High&quot;], na.rm = TRUE) -
+                      mean(antigen_z[responder == &quot;Low&quot;],  na.rm = TRUE), 3),
+    AUC       = round(auc_binary(antigen_z, responder), 3),
+    loading   = round(stats::cor(antigen_z, score, use = &quot;complete.obs&quot;), 3),
+    p         = tryCatch(signif(stats::wilcox.test(antigen_z ~ responder)$p.value, 3),
+                         error = function(e) NA_real_),
+    .groups   = &quot;drop&quot;) %&gt;%
+  dplyr::arrange(dplyr::desc(diff))
+print(knitr::kable(per_ant,
+  caption = paste0(&quot;Table D1. Per-antigen decomposition of the responder categories. Each defining &quot;,
+    &quot;antigen&#39;s maternal Blom-z (averaged over the maternal visits) by class, the High-minus-Low &quot;,
+    &quot;difference, the antigen&#39;s discrimination of the class (AUC), and its loading (correlation) on the &quot;,
+    &quot;overall score. All three of PT, FHA and PRN contribute positively; the ranking shows which antigen &quot;,
+    &quot;separates the categories most.&quot;)))</code></pre>
+<table>
+<caption>Table D1. Per-antigen decomposition of the responder
+categories. Each defining antigen’s maternal Blom-z (averaged over the
+maternal visits) by class, the High-minus-Low difference, the antigen’s
+discrimination of the class (AUC), and its loading (correlation) on the
+overall score. All three of PT, FHA and PRN contribute positively; the
+ranking shows which antigen separates the categories most.</caption>
+<thead>
+<tr class="header">
+<th align="left">feature</th>
+<th align="right">n</th>
+<th align="right">mean_Low</th>
+<th align="right">mean_High</th>
+<th align="right">diff</th>
+<th align="right">AUC</th>
+<th align="right">loading</th>
+<th align="right">p</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT_IgG</td>
+<td align="right">283</td>
+<td align="right">-0.650</td>
+<td align="right">0.536</td>
+<td align="right">1.185</td>
+<td align="right">0.921</td>
+<td align="right">0.867</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">FHA_IgG</td>
+<td align="right">283</td>
+<td align="right">-0.642</td>
+<td align="right">0.516</td>
+<td align="right">1.158</td>
+<td align="right">0.926</td>
+<td align="right">0.890</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN_IgG</td>
+<td align="right">283</td>
+<td align="right">-0.610</td>
+<td align="right">0.538</td>
+<td align="right">1.148</td>
+<td align="right">0.895</td>
+<td align="right">0.859</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>top &lt;- per_ant$feature[which.max(per_ant$diff)]
+cat(sprintf(paste0(&quot;\nThe categories separate on **all three** defining antigens. The largest &quot;,
+                   &quot;High-vs-Low gap is **%s** (\u0394z = %.3f, AUC = %.3f); every antigen loads &quot;,
+                   &quot;positively on the score (loadings: %s).\n\n&quot;),
+            top, per_ant$diff[per_ant$feature == top], per_ant$AUC[per_ant$feature == top],
+            paste(sprintf(&quot;%s %.2f&quot;, per_ant$feature, per_ant$loading), collapse = &quot;, &quot;)))</code></pre>
+<p>The categories separate on <strong>all three</strong> defining
+antigens. The largest High-vs-Low gap is <strong>PT_IgG</strong> (Δz =
+1.185, AUC = 0.921); every antigen loads positively on the score
+(loadings: PT_IgG 0.87, FHA_IgG 0.89, PRN_IgG 0.86).</p>
+<pre class="r"><code>ggplot(decm, aes(responder, antigen_z, fill = responder)) +
+  geom_violin(alpha = .5, color = NA) +
+  geom_boxplot(width = .16, outlier.size = .5) +
+  facet_wrap(~ feature, nrow = 1) +
+  scale_fill_manual(values = c(Low = &quot;#c0297a&quot;, High = &quot;#1b5aa0&quot;), guide = &quot;none&quot;) +
+  labs(x = NULL, y = &quot;antigen Blom-z (maternal)&quot;) +
+  theme_bw(base_size = 10)</code></pre>
+<div class="figure">
+<img src="C3_responder_phenotype_files/figure-html/score-decomp-fig-1.png" alt="Figure D1. Per-antigen Blom-standardised maternal response (averaged over the maternal visits) by responder class, for each of the three score-defining antigens." width="672" />
+<p class="caption">
+Figure D1. Per-antigen Blom-standardised maternal response (averaged
+over the maternal visits) by responder class, for each of the three
+score-defining antigens.
+</p>
+</div>
+<hr />
+</div>
+<div id="clinical-covariates" class="section level1">
+<h1>Clinical Covariates</h1>
+<p>The ten covariates from <code>clin_assess</code> (identical to the
+clinical-predictor analyses). <code>infant_sex</code> is retained as a
+dyad covariate of the pregnancy, not as an infant-arm axis.</p>
+<table style="width:100%;">
+<caption>Clinical covariates screened.</caption>
+<colgroup>
+<col width="42%" />
+<col width="28%" />
+<col width="28%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Label</th>
+<th align="left">Variable</th>
+<th align="left">Type</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">birth_weight</td>
+<td align="left">continuous (cont + tertile)</td>
+</tr>
+<tr class="even">
+<td align="left">Infant Sex</td>
+<td align="left">infant_sex</td>
+<td align="left">categorical (2 level)</td>
+</tr>
+<tr class="odd">
+<td align="left">Delivery Mode</td>
+<td align="left">delivery_mode</td>
+<td align="left">categorical (2 level)</td>
+</tr>
+<tr class="even">
+<td align="left">Parity</td>
+<td align="left">parity</td>
+<td align="left">categorical (2 level)</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">gestational_age_vaccination</td>
+<td align="left">continuous (cont + tertile)</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">vaccine_birth_interval_days</td>
+<td align="left">continuous (cont + tertile)</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">gestational_age_birth</td>
+<td align="left">continuous (cont + tertile)</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">maternal_age</td>
+<td align="left">continuous (cont + tertile)</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">maternal_bmi</td>
+<td align="left">continuous (cont + tertile)</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">maternal_Hb</td>
+<td align="left">continuous (cont + tertile)</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>data &lt;- merge(mat, clin, by = &quot;subject_accession&quot;, all.x = TRUE)
+
+# ---- prepare covariates (mirrors the clinical-predictor pipeline) ----
+if (&quot;infant_sex&quot; %in% names(data)) data$infant_sex &lt;- factor(data$infant_sex)
+if (&quot;delivery_mode&quot; %in% names(data) &amp;&amp; requireNamespace(&quot;forcats&quot;, quietly = TRUE)) {
+  dm &lt;- factor(data$delivery_mode)
+  data$delivery_mode &lt;- forcats::fct_collapse(dm,
+    vaginal  = grep(&quot;(?i)vag|normal|spontan|SVD&quot;, levels(dm), value = TRUE, perl = TRUE),
+    cesarean = grep(&quot;(?i)ces|csec|section|C/S&quot;,   levels(dm), value = TRUE, perl = TRUE))
+  data$delivery_mode &lt;- tryCatch(stats::relevel(forcats::fct_drop(data$delivery_mode),
+                                                ref = &quot;vaginal&quot;),
+                                 error = function(e) data$delivery_mode)
+}
+if (&quot;parity&quot; %in% names(data))
+  data$parity &lt;- factor(ifelse(data$parity == 0, &quot;nulliparous&quot;, &quot;parous&quot;),
+                        levels = c(&quot;nulliparous&quot;, &quot;parous&quot;))
+for (v in cont_vars) if (v %in% names(data)) data[[paste0(v, &quot;_T&quot;)]] &lt;- make_tertile(data[[v]])
+
+cat(sprintf(&quot;Merged analysis frame: **%d mothers × %d columns**; Low = %d, High = %d.\n\n&quot;,
+            nrow(data), ncol(data), sum(data$responder == &quot;Low&quot;),
+            sum(data$responder == &quot;High&quot;)))</code></pre>
+<pre><code>## Merged analysis frame: **283 mothers × 24 columns**; Low = 129, High = 154.</code></pre>
+<pre class="r"><code>ids_resp &lt;- mat$subject_accession
+ids_clin &lt;- clin$subject_accession
+cat(&quot;responder mothers:&quot;, length(ids_resp),
+    &quot;| in clin_assess:&quot;, sum(ids_resp %in% ids_clin),
+    &quot;| missing:&quot;, sum(!ids_resp %in% ids_clin), &quot;\n&quot;)</code></pre>
+<pre><code>## responder mothers: 283 | in clin_assess: 211 | missing: 72</code></pre>
+<pre class="r"><code># are the unmatched a format issue? peek at both ID styles:
+head(setdiff(ids_resp, ids_clin)); str(ids_resp); str(ids_clin)</code></pre>
+<pre><code>## [1] 23 24 25 28 31 32</code></pre>
+<pre><code>##  num [1:283] 1 3 4 5 6 7 8 9 10 11 ...</code></pre>
+<pre><code>##  num [1:239] 1 3 4 5 6 7 8 9 10 11 ...</code></pre>
+<pre class="r"><code># is missingness related to responder status (not just arm)?
+data$has_clin &lt;- !is.na(data$maternal_age)
+print(table(data$responder, data$has_clin))</code></pre>
+<pre><code>##       
+##        FALSE TRUE
+##   Low     31   98
+##   High    41  113</code></pre>
+<hr />
+</div>
+<div id="part-a-the-arm-baseline" class="section level1">
+<h1>Part A — The Arm Baseline</h1>
+<p>🧭 <em>Maps to summary: “how much of the responder split is the
+vaccine itself?”</em></p>
+<pre class="r"><code>tab &lt;- table(arm = data$arm_name, responder = data$responder)
+print(knitr::kable(as.data.frame.matrix(tab),
+      caption = &quot;Table A1. Maternal arm × responder class.&quot;))</code></pre>
+<table>
+<caption>Table A1. Maternal arm × responder class.</caption>
+<thead>
+<tr class="header">
+<th align="left"></th>
+<th align="right">Low</th>
+<th align="right">High</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="right">109</td>
+<td align="right">44</td>
+</tr>
+<tr class="even">
+<td align="left">TdaP</td>
+<td align="right">20</td>
+<td align="right">110</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>w &lt;- tryCatch(stats::wilcox.test(score ~ arm_name, data = data), error = function(e) NULL)
+arm_auc &lt;- auc_binary(as.numeric(data$arm_name == &quot;TdaP&quot;), data$responder)
+ft &lt;- tryCatch(stats::fisher.test(tab), error = function(e) NULL)
+cat(sprintf(paste0(&quot;\nResponder **score** by arm: Wilcoxon %s. &quot;,
+                   &quot;Arm alone separates the **class** at AUC = **%.3f** (Fisher p = %s). &quot;,
+                   &quot;This is the bar Parts B and C must beat.\n\n&quot;),
+            if (!is.null(w)) sprintf(&quot;W = %.0f, p = %.3g&quot;, w$statistic, w$p.value) else &quot;n/a&quot;,
+            arm_auc, if (!is.null(ft)) signif(ft$p.value, 3) else &quot;n/a&quot;))</code></pre>
+<p>Responder <strong>score</strong> by arm: Wilcoxon W = 4049, p =
+8.49e-18. Arm alone separates the <strong>class</strong> at AUC =
+<strong>0.780</strong> (Fisher p = 6.17e-22). This is the bar Parts B
+and C must beat.</p>
+<pre class="r"><code>ggplot(data, aes(arm_name, score, fill = arm_name)) +
+  geom_violin(alpha = .5, color = NA) +
+  geom_boxplot(width = .18, outlier.size = .6) +
+  scale_fill_manual(values = c(TT = &quot;#c0297a&quot;, TdaP = &quot;#1b5aa0&quot;), guide = &quot;none&quot;) +
+  labs(x = &quot;maternal arm&quot;, y = &quot;maternal responder score (z)&quot;) +
+  theme_bw(base_size = 11)</code></pre>
+<div class="figure">
+<img src="C3_responder_phenotype_files/figure-html/part-a-plot-1.png" alt="Figure A1. Maternal responder score by arm (the score that defines Low/High)." width="672" />
+<p class="caption">
+Figure A1. Maternal responder score by arm (the score that defines
+Low/High).
+</p>
+</div>
+<hr />
+</div>
+<div id="part-b-clinical-covariates" class="section level1">
+<h1>Part B — Clinical Covariates</h1>
+<p>Each covariate is screened against the responder
+<strong>score</strong> (linear model, mirrors the clinical-predictor
+pipeline) and the Low/High <strong>class</strong> (logistic), in three
+strata: <strong>Overall</strong>, <strong>TdaP mothers</strong>,
+<strong>TT mothers</strong>.</p>
+<pre class="r"><code>strata &lt;- list(
+  Overall = data,
+  TdaP    = dplyr::filter(data, arm_name == &quot;TdaP&quot;),
+  TT      = dplyr::filter(data, arm_name == &quot;TT&quot;))
+
+screen_score &lt;- lapply(strata, function(d)
+  run_clinical_screen(d, &quot;score&quot;, covariates_named_list, cat_vars,
+                      mode = &quot;lm&quot;, alpha = params$alpha))
+screen_class &lt;- lapply(strata, function(d)
+  run_clinical_screen(d, &quot;responder&quot;, covariates_named_list, cat_vars,
+                      mode = &quot;logit&quot;, alpha = params$alpha))</code></pre>
+<div id="predicting-the-responder-score-linear" class="section level2">
+<h2>Predicting the responder SCORE (linear)</h2>
+<pre class="r"><code>for (st in names(screen_score)) show_univ(screen_score[[st]], paste0(st, &quot; — score&quot;))</code></pre>
+<div id="overall-score" class="section level4">
+<h4>Overall — score</h4>
+<table style="width:100%;">
+<caption>Univariate screen — Overall — score</caption>
+<colgroup>
+<col width="46%" />
+<col width="13%" />
+<col width="4%" />
+<col width="16%" />
+<col width="4%" />
+<col width="11%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Covariate</th>
+<th align="left">Form</th>
+<th align="right">n</th>
+<th align="left">R2 / pseudo-R2</th>
+<th align="left">AUC</th>
+<th align="left">p (model)</th>
+<th align="left"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">continuous</td>
+<td align="right">208</td>
+<td align="left">0.007</td>
+<td align="left">—</td>
+<td align="left">0.242</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Birth Weight</td>
+<td align="left">tertile</td>
+<td align="right">208</td>
+<td align="left">0.007</td>
+<td align="left">—</td>
+<td align="left">0.472</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Infant Sex</td>
+<td align="left">categorical</td>
+<td align="right">211</td>
+<td align="left">0.028</td>
+<td align="left">—</td>
+<td align="left">0.0145</td>
+<td align="left">*</td>
+</tr>
+<tr class="even">
+<td align="left">Delivery Mode</td>
+<td align="left">categorical</td>
+<td align="right">211</td>
+<td align="left">0.001</td>
+<td align="left">—</td>
+<td align="left">0.647</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Parity</td>
+<td align="left">categorical</td>
+<td align="right">211</td>
+<td align="left">0.003</td>
+<td align="left">—</td>
+<td align="left">0.462</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.001</td>
+<td align="left">—</td>
+<td align="left">0.596</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.006</td>
+<td align="left">—</td>
+<td align="left">0.524</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.014</td>
+<td align="left">—</td>
+<td align="left">0.0882</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.014</td>
+<td align="left">—</td>
+<td align="left">0.234</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.022</td>
+<td align="left">—</td>
+<td align="left">0.0305</td>
+<td align="left">*</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.016</td>
+<td align="left">—</td>
+<td align="left">0.183</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.008</td>
+<td align="left">—</td>
+<td align="left">0.203</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.011</td>
+<td align="left">—</td>
+<td align="left">0.313</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">210</td>
+<td align="left">0.000</td>
+<td align="left">—</td>
+<td align="left">0.862</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">210</td>
+<td align="left">0.003</td>
+<td align="left">—</td>
+<td align="left">0.749</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">continuous</td>
+<td align="right">210</td>
+<td align="left">0.002</td>
+<td align="left">—</td>
+<td align="left">0.569</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">tertile</td>
+<td align="right">210</td>
+<td align="left">0.002</td>
+<td align="left">—</td>
+<td align="left">0.841</td>
+<td align="left">ns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Selected (p &lt; 0.05):</strong> Infant Sex; Gestational Age
+at Delivery</p>
+<table style="width:100%;">
+<caption>Multivariable model (lm) — Overall — score</caption>
+<colgroup>
+<col width="32%" />
+<col width="16%" />
+<col width="14%" />
+<col width="14%" />
+<col width="14%" />
+<col width="5%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Predictor</th>
+<th align="right">est</th>
+<th align="right">SE</th>
+<th align="right">stat</th>
+<th align="right">p</th>
+<th align="left">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">(Intercept)</td>
+<td align="right">-2.8915072</td>
+<td align="right">1.2845057</td>
+<td align="right">-2.251066</td>
+<td align="right">0.0254271</td>
+<td align="left">*</td>
+</tr>
+<tr class="even">
+<td align="left">infant_sexMale</td>
+<td align="right">0.2383156</td>
+<td align="right">0.0976519</td>
+<td align="right">2.440461</td>
+<td align="right">0.0155054</td>
+<td align="left">*</td>
+</tr>
+<tr class="odd">
+<td align="left">gestational_age_birth</td>
+<td align="right">0.0706433</td>
+<td align="right">0.0328248</td>
+<td align="right">2.152132</td>
+<td align="right">0.0325389</td>
+<td align="left">*</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="tdap-score" class="section level4">
+<h4>TdaP — score</h4>
+<table style="width:100%;">
+<caption>Univariate screen — TdaP — score</caption>
+<colgroup>
+<col width="46%" />
+<col width="13%" />
+<col width="3%" />
+<col width="17%" />
+<col width="4%" />
+<col width="11%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Covariate</th>
+<th align="left">Form</th>
+<th align="right">n</th>
+<th align="left">R2 / pseudo-R2</th>
+<th align="left">AUC</th>
+<th align="left">p (model)</th>
+<th align="left"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">continuous</td>
+<td align="right">96</td>
+<td align="left">0.010</td>
+<td align="left">—</td>
+<td align="left">0.327</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Birth Weight</td>
+<td align="left">tertile</td>
+<td align="right">96</td>
+<td align="left">0.015</td>
+<td align="left">—</td>
+<td align="left">0.497</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Infant Sex</td>
+<td align="left">categorical</td>
+<td align="right">97</td>
+<td align="left">0.013</td>
+<td align="left">—</td>
+<td align="left">0.275</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Delivery Mode</td>
+<td align="left">categorical</td>
+<td align="right">97</td>
+<td align="left">0.017</td>
+<td align="left">—</td>
+<td align="left">0.199</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Parity</td>
+<td align="left">categorical</td>
+<td align="right">97</td>
+<td align="left">0.001</td>
+<td align="left">—</td>
+<td align="left">0.742</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.001</td>
+<td align="left">—</td>
+<td align="left">0.715</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.015</td>
+<td align="left">—</td>
+<td align="left">0.496</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.005</td>
+<td align="left">—</td>
+<td align="left">0.485</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.020</td>
+<td align="left">—</td>
+<td align="left">0.39</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.003</td>
+<td align="left">—</td>
+<td align="left">0.62</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.014</td>
+<td align="left">—</td>
+<td align="left">0.52</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.008</td>
+<td align="left">—</td>
+<td align="left">0.371</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.063</td>
+<td align="left">—</td>
+<td align="left">0.0465</td>
+<td align="left">*</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.001</td>
+<td align="left">—</td>
+<td align="left">0.799</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.005</td>
+<td align="left">—</td>
+<td align="left">0.787</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.008</td>
+<td align="left">—</td>
+<td align="left">0.381</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.015</td>
+<td align="left">—</td>
+<td align="left">0.484</td>
+<td align="left">ns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Selected (p &lt; 0.05):</strong> Maternal Age at
+Vaccination</p>
+</div>
+<div id="tt-score" class="section level4">
+<h4>TT — score</h4>
+<table style="width:100%;">
+<caption>Univariate screen — TT — score</caption>
+<colgroup>
+<col width="46%" />
+<col width="13%" />
+<col width="4%" />
+<col width="16%" />
+<col width="4%" />
+<col width="11%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Covariate</th>
+<th align="left">Form</th>
+<th align="right">n</th>
+<th align="left">R2 / pseudo-R2</th>
+<th align="left">AUC</th>
+<th align="left">p (model)</th>
+<th align="left"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">continuous</td>
+<td align="right">112</td>
+<td align="left">0.008</td>
+<td align="left">—</td>
+<td align="left">0.352</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Birth Weight</td>
+<td align="left">tertile</td>
+<td align="right">112</td>
+<td align="left">0.012</td>
+<td align="left">—</td>
+<td align="left">0.516</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Infant Sex</td>
+<td align="left">categorical</td>
+<td align="right">114</td>
+<td align="left">0.027</td>
+<td align="left">—</td>
+<td align="left">0.0831</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Delivery Mode</td>
+<td align="left">categorical</td>
+<td align="right">114</td>
+<td align="left">0.007</td>
+<td align="left">—</td>
+<td align="left">0.393</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Parity</td>
+<td align="left">categorical</td>
+<td align="right">114</td>
+<td align="left">0.022</td>
+<td align="left">—</td>
+<td align="left">0.113</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.020</td>
+<td align="left">—</td>
+<td align="left">0.136</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.006</td>
+<td align="left">—</td>
+<td align="left">0.714</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.045</td>
+<td align="left">—</td>
+<td align="left">0.024</td>
+<td align="left">*</td>
+</tr>
+<tr class="odd">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.031</td>
+<td align="left">—</td>
+<td align="left">0.171</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.033</td>
+<td align="left">—</td>
+<td align="left">0.054</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.041</td>
+<td align="left">—</td>
+<td align="left">0.0975</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.002</td>
+<td align="left">—</td>
+<td align="left">0.682</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.102</td>
+<td align="left">—</td>
+<td align="left">0.0026</td>
+<td align="left">**</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">113</td>
+<td align="left">0.004</td>
+<td align="left">—</td>
+<td align="left">0.525</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">113</td>
+<td align="left">0.005</td>
+<td align="left">—</td>
+<td align="left">0.751</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">continuous</td>
+<td align="right">113</td>
+<td align="left">0.009</td>
+<td align="left">—</td>
+<td align="left">0.307</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">tertile</td>
+<td align="right">113</td>
+<td align="left">0.007</td>
+<td align="left">—</td>
+<td align="left">0.663</td>
+<td align="left">ns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Selected (p &lt; 0.05):</strong> Interval: Vaccination to
+Delivery (days); Maternal Age at Vaccination</p>
+<table>
+<caption>Multivariable model (lm) — TT — score</caption>
+<colgroup>
+<col width="37%" />
+<col width="14%" />
+<col width="13%" />
+<col width="14%" />
+<col width="13%" />
+<col width="5%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Predictor</th>
+<th align="right">est</th>
+<th align="right">SE</th>
+<th align="right">stat</th>
+<th align="right">p</th>
+<th align="left">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">(Intercept)</td>
+<td align="right">-1.0832284</td>
+<td align="right">0.2816626</td>
+<td align="right">-3.8458367</td>
+<td align="right">0.0002017</td>
+<td align="left">***</td>
+</tr>
+<tr class="even">
+<td align="left">vaccine_birth_interval_days</td>
+<td align="right">0.0082738</td>
+<td align="right">0.0040295</td>
+<td align="right">2.0533114</td>
+<td align="right">0.0424143</td>
+<td align="left">*</td>
+</tr>
+<tr class="odd">
+<td align="left">maternal_age_TT2 (mid)</td>
+<td align="right">0.4236692</td>
+<td align="right">0.1361308</td>
+<td align="right">3.1122206</td>
+<td align="right">0.0023663</td>
+<td align="left">**</td>
+</tr>
+<tr class="even">
+<td align="left">maternal_age_TT3 (high)</td>
+<td align="right">0.0636487</td>
+<td align="right">0.1527139</td>
+<td align="right">0.4167837</td>
+<td align="right">0.6776488</td>
+<td align="left">ns</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="predicting-the-lowhigh-class-logistic" class="section level2">
+<h2>Predicting the Low/High CLASS (logistic)</h2>
+<pre class="r"><code>for (st in names(screen_class)) show_univ(screen_class[[st]], paste0(st, &quot; — class&quot;))</code></pre>
+<div id="overall-class" class="section level4">
+<h4>Overall — class</h4>
+<table style="width:100%;">
+<caption>Univariate screen — Overall — class</caption>
+<colgroup>
+<col width="45%" />
+<col width="13%" />
+<col width="4%" />
+<col width="16%" />
+<col width="6%" />
+<col width="10%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Covariate</th>
+<th align="left">Form</th>
+<th align="right">n</th>
+<th align="left">R2 / pseudo-R2</th>
+<th align="left">AUC</th>
+<th align="left">p (model)</th>
+<th align="left"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">continuous</td>
+<td align="right">208</td>
+<td align="left">0.264</td>
+<td align="left">0.498</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Birth Weight</td>
+<td align="left">tertile</td>
+<td align="right">208</td>
+<td align="left">0.268</td>
+<td align="left">0.541</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Infant Sex</td>
+<td align="left">categorical</td>
+<td align="right">211</td>
+<td align="left">0.261</td>
+<td align="left">0.562</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Delivery Mode</td>
+<td align="left">categorical</td>
+<td align="right">211</td>
+<td align="left">0.255</td>
+<td align="left">0.514</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Parity</td>
+<td align="left">categorical</td>
+<td align="right">211</td>
+<td align="left">0.255</td>
+<td align="left">0.524</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.253</td>
+<td align="left">0.514</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.256</td>
+<td align="left">0.532</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.254</td>
+<td align="left">0.530</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.255</td>
+<td align="left">0.530</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.256</td>
+<td align="left">0.530</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.257</td>
+<td align="left">0.540</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">211</td>
+<td align="left">0.253</td>
+<td align="left">0.524</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">211</td>
+<td align="left">0.253</td>
+<td align="left">0.516</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">210</td>
+<td align="left">0.257</td>
+<td align="left">0.503</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">210</td>
+<td align="left">0.257</td>
+<td align="left">0.513</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">continuous</td>
+<td align="right">210</td>
+<td align="left">0.257</td>
+<td align="left">0.509</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">tertile</td>
+<td align="right">210</td>
+<td align="left">0.260</td>
+<td align="left">0.536</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+</tbody>
+</table>
+<p><em>No covariate reached p &lt; 0.05 in this stratum.</em></p>
+</div>
+<div id="tdap-class" class="section level4">
+<h4>TdaP — class</h4>
+<table style="width:100%;">
+<caption>Univariate screen — TdaP — class</caption>
+<colgroup>
+<col width="45%" />
+<col width="13%" />
+<col width="3%" />
+<col width="16%" />
+<col width="6%" />
+<col width="11%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Covariate</th>
+<th align="left">Form</th>
+<th align="right">n</th>
+<th align="left">R2 / pseudo-R2</th>
+<th align="left">AUC</th>
+<th align="left">p (model)</th>
+<th align="left"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">continuous</td>
+<td align="right">96</td>
+<td align="left">0.225</td>
+<td align="left">0.520</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Birth Weight</td>
+<td align="left">tertile</td>
+<td align="right">96</td>
+<td align="left">0.252</td>
+<td align="left">0.623</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Infant Sex</td>
+<td align="left">categorical</td>
+<td align="right">97</td>
+<td align="left">0.222</td>
+<td align="left">0.509</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Delivery Mode</td>
+<td align="left">categorical</td>
+<td align="right">97</td>
+<td align="left">0.235</td>
+<td align="left">0.525</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Parity</td>
+<td align="left">categorical</td>
+<td align="right">97</td>
+<td align="left">0.223</td>
+<td align="left">0.520</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.232</td>
+<td align="left">0.591</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.241</td>
+<td align="left">0.606</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.228</td>
+<td align="left">0.583</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.236</td>
+<td align="left">0.583</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.222</td>
+<td align="left">0.499</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.228</td>
+<td align="left">0.555</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.223</td>
+<td align="left">0.541</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.231</td>
+<td align="left">0.576</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.222</td>
+<td align="left">0.449</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.246</td>
+<td align="left">0.608</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">continuous</td>
+<td align="right">97</td>
+<td align="left">0.223</td>
+<td align="left">0.520</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">tertile</td>
+<td align="right">97</td>
+<td align="left">0.245</td>
+<td align="left">0.616</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+</tbody>
+</table>
+<p><em>No covariate reached p &lt; 0.05 in this stratum.</em></p>
+</div>
+<div id="tt-class" class="section level4">
+<h4>TT — class</h4>
+<table style="width:100%;">
+<caption>Univariate screen — TT — class</caption>
+<colgroup>
+<col width="45%" />
+<col width="13%" />
+<col width="4%" />
+<col width="16%" />
+<col width="6%" />
+<col width="10%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Covariate</th>
+<th align="left">Form</th>
+<th align="right">n</th>
+<th align="left">R2 / pseudo-R2</th>
+<th align="left">AUC</th>
+<th align="left">p (model)</th>
+<th align="left"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">continuous</td>
+<td align="right">112</td>
+<td align="left">0.270</td>
+<td align="left">0.498</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Birth Weight</td>
+<td align="left">tertile</td>
+<td align="right">112</td>
+<td align="left">0.271</td>
+<td align="left">0.523</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Infant Sex</td>
+<td align="left">categorical</td>
+<td align="right">114</td>
+<td align="left">0.275</td>
+<td align="left">0.577</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Delivery Mode</td>
+<td align="left">categorical</td>
+<td align="right">114</td>
+<td align="left">0.269</td>
+<td align="left">0.527</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Parity</td>
+<td align="left">categorical</td>
+<td align="right">114</td>
+<td align="left">0.270</td>
+<td align="left">0.553</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.265</td>
+<td align="left">0.537</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.264</td>
+<td align="left">0.523</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.266</td>
+<td align="left">0.534</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.266</td>
+<td align="left">0.539</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.267</td>
+<td align="left">0.531</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.283</td>
+<td align="left">0.601</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">114</td>
+<td align="left">0.264</td>
+<td align="left">0.510</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">114</td>
+<td align="left">0.309</td>
+<td align="left">0.660</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">continuous</td>
+<td align="right">113</td>
+<td align="left">0.266</td>
+<td align="left">0.502</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">tertile</td>
+<td align="right">113</td>
+<td align="left">0.270</td>
+<td align="left">0.546</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">continuous</td>
+<td align="right">113</td>
+<td align="left">0.287</td>
+<td align="left">0.597</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">tertile</td>
+<td align="right">113</td>
+<td align="left">0.274</td>
+<td align="left">0.560</td>
+<td align="left">—</td>
+<td align="left">—</td>
+</tr>
+</tbody>
+</table>
+<p><em>No covariate reached p &lt; 0.05 in this stratum.</em></p>
+</div>
+</div>
+<div id="maternal-arm-adjusted-model-overall" class="section level2">
+<h2>Maternal-arm-adjusted model (overall)</h2>
+<p>🧭 <em>Maps to summary: “does any clinical covariate predict the
+class beyond the arm?”</em></p>
+<pre class="r"><code># Enter arm + any covariate selected in ANY stratum (score or class), jointly.
+sel_any &lt;- unique(unlist(c(
+  lapply(screen_score, function(s) unname(unlist(s$selected))),
+  lapply(screen_class, function(s) unname(unlist(s$selected))))))
+sel_any &lt;- sel_any[!is.na(sel_any)]
+
+if (length(sel_any)) {
+  fla &lt;- stats::reformulate(c(&quot;arm_name&quot;, sel_any), response = &quot;responder&quot;)
+  m_adj &lt;- tryCatch(stats::glm(fla, data = data, family = stats::binomial(),
+                               na.action = stats::na.omit), error = function(e) NULL)
+  if (!is.null(m_adj)) {
+    print(knitr::kable(.tidy_fit(m_adj, logit = TRUE),
+          caption = &quot;Table B-adj. Arm-adjusted logistic model for High responder (OR per term).&quot;))
+    au &lt;- auc_binary(stats::predict(m_adj, type = &quot;response&quot;),
+                     stats::model.frame(m_adj)[[&quot;responder&quot;]])
+    cat(sprintf(&quot;\nIn-sample AUC = **%.3f** (vs arm-only AUC = %.3f). &quot;, au, arm_auc))
+    cat(&quot;Only terms that stay significant *after* arm adjustment add information beyond the vaccine.\n\n&quot;)
+  }
+} else {
+  cat(&quot;*No clinical covariate was selected in any stratum, so no arm-adjusted model is fitted — &quot;,
+      &quot;clinical covariates do not predict responder status beyond the arm.*\n\n&quot;)
+}</code></pre>
+<table>
+<caption>Table B-adj. Arm-adjusted logistic model for High responder (OR
+per term).</caption>
+<colgroup>
+<col width="25%" />
+<col width="10%" />
+<col width="9%" />
+<col width="10%" />
+<col width="9%" />
+<col width="10%" />
+<col width="9%" />
+<col width="12%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Predictor</th>
+<th align="right">est</th>
+<th align="right">SE</th>
+<th align="right">stat</th>
+<th align="right">p</th>
+<th align="right">OR</th>
+<th align="right">OR_lo</th>
+<th align="right">OR_hi</th>
+<th align="left">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">(Intercept)</td>
+<td align="right">0.4373078</td>
+<td align="right">5.3785559</td>
+<td align="right">0.0813058</td>
+<td align="right">0.9351988</td>
+<td align="right">1.5485327</td>
+<td align="right">0.0000409</td>
+<td align="right">58646.160980</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">arm_nameTdaP</td>
+<td align="right">2.7678298</td>
+<td align="right">0.3787834</td>
+<td align="right">7.3071564</td>
+<td align="right">0.0000000</td>
+<td align="right">15.9240388</td>
+<td align="right">7.5792503</td>
+<td align="right">33.456477</td>
+<td align="left">***</td>
+</tr>
+<tr class="odd">
+<td align="left">infant_sexMale</td>
+<td align="right">0.4360930</td>
+<td align="right">0.3426837</td>
+<td align="right">1.2725815</td>
+<td align="right">0.2031666</td>
+<td align="right">1.5466526</td>
+<td align="right">0.7901226</td>
+<td align="right">3.027548</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">gestational_age_birth</td>
+<td align="right">-0.0763645</td>
+<td align="right">0.1545209</td>
+<td align="right">-0.4942014</td>
+<td align="right">0.6211640</td>
+<td align="right">0.9264785</td>
+<td align="right">0.6843913</td>
+<td align="right">1.254198</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">maternal_age_TT2 (mid)</td>
+<td align="right">0.5744815</td>
+<td align="right">0.4213893</td>
+<td align="right">1.3633036</td>
+<td align="right">0.1727868</td>
+<td align="right">1.7762094</td>
+<td align="right">0.7776790</td>
+<td align="right">4.056841</td>
+<td align="left">ns</td>
+</tr>
+<tr class="even">
+<td align="left">maternal_age_TT3 (high)</td>
+<td align="right">-0.0729366</td>
+<td align="right">0.4258058</td>
+<td align="right">-0.1712907</td>
+<td align="right">0.8639952</td>
+<td align="right">0.9296598</td>
+<td align="right">0.4035254</td>
+<td align="right">2.141792</td>
+<td align="left">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">vaccine_birth_interval_days</td>
+<td align="right">0.0176752</td>
+<td align="right">0.0158074</td>
+<td align="right">1.1181594</td>
+<td align="right">0.2634989</td>
+<td align="right">1.0178324</td>
+<td align="right">0.9867808</td>
+<td align="right">1.049861</td>
+<td align="left">ns</td>
+</tr>
+</tbody>
+</table>
+<p>In-sample AUC = <strong>0.819</strong> (vs arm-only AUC = 0.780).
+Only terms that stay significant <em>after</em> arm adjustment add
+information beyond the vaccine.</p>
+</div>
+<div id="cross-stratum-summary-figures" class="section level2">
+<h2>Cross-stratum summary &amp; figures</h2>
+<pre class="r"><code>all_rows &lt;- dplyr::bind_rows(lapply(names(screen_class), function(sn)
+  dplyr::mutate(screen_class[[sn]]$univ_table, Stratum = sn)))
+disp &lt;- all_rows %&gt;%
+  dplyr::mutate(cell = ifelse(is.na(auc), &quot;\u2014&quot;,
+                              sprintf(&quot;%.2f%s&quot;, auc, ifelse(sig %in% c(&quot;*&quot;,&quot;**&quot;,&quot;***&quot;), sig, &quot;&quot;)))) %&gt;%
+  dplyr::select(Label, Form, Stratum, cell) %&gt;%
+  tidyr::pivot_wider(names_from = Stratum, values_from = cell)
+print(knitr::kable(disp,
+      caption = &quot;Table B-x. Univariate class AUC (with significance stars) across strata.&quot;))</code></pre>
+<table>
+<caption>Table B-x. Univariate class AUC (with significance stars)
+across strata.</caption>
+<colgroup>
+<col width="57%" />
+<col width="16%" />
+<col width="11%" />
+<col width="7%" />
+<col width="7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Label</th>
+<th align="left">Form</th>
+<th align="left">Overall</th>
+<th align="left">TdaP</th>
+<th align="left">TT</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Birth Weight</td>
+<td align="left">continuous</td>
+<td align="left">0.50</td>
+<td align="left">0.52</td>
+<td align="left">0.50</td>
+</tr>
+<tr class="even">
+<td align="left">Birth Weight</td>
+<td align="left">tertile</td>
+<td align="left">0.54</td>
+<td align="left">0.62</td>
+<td align="left">0.52</td>
+</tr>
+<tr class="odd">
+<td align="left">Infant Sex</td>
+<td align="left">categorical</td>
+<td align="left">0.56</td>
+<td align="left">0.51</td>
+<td align="left">0.58</td>
+</tr>
+<tr class="even">
+<td align="left">Delivery Mode</td>
+<td align="left">categorical</td>
+<td align="left">0.51</td>
+<td align="left">0.52</td>
+<td align="left">0.53</td>
+</tr>
+<tr class="odd">
+<td align="left">Parity</td>
+<td align="left">categorical</td>
+<td align="left">0.52</td>
+<td align="left">0.52</td>
+<td align="left">0.55</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">continuous</td>
+<td align="left">0.51</td>
+<td align="left">0.59</td>
+<td align="left">0.54</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Vaccine</td>
+<td align="left">tertile</td>
+<td align="left">0.53</td>
+<td align="left">0.61</td>
+<td align="left">0.52</td>
+</tr>
+<tr class="even">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">continuous</td>
+<td align="left">0.53</td>
+<td align="left">0.58</td>
+<td align="left">0.53</td>
+</tr>
+<tr class="odd">
+<td align="left">Interval: Vaccination to Delivery (days)</td>
+<td align="left">tertile</td>
+<td align="left">0.53</td>
+<td align="left">0.58</td>
+<td align="left">0.54</td>
+</tr>
+<tr class="even">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">continuous</td>
+<td align="left">0.53</td>
+<td align="left">0.50</td>
+<td align="left">0.53</td>
+</tr>
+<tr class="odd">
+<td align="left">Gestational Age at Delivery</td>
+<td align="left">tertile</td>
+<td align="left">0.54</td>
+<td align="left">0.55</td>
+<td align="left">0.60</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">continuous</td>
+<td align="left">0.52</td>
+<td align="left">0.54</td>
+<td align="left">0.51</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Age at Vaccination</td>
+<td align="left">tertile</td>
+<td align="left">0.52</td>
+<td align="left">0.58</td>
+<td align="left">0.66</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">continuous</td>
+<td align="left">0.50</td>
+<td align="left">0.45</td>
+<td align="left">0.50</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal BMI at Vaccination</td>
+<td align="left">tertile</td>
+<td align="left">0.51</td>
+<td align="left">0.61</td>
+<td align="left">0.55</td>
+</tr>
+<tr class="even">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">continuous</td>
+<td align="left">0.51</td>
+<td align="left">0.52</td>
+<td align="left">0.60</td>
+</tr>
+<tr class="odd">
+<td align="left">Maternal Haemoglobin</td>
+<td align="left">tertile</td>
+<td align="left">0.54</td>
+<td align="left">0.62</td>
+<td align="left">0.56</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>pdat &lt;- all_rows %&gt;%
+  dplyr::filter(!is.na(auc)) %&gt;%
+  dplyr::mutate(sig_fill = !is.na(p_model) &amp; p_model &lt; params$alpha,
+                cov_form = paste0(Label, &quot; (&quot;, Form, &quot;)&quot;))
+ggplot(pdat, aes(auc, reorder(cov_form, auc), color = Stratum, shape = sig_fill)) +
+  geom_vline(xintercept = 0.5, linetype = &quot;dashed&quot;, color = &quot;grey60&quot;) +
+  geom_point(size = 3, position = position_dodge(.5)) +
+  scale_shape_manual(values = c(`TRUE` = 16, `FALSE` = 1),
+                     labels = c(`TRUE` = paste0(&quot;p &lt; &quot;, params$alpha),
+                                `FALSE` = paste0(&quot;p \u2265 &quot;, params$alpha))) +
+  scale_color_manual(values = c(Overall = &quot;#444444&quot;, TdaP = &quot;#1b5aa0&quot;, TT = &quot;#c0297a&quot;)) +
+  labs(x = &quot;univariate AUC (class = High)&quot;, y = NULL, color = &quot;stratum&quot;, shape = NULL,
+       title = &quot;Clinical covariate predictive value by stratum&quot;) +
+  theme_bw(base_size = 10)</code></pre>
+<div class="figure">
+<img src="C3_responder_phenotype_files/figure-html/forest-1.png" alt="Figure B1. Univariate predictive AUC of each clinical covariate for the Low/High class, by stratum. Filled = p &lt; alpha." width="672" />
+<p class="caption">
+Figure B1. Univariate predictive AUC of each clinical covariate for the
+Low/High class, by stratum. Filled = p &lt; alpha.
+</p>
+</div>
+<hr />
+</div>
+</div>
+<div id="part-c-maternal-serological-signature" class="section level1">
+<h1>Part C — Maternal Serological Signature</h1>
+<p>🧭 <em>Maps to summary: “is there an antibody-side signature of the
+responder class that the 3 defining features don’t already
+encode?”</em></p>
+<p>We assemble a maternal-serology matrix from <strong>all</strong>
+antigen × analyte features at the maternal visits, <strong>excluding the
+3 responder-defining features</strong> (PT_IgG, FHA_IgG, PRN_IgG) so the
+signature is not circular with the score. Features are Blom-standardised
+within each <a href="mailto:feature@visit"
+class="email">feature@visit</a>.</p>
+<pre class="r"><code># Explicit guard: never let ACT or PENTAMER features enter the signature (they carry
+# no measured rows in this dataset, but the exclusion is made explicit per protocol).
+.excl_anti &lt;- { .av &lt;- unique(as.character(data_raw$feature)); .av[sub(&quot;_.*$&quot;, &quot;&quot;, toupper(.av)) %in% c(&quot;ACT&quot;, &quot;PENTAMER&quot;)] }
+.excl &lt;- union(RESP_FEATS, .excl_anti)
+W_all  &lt;- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = .excl,
+                                         min_coverage = params$min_coverage)
+W_base &lt;- build_maternal_serology_matrix(data_raw, params$baseline_visit,
+                                         exclude_feats = .excl,
+                                         min_coverage = params$min_coverage)
+cat(sprintf(&quot;Serology predictor matrices: all maternal visits = **%d features**; &quot;,
+            ncol(W_all) - 1))</code></pre>
+<pre><code>## Serology predictor matrices: all maternal visits = **86 features**;</code></pre>
+<pre class="r"><code>cat(sprintf(&quot;pre-vaccination (%s) baseline = **%d features**.\n\n&quot;,
+            params$baseline_visit, ncol(W_base) - 1))</code></pre>
+<pre><code>## pre-vaccination (PregEarly) baseline = **43 features**.</code></pre>
+<div id="univariate-auc-of-each-serology-feature"
+class="section level2">
+<h2>Univariate AUC of each serology feature</h2>
+<pre class="r"><code>su &lt;- serology_univariate_auc(W_all, mat_cls)
+su$base_feature &lt;- sub(&quot;@.*$&quot;, &quot;&quot;, su$feature)
+cls_map &lt;- classify_feature(unique(su$base_feature))
+su_disp &lt;- su %&gt;%
+  dplyr::left_join(cls_map, by = c(&quot;base_feature&quot; = &quot;feature&quot;)) %&gt;%
+  dplyr::mutate(auc = round(auc, 3), p = signif(p, 3), p_BH = signif(p_BH, 3)) %&gt;%
+  dplyr::select(feature, antigen, analyte_class, n, auc, p, p_BH)
+print(knitr::kable(utils::head(su_disp, 20),
+      caption = &quot;Table C1. Top maternal serology features by univariate AUC for the Low/High class.&quot;))</code></pre>
+<table>
+<caption>Table C1. Top maternal serology features by univariate AUC for
+the Low/High class.</caption>
+<colgroup>
+<col width="26%" />
+<col width="11%" />
+<col width="25%" />
+<col width="5%" />
+<col width="8%" />
+<col width="11%" />
+<col width="11%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">feature</th>
+<th align="left">antigen</th>
+<th align="left">analyte_class</th>
+<th align="right">n</th>
+<th align="right">auc</th>
+<th align="right">p</th>
+<th align="right">p_BH</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><a href="mailto:PRN_IgG1@MatBirth"
+class="email">PRN_IgG1@MatBirth</a></td>
+<td align="left">PRN</td>
+<td align="left">IgG subclass</td>
+<td align="right">245</td>
+<td align="right">0.911</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PT_IgG1@MatBirth"
+class="email">PT_IgG1@MatBirth</a></td>
+<td align="left">PT</td>
+<td align="left">IgG subclass</td>
+<td align="right">245</td>
+<td align="right">0.878</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:FHA_IgG1@MatBirth"
+class="email">FHA_IgG1@MatBirth</a></td>
+<td align="left">FHA</td>
+<td align="left">IgG subclass</td>
+<td align="right">245</td>
+<td align="right">0.876</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:FHA_ADCD@MatBirth"
+class="email">FHA_ADCD@MatBirth</a></td>
+<td align="left">FHA</td>
+<td align="left">effector function</td>
+<td align="right">239</td>
+<td align="right">0.833</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PRN_ADCD@MatBirth"
+class="email">PRN_ADCD@MatBirth</a></td>
+<td align="left">PRN</td>
+<td align="left">effector function</td>
+<td align="right">239</td>
+<td align="right">0.831</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:IPV1_IgG1@MatBirth"
+class="email">IPV1_IgG1@MatBirth</a></td>
+<td align="left">IPV1</td>
+<td align="left">IgG subclass</td>
+<td align="right">245</td>
+<td align="right">0.793</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PT_IgG3@MatBirth"
+class="email">PT_IgG3@MatBirth</a></td>
+<td align="left">PT</td>
+<td align="left">IgG subclass</td>
+<td align="right">239</td>
+<td align="right">0.790</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PT_ADCD@MatBirth"
+class="email">PT_ADCD@MatBirth</a></td>
+<td align="left">PT</td>
+<td align="left">effector function</td>
+<td align="right">239</td>
+<td align="right">0.778</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:FHA_IgG3@MatBirth"
+class="email">FHA_IgG3@MatBirth</a></td>
+<td align="left">FHA</td>
+<td align="left">IgG subclass</td>
+<td align="right">239</td>
+<td align="right">0.777</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PT_IgG2@MatBirth"
+class="email">PT_IgG2@MatBirth</a></td>
+<td align="left">PT</td>
+<td align="left">IgG subclass</td>
+<td align="right">233</td>
+<td align="right">0.769</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:IPV2_IgG1@MatBirth"
+class="email">IPV2_IgG1@MatBirth</a></td>
+<td align="left">IPV2</td>
+<td align="left">IgG subclass</td>
+<td align="right">245</td>
+<td align="right">0.766</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:IPV1_ADCD@MatBirth"
+class="email">IPV1_ADCD@MatBirth</a></td>
+<td align="left">IPV1</td>
+<td align="left">effector function</td>
+<td align="right">239</td>
+<td align="right">0.764</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:IPV2_ADCD@MatBirth"
+class="email">IPV2_ADCD@MatBirth</a></td>
+<td align="left">IPV2</td>
+<td align="left">effector function</td>
+<td align="right">239</td>
+<td align="right">0.745</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PRN_IgG2@MatBirth"
+class="email">PRN_IgG2@MatBirth</a></td>
+<td align="left">PRN</td>
+<td align="left">IgG subclass</td>
+<td align="right">233</td>
+<td align="right">0.720</td>
+<td align="right">0.0e+00</td>
+<td align="right">0.0e+00</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PRN_IgG1@PregEarly"
+class="email">PRN_IgG1@PregEarly</a></td>
+<td align="left">PRN</td>
+<td align="left">IgG subclass</td>
+<td align="right">242</td>
+<td align="right">0.712</td>
+<td align="right">0.0e+00</td>
+<td align="right">1.0e-07</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PRN_IgG4@MatBirth"
+class="email">PRN_IgG4@MatBirth</a></td>
+<td align="left">PRN</td>
+<td align="left">IgG subclass</td>
+<td align="right">245</td>
+<td align="right">0.704</td>
+<td align="right">0.0e+00</td>
+<td align="right">2.0e-07</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PRN_IgG3@MatBirth"
+class="email">PRN_IgG3@MatBirth</a></td>
+<td align="left">PRN</td>
+<td align="left">IgG subclass</td>
+<td align="right">239</td>
+<td align="right">0.696</td>
+<td align="right">2.0e-07</td>
+<td align="right">8.0e-07</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PT_IgG4@MatBirth"
+class="email">PT_IgG4@MatBirth</a></td>
+<td align="left">PT</td>
+<td align="left">IgG subclass</td>
+<td align="right">245</td>
+<td align="right">0.689</td>
+<td align="right">3.0e-07</td>
+<td align="right">1.6e-06</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:FHA_IgG1@PregEarly"
+class="email">FHA_IgG1@PregEarly</a></td>
+<td align="left">FHA</td>
+<td align="left">IgG subclass</td>
+<td align="right">242</td>
+<td align="right">0.677</td>
+<td align="right">2.1e-06</td>
+<td align="right">8.9e-06</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:DT_IgG@MatBirth"
+class="email">DT_IgG@MatBirth</a></td>
+<td align="left">DT</td>
+<td align="left">IgG total</td>
+<td align="right">283</td>
+<td align="right">0.670</td>
+<td align="right">9.0e-07</td>
+<td align="right">4.1e-06</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>top &lt;- utils::head(su, 15)
+top$feature &lt;- factor(top$feature, levels = rev(top$feature))
+ggplot(top, aes(auc, feature, fill = auc &gt;= 0.5)) +
+  geom_vline(xintercept = 0.5, linetype = &quot;dashed&quot;, color = &quot;grey60&quot;) +
+  geom_col() +
+  scale_fill_manual(values = c(`TRUE` = &quot;#1b5aa0&quot;, `FALSE` = &quot;#c0297a&quot;),
+                    labels = c(`TRUE` = &quot;higher \u2192 High&quot;, `FALSE` = &quot;higher \u2192 Low&quot;),
+                    name = NULL) +
+  labs(x = &quot;univariate AUC (class = High)&quot;, y = NULL,
+       title = &quot;Maternal serology features ranked by responder-class AUC&quot;) +
+  theme_bw(base_size = 10)</code></pre>
+<div class="figure">
+<img src="C3_responder_phenotype_files/figure-html/serology-univ-plot-1.png" alt="Figure C1. Top-15 maternal serology features by univariate AUC for the responder class." width="672" />
+<p class="caption">
+Figure C1. Top-15 maternal serology features by univariate AUC for the
+responder class.
+</p>
+</div>
+</div>
+<div id="arm-adjusted-elastic-net-signature-cross-validated"
+class="section level2">
+<h2>Arm-adjusted elastic-net signature (cross-validated)</h2>
+<p>The elastic net forces the <strong>maternal arm in
+unpenalised</strong> and lets the serology features compete for the
+remaining signal; CV-AUC is the honest metric (in-sample AUC is
+optimistic). We compare the pre-vaccination baseline matrix with the
+full maternal matrix.</p>
+<pre class="r"><code>if (!has_glmnet) {
+  cat(&quot;&gt; **glmnet is not installed**, so the penalised model is skipped. &quot;,
+      &quot;Install `glmnet` to run the cross-validated signature; the univariate AUC &quot;,
+      &quot;ranking above still indicates which features carry signal.\n\n&quot;)
+} else {
+  en_base &lt;- elastic_net_signature(W_base, mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds,
+                                   seed = params$seed)
+  en_all  &lt;- elastic_net_signature(W_all,  mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds,
+                                   seed = params$seed)
+  cmp &lt;- data.frame(
+    model = c(&quot;arm only (reference)&quot;,
+              sprintf(&quot;arm + baseline serology (%s)&quot;, params$baseline_visit),
+              &quot;arm + all maternal serology&quot;),
+    cv_auc = c(round(arm_auc, 3),
+               if (isTRUE(en_base$ok)) round(en_base$cv_auc, 3) else NA,
+               if (isTRUE(en_all$ok))  round(en_all$cv_auc, 3)  else NA),
+    n_features_selected = c(0L,
+               if (isTRUE(en_base$ok)) nrow(en_base$coefs) - 1L else NA_integer_,
+               if (isTRUE(en_all$ok))  nrow(en_all$coefs)  - 1L else NA_integer_),
+    stringsAsFactors = FALSE)
+  print(knitr::kable(cmp,
+        caption = &quot;Table C2. Cross-validated AUC: does serology add to the arm? (arm-only is the Part-A rank statistic; serology rows are CV-AUC.)&quot;))
+
+  if (isTRUE(en_all$ok) &amp;&amp; nrow(en_all$coefs) &gt; 1) {
+    co &lt;- en_all$coefs[en_all$coefs$term != &quot;(Intercept)&quot;, , drop = FALSE]
+    co &lt;- co[order(-abs(co$coef)), , drop = FALSE]
+    co$coef &lt;- round(co$coef, 3)
+    print(knitr::kable(co, row.names = FALSE,
+          caption = &quot;Table C3. Non-zero elastic-net coefficients (arm forced in; standardised features).&quot;))
+  }
+}</code></pre>
+<table>
+<caption>Table C2. Cross-validated AUC: does serology add to the arm?
+(arm-only is the Part-A rank statistic; serology rows are
+CV-AUC.)</caption>
+<thead>
+<tr class="header">
+<th align="left">model</th>
+<th align="right">cv_auc</th>
+<th align="right">n_features_selected</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">arm only (reference)</td>
+<td align="right">0.780</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">arm + baseline serology (PregEarly)</td>
+<td align="right">0.883</td>
+<td align="right">2</td>
+</tr>
+<tr class="odd">
+<td align="left">arm + all maternal serology</td>
+<td align="right">0.917</td>
+<td align="right">23</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Table C3. Non-zero elastic-net coefficients (arm forced in;
+standardised features).</caption>
+<thead>
+<tr class="header">
+<th align="left">term</th>
+<th align="right">coef</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">arm_TdaP</td>
+<td align="right">-1.855</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PRN_IgG1@MatBirth"
+class="email">PRN_IgG1@MatBirth</a></td>
+<td align="right">0.480</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PRN_IgG1@PregEarly"
+class="email">PRN_IgG1@PregEarly</a></td>
+<td align="right">0.343</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PT_IgG3@MatBirth"
+class="email">PT_IgG3@MatBirth</a></td>
+<td align="right">0.336</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:IPV1_IgG2@PregEarly"
+class="email">IPV1_IgG2@PregEarly</a></td>
+<td align="right">-0.185</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:FHA_IgG1@PregEarly"
+class="email">FHA_IgG1@PregEarly</a></td>
+<td align="right">0.185</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PRN_ADCD@MatBirth"
+class="email">PRN_ADCD@MatBirth</a></td>
+<td align="right">0.166</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:FIM_IgG@MatBirth"
+class="email">FIM_IgG@MatBirth</a></td>
+<td align="right">0.163</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:FHA_ADCD@MatBirth"
+class="email">FHA_ADCD@MatBirth</a></td>
+<td align="right">0.162</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:FHA_IgG3@MatBirth"
+class="email">FHA_IgG3@MatBirth</a></td>
+<td align="right">0.156</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PT_IgG1@MatBirth"
+class="email">PT_IgG1@MatBirth</a></td>
+<td align="right">0.150</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PT_IgG1@PregEarly"
+class="email">PT_IgG1@PregEarly</a></td>
+<td align="right">0.137</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:DT_IgG4@MatBirth"
+class="email">DT_IgG4@MatBirth</a></td>
+<td align="right">0.132</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:PRN_IgG3@MatBirth"
+class="email">PRN_IgG3@MatBirth</a></td>
+<td align="right">0.080</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:FHA_IgG3@PregEarly"
+class="email">FHA_IgG3@PregEarly</a></td>
+<td align="right">0.077</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:FIM_IgG@PregEarly"
+class="email">FIM_IgG@PregEarly</a></td>
+<td align="right">0.077</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:TT_IgG@MatBirth"
+class="email">TT_IgG@MatBirth</a></td>
+<td align="right">-0.071</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:DT_ADCD@PregEarly"
+class="email">DT_ADCD@PregEarly</a></td>
+<td align="right">-0.067</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:IPV3_ADCD@PregEarly"
+class="email">IPV3_ADCD@PregEarly</a></td>
+<td align="right">-0.052</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:FHA_ADCD@PregEarly"
+class="email">FHA_ADCD@PregEarly</a></td>
+<td align="right">0.031</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PT_ADCD@MatBirth"
+class="email">PT_ADCD@MatBirth</a></td>
+<td align="right">0.028</td>
+</tr>
+<tr class="even">
+<td align="left"><a href="mailto:IPV3_IgG4@PregEarly"
+class="email">IPV3_IgG4@PregEarly</a></td>
+<td align="right">-0.016</td>
+</tr>
+<tr class="odd">
+<td align="left"><a href="mailto:PRN_IgG2@MatBirth"
+class="email">PRN_IgG2@MatBirth</a></td>
+<td align="right">0.001</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>if (has_glmnet &amp;&amp; exists(&quot;en_all&quot;) &amp;&amp; isTRUE(en_all$ok)) {
+  pr &lt;- as.numeric(predict(en_all$cv, newx = en_all$X, s = &quot;lambda.min&quot;, type = &quot;response&quot;))
+  rp &lt;- roc_points(pr, en_all$y)
+  ggplot(rp, aes(fpr, tpr)) +
+    geom_abline(slope = 1, intercept = 0, linetype = &quot;dashed&quot;, color = &quot;grey70&quot;) +
+    geom_path(color = &quot;#1b5aa0&quot;, linewidth = 1) +
+    labs(x = &quot;false-positive rate&quot;, y = &quot;true-positive rate&quot;,
+         title = &quot;Arm + maternal serology — in-sample ROC&quot;) +
+    coord_equal() + theme_bw(base_size = 10)
+}</code></pre>
+<div class="figure">
+<img src="C3_responder_phenotype_files/figure-html/en-roc-1.png" alt="Figure C2. In-sample ROC for the arm + all-maternal-serology elastic net (optimistic; compare CV-AUC in Table C2)." width="672" />
+<p class="caption">
+Figure C2. In-sample ROC for the arm + all-maternal-serology elastic net
+(optimistic; compare CV-AUC in Table C2).
+</p>
+</div>
+<hr />
+</div>
+</div>
+<div id="synthesis" class="section level1">
+<h1>Synthesis Questions to Address</h1>
+<ol style="list-style-type: decimal">
+<li><strong>Is the responder split mostly the vaccine?</strong> Compare
+the arm-only AUC (Part A) to everything else. If clinical/serology AUCs
+barely exceed it, the Low/High class is essentially a vaccine-exposure
+label.</li>
+<li><strong>Any clinical covariate beyond the arm?</strong> In the
+arm-adjusted logistic (Table B-adj) and the within-arm screens, does any
+covariate (gestational age at vaccine, vaccine→birth interval, BMI,
+parity, Hb, age) stay significant? Within <strong>TdaP</strong> mothers
+especially — what predicts a vaccinated mother nonetheless responding
+poorly?</li>
+<li><strong>Consistent across arms or arm-specific?</strong> Does a
+predictor that matters in TdaP also matter in TT (a general “good
+responder” trait), or is it arm-specific (interacts with the
+vaccine)?</li>
+<li><strong>Continuous vs threshold.</strong> For any significant
+continuous covariate, did the continuous or tertile form win, and by how
+much (linear vs threshold effect)?</li>
+<li><strong>Serological signature beyond the 3 defining
+features.</strong> Does the elastic-net CV-AUC (Table C2) exceed
+arm-only? Which features (Table C1/C3) — other pertussis antigens
+(FHA/FIM), carrier antigens (DT/TT), IgG subclasses, Fc-receptor
+binding, or effector functions — carry it, and is the signal
+<strong>baseline (pre-vaccination)</strong> or only concurrent at
+birth?</li>
+<li><strong>Baseline predictivity (the clean test).</strong> Does the
+pre-vaccination (PregEarly) baseline model predict who becomes a High
+responder? A positive baseline signal would mean responder status is
+partly a pre-existing maternal trait, not only a vaccine response.</li>
+<li><strong>Mechanistic reading.</strong> Pull Parts A–C together: is
+“Low responder” best described as (a) a TT/exposure label, (b) a
+clinical phenotype, (c) a pre-existing serological trait, or (d) largely
+unpredictable from the measured covariates?</li>
+</ol>
+<hr />
+</div>
+<div id="global-naccounting" class="section level1">
+<h1>Global Participant Accounting</h1>
+<pre class="r"><code>manual_acct &lt;- function()
+  cat(sprintf(&quot;Mothers analysed: **%d** (Low = %d, High = %d); TdaP = %d, TT = %d.\n\n&quot;,
+              nrow(data), sum(data$responder == &quot;Low&quot;), sum(data$responder == &quot;High&quot;),
+              sum(data$arm_name == &quot;TdaP&quot;), sum(data$arm_name == &quot;TT&quot;)))
+
+if (!is.null(nt) &amp;&amp; exists(&quot;nt_render&quot;, mode = &quot;function&quot;)) {
+  ok &lt;- tryCatch({ nt_render(nt, caption = &quot;Participant accounting for Phase 08.&quot;); TRUE },
+                 error = function(e) FALSE)
+  if (!ok) manual_acct()
+} else {
+  manual_acct()
+}</code></pre>
+<p><em>No models logged.</em></p>
+<hr />
+<p><em>Phase 08 branch. The maternal Low/High class is the Phase 07
+Stage A construct, rebuilt via the new
+<code>R/C3_responder_helpers.R</code> (which calls the unmodified
+<code>R/C4_within_visit_helpers.R</code> engine). Outcome modelled as
+both the continuous responder score (linear) and the binary class
+(logistic). Stratifier: maternal arm only — no infant-arm analysis. Knit
+both formats with</em>
+<code>rmarkdown::render("08_maternal_responder_predictors.Rmd", output_format = "all")</code>.</p>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

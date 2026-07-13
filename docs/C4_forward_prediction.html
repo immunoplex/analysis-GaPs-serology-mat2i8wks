@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Scot Zens and Anja Saso" />
+
+<meta name="date" content="2026-07-13" />
+
+<title>GaPs: maternal-group × antibody interaction tests and Deming (errors-in-variables) antibody–function regression</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/readable.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<script src="site_libs/navigation-1.1/codefolding.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+<style type="text/css">
+.code-folding-btn { margin-bottom: 4px; }
+</style>
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+<div class="btn-group pull-right float-right">
+<button type="button" class="btn btn-default btn-xs btn-secondary btn-sm dropdown-toggle" data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Code</span> <span class="caret"></span></button>
+<ul class="dropdown-menu dropdown-menu-right" style="min-width: 50px;">
+<li><a id="rmd-show-all-code" href="#">Show All Code</a></li>
+<li><a id="rmd-hide-all-code" href="#">Hide All Code</a></li>
+</ul>
+</div>
+
+
+
+<h1 class="title toc-ignore">GaPs: maternal-group × antibody interaction
+tests and Deming (errors-in-variables) antibody–function regression</h1>
+<h3 class="subtitle">Do the antibody–function slopes differ by maternal
+vaccine background? (PT↔︎PTNA, PRN↔︎SBA, PRN↔︎whole-cell IgG)</h3>
+<h4 class="author">Scot Zens and Anja Saso</h4>
+<h4 class="date">2026-07-13</h4>
+
+</div>
+
+
+<div id="design" class="section level1">
+<h1>Design</h1>
+<p>These two analyses formalise the section-D claim. Section D shows the
+<strong>expanded maternal model fits better after Tdap-IPV</strong>
+(e.g. SBA R² 68.7% vs 17.9%), but a difference in variance explained can
+arise from a different <em>slope</em>, a different <em>predictor
+range</em> (TT mothers have little PRN to transfer, so a restricted
+x-range deflates R² even at an identical slope), or different residual
+scatter. To separate these we fit:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Interaction models</strong> —
+<code>function ~ maternal group * matched antibody + maternal age</code>,
+standardised, so the <code>group × antibody</code> term tests directly
+whether the antibody–function <strong>slope</strong> differs by maternal
+background. We run this for the matched <strong>IgG1</strong> predictor
+at two visits: maternal <strong>delivery</strong> (MatBirth — the
+section-D predictor) and <strong>concurrent</strong> infant (InfMon2 —
+the section-E predictor).</li>
+<li><strong>Deming / errors-in-variables regression</strong> — both
+antibody and function are measured with error, so OLS slopes are
+attenuated. Deming regression (λ = 1; λ = 1 is orthogonal regression)
+estimates the error-corrected slope. We fit it <strong>within each
+maternal arm</strong> and test the slope difference by stratified
+bootstrap. The concurrent (same-sample, InfMon2) pairing is the
+appropriate EIV setting; the maternal-delivery pairing is also reported
+to reconcile with table 2.</li>
+</ol>
+<p><strong>Matched antibody–function pairs</strong> (the dominant
+correlates identified earlier): PT IgG1 ↔︎ PTNA, PRN IgG1 ↔︎ SBA, PRN IgG1
+↔︎ whole-cell IgG binding.</p>
+<pre class="r"><code>PAIRS &lt;- list(
+  list(key=&quot;PTNA&quot;,   outcome=&quot;WHOLE_PTNA&quot;,   antigen=&quot;PT&quot;,  fn=&quot;PT-neutralising activity (PTNA)&quot;),
+  list(key=&quot;SBA&quot;,    outcome=&quot;WHOLE_SBA&quot;,    antigen=&quot;PRN&quot;, fn=&quot;serum bactericidal activity (SBA)&quot;),
+  list(key=&quot;WT_IgG&quot;, outcome=&quot;WHOLE_WT_IgG&quot;, antigen=&quot;PRN&quot;, fn=&quot;whole-cell IgG binding&quot;)
+)
+PRED_ANALYTE &lt;- &quot;IgG1&quot;   # matched-subclass predictor (change to &quot;IgG&quot; to reconcile with table-2 totals)
+PRED_ANALYTES &lt;- c(&quot;IgG&quot;, &quot;IgG1&quot;)   # requirement #6: compare total IgG vs IgG1
+                                    # side-by-side in the slope tables (IgG+IgG1
+                                    # joint model lives in 06 Family 4).
+
+## case-insensitive feature resolver (guards the IgG/IGG casing issue)
+.avail &lt;- as.character(unique(data_raw$feature))
+resolve_feat &lt;- function(w) { hit &lt;- .avail[toupper(.avail) == toupper(w)]; if (length(hit)) hit[[1]] else NA_character_ }
+
+## Build a one-row-per-subject frame: x = predictor antibody at pred_visit,
+## y = whole-cell function at outcome_visit, + maternal arm + maternal age.
+build_pair &lt;- function(outcome_feat, pred_feat, pred_visit, outcome_visit = &quot;InfMon2&quot;) {
+  of &lt;- resolve_feat(outcome_feat); pf &lt;- resolve_feat(pred_feat)
+  if (is.na(of) || is.na(pf)) return(NULL)
+  d &lt;- data_raw %&gt;%
+    dplyr::filter(feature %in% c(of, pf),
+                  visit_name %in% c(pred_visit, outcome_visit),
+                  as.character(arm_name) %in% MATERNAL_ARMS) %&gt;%
+    dplyr::mutate(key = paste(feature, visit_name, sep = &quot;@&quot;)) %&gt;%
+    dplyr::distinct(subject_accession, arm_name, key, .keep_all = TRUE) %&gt;%
+    dplyr::select(subject_accession, arm_name, key, log_assay_value) %&gt;%
+    tidyr::pivot_wider(names_from = key, values_from = log_assay_value,
+                       values_fn = function(z) mean(z, na.rm = TRUE))
+  xcol &lt;- paste(pf, pred_visit, sep = &quot;@&quot;); ycol &lt;- paste(of, outcome_visit, sep = &quot;@&quot;)
+  if (!all(c(xcol, ycol) %in% names(d))) return(NULL)
+  tibble::tibble(subject_accession = d$subject_accession,
+                 arm = factor(as.character(d$arm_name), levels = MATERNAL_ARMS),
+                 x = d[[xcol]], y = d[[ycol]]) %&gt;%
+    dplyr::left_join(clin_age, by = &quot;subject_accession&quot;) %&gt;%
+    dplyr::filter(is.finite(x), is.finite(y))
+}</code></pre>
+</div>
+<div id="maternal-vaccine-group-antibody-interaction-tests"
+class="section level1">
+<h1>1. Maternal vaccine group × antibody interaction tests</h1>
+<pre class="r"><code>## Standardised interaction model: function ~ arm * antibody + maternal age.
+## Returns the group x antibody coefficient (difference in standardised slope,
+## TdaP minus TT), each arm&#39;s simple slope, and model fit.
+fit_interaction &lt;- function(df) {
+  d &lt;- df %&gt;% dplyr::filter(is.finite(x), is.finite(y), is.finite(maternal_age))
+  if (nrow(d) &lt; 30 || dplyr::n_distinct(d$arm) &lt; 2) return(NULL)
+  d$zx &lt;- as.numeric(scale(d$x)); d$zy &lt;- as.numeric(scale(d$y))
+  d$za &lt;- as.numeric(scale(d$maternal_age))
+  d$arm &lt;- relevel(factor(d$arm), ref = &quot;TT&quot;)            # TT = comparator
+  m  &lt;- lm(zy ~ arm * zx + za, data = d)
+  co &lt;- summary(m)$coefficients
+  it &lt;- grep(&quot;(armTdaP:zx|zx:armTdaP)&quot;, rownames(co), value = TRUE)[1]
+  ci &lt;- suppressMessages(confint(m))
+  slope_TT   &lt;- co[&quot;zx&quot;, &quot;Estimate&quot;]
+  slope_TdaP &lt;- slope_TT + co[it, &quot;Estimate&quot;]
+  # Type III test for the interaction (single df -&gt; equals the t-test); use car if available
+  p_int &lt;- co[it, &quot;Pr(&gt;|t|)&quot;]
+  if (has_car) {
+    a3 &lt;- tryCatch(car::Anova(m, type = 3), error = function(e) NULL)
+    if (!is.null(a3) &amp;&amp; &quot;arm:zx&quot; %in% rownames(a3)) p_int &lt;- a3[&quot;arm:zx&quot;, &quot;Pr(&gt;F)&quot;]
+  }
+  data.frame(n = nrow(d),
+             slope_TT = round(slope_TT, 3), slope_TdaP = round(slope_TdaP, 3),
+             int_diff = round(co[it, &quot;Estimate&quot;], 3),
+             ci_lo = round(ci[it, 1], 3), ci_hi = round(ci[it, 2], 3),
+             p_interaction = signif(p_int, 3),
+             adjR2 = round(summary(m)$adj.r.squared, 3))
+}
+
+run_interaction_set &lt;- function(pred_visit, analytes = PRED_ANALYTES) {
+  rows &lt;- list()
+  for (an in analytes) for (p in PAIRS) {
+    df &lt;- build_pair(p$outcome, paste0(p$antigen, &quot;_&quot;, an), pred_visit)
+    if (is.null(df)) next
+    f &lt;- fit_interaction(df)
+    if (is.null(f)) next
+    rows[[length(rows) + 1]] &lt;- cbind(
+      Outcome   = p$fn,
+      Predictor = paste0(p$antigen, &quot; &quot;, an, &quot; @ &quot;, pred_visit), f)
+  }
+  do.call(rbind, rows)
+}</code></pre>
+<div id="a.-maternal-delivery-antibody-predictor-addresses-section-d"
+class="section level2">
+<h2>1a. Maternal-delivery antibody predictor — addresses section D</h2>
+<pre class="r"><code>int_mat &lt;- run_interaction_set(&quot;MatBirth&quot;)
+kable(int_mat, row.names = FALSE,
+      col.names = c(&quot;Infant outcome&quot;, &quot;Predictor&quot;, &quot;n&quot;,
+                    &quot;slope (TT)&quot;, &quot;slope (TdaP)&quot;, &quot;Δslope (TdaP−TT)&quot;,
+                    &quot;95% CI low&quot;, &quot;95% CI high&quot;, &quot;p (interaction)&quot;, &quot;adj R²&quot;),
+      caption = &quot;Table 1a. Standardised maternal-group × maternal-delivery IgG / IgG1 interaction. Slopes are standardised (per SD of antibody, in SD of function). A significant Δslope means the maternal antibody–infant function slope differs by maternal vaccine group; a non-significant Δslope means the section-D R² gap is better explained by predictor range / residual variance than by a slope difference.&quot;)</code></pre>
+<table style="width:100%;">
+<caption>Table 1a. Standardised maternal-group × maternal-delivery IgG /
+IgG1 interaction. Slopes are standardised (per SD of antibody, in SD of
+function). A significant Δslope means the maternal antibody–infant
+function slope differs by maternal vaccine group; a non-significant
+Δslope means the section-D R² gap is better explained by predictor range
+/ residual variance than by a slope difference.</caption>
+<colgroup>
+<col width="23%" />
+<col width="13%" />
+<col width="2%" />
+<col width="7%" />
+<col width="8%" />
+<col width="11%" />
+<col width="7%" />
+<col width="8%" />
+<col width="11%" />
+<col width="4%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Infant outcome</th>
+<th align="left">Predictor</th>
+<th align="right">n</th>
+<th align="right">slope (TT)</th>
+<th align="right">slope (TdaP)</th>
+<th align="right">Δslope (TdaP−TT)</th>
+<th align="right">95% CI low</th>
+<th align="right">95% CI high</th>
+<th align="right">p (interaction)</th>
+<th align="right">adj R²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG @ MatBirth</td>
+<td align="right">209</td>
+<td align="right">0.508</td>
+<td align="right">0.563</td>
+<td align="right">0.056</td>
+<td align="right">-0.228</td>
+<td align="right">0.339</td>
+<td align="right">7.00e-01</td>
+<td align="right">0.459</td>
+</tr>
+<tr class="even">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG @ MatBirth</td>
+<td align="right">194</td>
+<td align="right">0.322</td>
+<td align="right">1.003</td>
+<td align="right">0.682</td>
+<td align="right">0.440</td>
+<td align="right">0.923</td>
+<td align="right">1.00e-07</td>
+<td align="right">0.683</td>
+</tr>
+<tr class="odd">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG @ MatBirth</td>
+<td align="right">195</td>
+<td align="right">0.070</td>
+<td align="right">0.739</td>
+<td align="right">0.669</td>
+<td align="right">0.333</td>
+<td align="right">1.005</td>
+<td align="right">1.22e-04</td>
+<td align="right">0.395</td>
+</tr>
+<tr class="even">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG1 @ MatBirth</td>
+<td align="right">177</td>
+<td align="right">0.474</td>
+<td align="right">0.450</td>
+<td align="right">-0.024</td>
+<td align="right">-0.345</td>
+<td align="right">0.298</td>
+<td align="right">8.86e-01</td>
+<td align="right">0.434</td>
+</tr>
+<tr class="odd">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG1 @ MatBirth</td>
+<td align="right">166</td>
+<td align="right">0.421</td>
+<td align="right">0.856</td>
+<td align="right">0.435</td>
+<td align="right">0.170</td>
+<td align="right">0.700</td>
+<td align="right">1.43e-03</td>
+<td align="right">0.677</td>
+</tr>
+<tr class="even">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG1 @ MatBirth</td>
+<td align="right">162</td>
+<td align="right">0.062</td>
+<td align="right">0.589</td>
+<td align="right">0.527</td>
+<td align="right">0.149</td>
+<td align="right">0.904</td>
+<td align="right">6.57e-03</td>
+<td align="right">0.374</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="b.-concurrent-infant-antibody-predictor-addresses-section-e"
+class="section level2">
+<h2>1b. Concurrent infant antibody predictor — addresses section E</h2>
+<pre class="r"><code>int_inf &lt;- run_interaction_set(&quot;InfMon2&quot;)
+kable(int_inf, row.names = FALSE,
+      col.names = c(&quot;Infant outcome&quot;, &quot;Predictor&quot;, &quot;n&quot;,
+                    &quot;slope (TT)&quot;, &quot;slope (TdaP)&quot;, &quot;Δslope (TdaP−TT)&quot;,
+                    &quot;95% CI low&quot;, &quot;95% CI high&quot;, &quot;p (interaction)&quot;, &quot;adj R²&quot;),
+      caption = &quot;Table 1b. Standardised maternal-group × concurrent (InfMon2) infant IgG / IgG1 interaction — whether the same-sample antibody→function slope in the infant differs by maternal background.&quot;)</code></pre>
+<table>
+<caption>Table 1b. Standardised maternal-group × concurrent (InfMon2)
+infant IgG / IgG1 interaction — whether the same-sample
+antibody→function slope in the infant differs by maternal
+background.</caption>
+<colgroup>
+<col width="23%" />
+<col width="13%" />
+<col width="2%" />
+<col width="7%" />
+<col width="9%" />
+<col width="11%" />
+<col width="7%" />
+<col width="8%" />
+<col width="11%" />
+<col width="4%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Infant outcome</th>
+<th align="left">Predictor</th>
+<th align="right">n</th>
+<th align="right">slope (TT)</th>
+<th align="right">slope (TdaP)</th>
+<th align="right">Δslope (TdaP−TT)</th>
+<th align="right">95% CI low</th>
+<th align="right">95% CI high</th>
+<th align="right">p (interaction)</th>
+<th align="right">adj R²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG @ InfMon2</td>
+<td align="right">237</td>
+<td align="right">0.473</td>
+<td align="right">0.875</td>
+<td align="right">0.402</td>
+<td align="right">0.123</td>
+<td align="right">0.681</td>
+<td align="right">4.91e-03</td>
+<td align="right">0.506</td>
+</tr>
+<tr class="even">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG @ InfMon2</td>
+<td align="right">220</td>
+<td align="right">0.439</td>
+<td align="right">1.317</td>
+<td align="right">0.878</td>
+<td align="right">0.720</td>
+<td align="right">1.036</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.843</td>
+</tr>
+<tr class="odd">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG @ InfMon2</td>
+<td align="right">223</td>
+<td align="right">0.252</td>
+<td align="right">0.996</td>
+<td align="right">0.745</td>
+<td align="right">0.468</td>
+<td align="right">1.021</td>
+<td align="right">3.00e-07</td>
+<td align="right">0.501</td>
+</tr>
+<tr class="even">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG1 @ InfMon2</td>
+<td align="right">237</td>
+<td align="right">0.870</td>
+<td align="right">0.703</td>
+<td align="right">-0.167</td>
+<td align="right">-0.437</td>
+<td align="right">0.103</td>
+<td align="right">2.25e-01</td>
+<td align="right">0.572</td>
+</tr>
+<tr class="odd">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG1 @ InfMon2</td>
+<td align="right">220</td>
+<td align="right">1.011</td>
+<td align="right">0.999</td>
+<td align="right">-0.012</td>
+<td align="right">-0.217</td>
+<td align="right">0.193</td>
+<td align="right">9.10e-01</td>
+<td align="right">0.850</td>
+</tr>
+<tr class="even">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG1 @ InfMon2</td>
+<td align="right">223</td>
+<td align="right">0.615</td>
+<td align="right">0.814</td>
+<td align="right">0.199</td>
+<td align="right">-0.175</td>
+<td align="right">0.574</td>
+<td align="right">2.95e-01</td>
+<td align="right">0.526</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>## visualise the InfMon2 (concurrent) simple slopes
+plot_df &lt;- do.call(rbind, lapply(PAIRS, function(p) {
+  df &lt;- build_pair(p$outcome, paste0(p$antigen, &quot;_&quot;, PRED_ANALYTE), &quot;InfMon2&quot;)
+  if (is.null(df)) return(NULL)
+  d &lt;- df %&gt;% filter(is.finite(x), is.finite(y))
+  d$Outcome &lt;- p$fn; d
+}))
+ggplot(plot_df, aes(x, y, colour = arm)) +
+  geom_point(alpha = .35, size = 1) +
+  geom_smooth(method = &quot;lm&quot;, se = FALSE, linewidth = 1) +
+  facet_wrap(~ Outcome, scales = &quot;free&quot;, nrow = 1) +
+  scale_colour_manual(values = MARM_COL, name = &quot;Maternal arm&quot;) +
+  labs(x = paste0(&quot;log10 matched &quot;, PRED_ANALYTE, &quot; (InfMon2)&quot;), y = &quot;log10 function (InfMon2)&quot;,
+       title = &quot;Concurrent antibody–function relationship by maternal arm (OLS lines)&quot;) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = &quot;bottom&quot;, strip.text = element_text(face = &quot;bold&quot;, colour = ACCENT))</code></pre>
+<p><img src="C4_forward_prediction_files/figure-html/int-plot-1.png" alt="" width="864" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="deming-errors-in-variables-regression-by-maternal-arm"
+class="section level1">
+<h1>2. Deming (errors-in-variables) regression by maternal arm</h1>
+<pre class="r"><code>## Closed-form Deming slope/intercept for a given error-variance ratio lambda.
+deming_fit &lt;- function(x, y, lambda = 1) {
+  ok &lt;- is.finite(x) &amp; is.finite(y); x &lt;- x[ok]; y &lt;- y[ok]; n &lt;- length(x)
+  if (n &lt; 5) return(c(intercept = NA, slope = NA, n = n))
+  mx &lt;- mean(x); my &lt;- mean(y)
+  sxx &lt;- sum((x - mx)^2) / (n - 1); syy &lt;- sum((y - my)^2) / (n - 1)
+  sxy &lt;- sum((x - mx) * (y - my)) / (n - 1)
+  b &lt;- ((syy - lambda * sxx) + sqrt((syy - lambda * sxx)^2 + 4 * lambda * sxy^2)) / (2 * sxy)
+  c(intercept = my - b * mx, slope = b, n = n)
+}
+
+## Per-arm Deming with stratified bootstrap CIs and a slope-difference test.
+deming_by_arm &lt;- function(df, lambda = 1, B = 2000, seed = 1) {
+  set.seed(seed)
+  arms &lt;- MATERNAL_ARMS
+  d &lt;- df %&gt;% filter(is.finite(x), is.finite(y))
+  obs &lt;- lapply(arms, function(a) deming_fit(d$x[d$arm == a], d$y[d$arm == a], lambda))
+  names(obs) &lt;- arms
+  diff_obs &lt;- unname(obs[[1]][&quot;slope&quot;] - obs[[2]][&quot;slope&quot;])
+  bs &lt;- matrix(NA_real_, B, length(arms), dimnames = list(NULL, arms))
+  for (b in seq_len(B)) for (a in arms) {
+    da &lt;- d[d$arm == a, ]; idx &lt;- sample(nrow(da), replace = TRUE)
+    bs[b, a] &lt;- deming_fit(da$x[idx], da$y[idx], lambda)[&quot;slope&quot;]
+  }
+  diffs &lt;- bs[, arms[1]] - bs[, arms[2]]
+  q &lt;- function(v) round(stats::quantile(v, c(.025, .975), na.rm = TRUE), 3)
+  list(obs = obs, diff_obs = diff_obs,
+       ci = lapply(arms, function(a) q(bs[, a])),
+       ci_diff = q(diffs),
+       p_diff = round(2 * min(mean(diffs &lt;= 0, na.rm = TRUE), mean(diffs &gt;= 0, na.rm = TRUE)), 4))
+}
+
+run_deming_set &lt;- function(pred_visit, analytes = PRED_ANALYTES, plot_analyte = &quot;IgG1&quot;) {
+  res &lt;- list(); rows &lt;- list()
+  for (an in analytes) for (p in PAIRS) {
+    df &lt;- build_pair(p$outcome, paste0(p$antigen, &quot;_&quot;, an), pred_visit)
+    if (is.null(df)) next
+    r &lt;- deming_by_arm(df, lambda = params$lambda, B = params$boot_B, seed = params$seed)
+    if (identical(an, plot_analyte)) res[[p$key]] &lt;- list(df = df, r = r, p = p)
+    rows[[paste(p$key, an)]] &lt;- data.frame(
+      Outcome = p$fn, Predictor = paste0(p$antigen, &quot; &quot;, an, &quot; @ &quot;, pred_visit),
+      n_TdaP = unname(r$obs$TdaP[&quot;n&quot;]), n_TT = unname(r$obs$TT[&quot;n&quot;]),
+      slope_TdaP = round(unname(r$obs$TdaP[&quot;slope&quot;]), 3),
+      ci_TdaP = paste0(&quot;[&quot;, r$ci[[1]][1], &quot;, &quot;, r$ci[[1]][2], &quot;]&quot;),
+      slope_TT = round(unname(r$obs$TT[&quot;slope&quot;]), 3),
+      ci_TT = paste0(&quot;[&quot;, r$ci[[2]][1], &quot;, &quot;, r$ci[[2]][2], &quot;]&quot;),
+      slope_diff = round(r$diff_obs, 3),
+      ci_diff = paste0(&quot;[&quot;, r$ci_diff[1], &quot;, &quot;, r$ci_diff[2], &quot;]&quot;),
+      p_diff = r$p_diff)
+  }
+  list(table = do.call(rbind, rows), res = res)
+}
+
+deming_plot &lt;- function(set, pred_visit) {
+  for (k in names(set$res)) {
+    o &lt;- set$res[[k]]; r &lt;- o$r; d &lt;- o$df %&gt;% filter(is.finite(x), is.finite(y))
+    g &lt;- ggplot(d, aes(x, y, colour = arm)) +
+      geom_point(alpha = .35, size = 1) +
+      geom_abline(intercept = r$obs$TdaP[&quot;intercept&quot;], slope = r$obs$TdaP[&quot;slope&quot;],
+                  colour = MARM_COL[&quot;TdaP&quot;], linewidth = 1) +
+      geom_abline(intercept = r$obs$TT[&quot;intercept&quot;], slope = r$obs$TT[&quot;slope&quot;],
+                  colour = MARM_COL[&quot;TT&quot;], linewidth = 1) +
+      geom_smooth(aes(group = arm), method = &quot;lm&quot;, se = FALSE, linetype = &quot;dashed&quot;,
+                  linewidth = .6, alpha = .7) +
+      scale_colour_manual(values = MARM_COL, name = &quot;Maternal arm&quot;) +
+      labs(title = paste0(o$p$fn, &quot; — Deming by arm (&quot;, pred_visit, &quot; predictor)&quot;),
+           subtitle = &quot;solid = Deming (errors-in-variables); dashed = OLS&quot;,
+           x = paste0(&quot;log10 &quot;, o$p$antigen, &quot; &quot;, PRED_ANALYTE, &quot; (&quot;, pred_visit, &quot;)&quot;),
+           y = paste0(&quot;log10 &quot;, o$p$key)) +
+      theme_minimal(base_size = 10) +
+      theme(legend.position = &quot;bottom&quot;, plot.title = element_text(face = &quot;bold&quot;, colour = ACCENT, size = 11))
+    print(g)
+  }
+}</code></pre>
+<div id="a.-concurrent-same-sample-infmon2-the-appropriate-eiv-setting"
+class="section level2">
+<h2>2a. Concurrent (same-sample, InfMon2) — the appropriate EIV
+setting</h2>
+<pre class="r"><code>dem_inf &lt;- run_deming_set(&quot;InfMon2&quot;)
+kable(dem_inf$table, row.names = FALSE,
+      col.names = c(&quot;Outcome&quot;, &quot;Predictor&quot;, &quot;n (TdaP)&quot;, &quot;n (TT)&quot;,
+                    &quot;slope TdaP&quot;, &quot;95% CI&quot;, &quot;slope TT&quot;, &quot;95% CI&quot;,
+                    &quot;Δslope&quot;, &quot;95% CI&quot;, &quot;p (diff)&quot;),
+      caption = sprintf(&quot;Table 2a. Deming regression (λ = %s) of concurrent infant function on matched infant IgG and IgG1, fitted within each maternal arm. Δslope and its bootstrap CI/p test whether the error-corrected antibody→function slope differs by maternal background.&quot;, params$lambda))</code></pre>
+<table>
+<caption>Table 2a. Deming regression (λ = 1) of concurrent infant
+function on matched infant IgG and IgG1, fitted within each maternal
+arm. Δslope and its bootstrap CI/p test whether the error-corrected
+antibody→function slope differs by maternal background.</caption>
+<colgroup>
+<col width="22%" />
+<col width="12%" />
+<col width="5%" />
+<col width="4%" />
+<col width="7%" />
+<col width="9%" />
+<col width="5%" />
+<col width="9%" />
+<col width="4%" />
+<col width="11%" />
+<col width="5%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Outcome</th>
+<th align="left">Predictor</th>
+<th align="right">n (TdaP)</th>
+<th align="right">n (TT)</th>
+<th align="right">slope TdaP</th>
+<th align="left">95% CI</th>
+<th align="right">slope TT</th>
+<th align="left">95% CI</th>
+<th align="right">Δslope</th>
+<th align="left">95% CI</th>
+<th align="right">p (diff)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG @ InfMon2</td>
+<td align="right">116</td>
+<td align="right">121</td>
+<td align="right">1.092</td>
+<td align="left">[0.752, 1.692]</td>
+<td align="right">0.705</td>
+<td align="left">[0.431, 0.972]</td>
+<td align="right">0.387</td>
+<td align="left">[-0.05, 1.043]</td>
+<td align="right">0.088</td>
+</tr>
+<tr class="even">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG @ InfMon2</td>
+<td align="right">105</td>
+<td align="right">117</td>
+<td align="right">1.043</td>
+<td align="left">[0.959, 1.138]</td>
+<td align="right">0.401</td>
+<td align="left">[0.237, 0.55]</td>
+<td align="right">0.642</td>
+<td align="left">[0.468, 0.833]</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="odd">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG @ InfMon2</td>
+<td align="right">114</td>
+<td align="right">109</td>
+<td align="right">0.761</td>
+<td align="left">[0.604, 0.955]</td>
+<td align="right">0.189</td>
+<td align="left">[0.049, 0.354]</td>
+<td align="right">0.572</td>
+<td align="left">[0.349, 0.802]</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="even">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG1 @ InfMon2</td>
+<td align="right">116</td>
+<td align="right">121</td>
+<td align="right">1.122</td>
+<td align="left">[0.868, 1.403]</td>
+<td align="right">2.333</td>
+<td align="left">[1.771, 3.646]</td>
+<td align="right">-1.211</td>
+<td align="left">[-2.572, -0.592]</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="odd">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG1 @ InfMon2</td>
+<td align="right">104</td>
+<td align="right">117</td>
+<td align="right">1.303</td>
+<td align="left">[1.215, 1.402]</td>
+<td align="right">1.604</td>
+<td align="left">[1.294, 2.282]</td>
+<td align="right">-0.301</td>
+<td align="left">[-1.011, 0.017]</td>
+<td align="right">0.073</td>
+</tr>
+<tr class="even">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG1 @ InfMon2</td>
+<td align="right">114</td>
+<td align="right">109</td>
+<td align="right">1.021</td>
+<td align="left">[0.834, 1.248]</td>
+<td align="right">2.094</td>
+<td align="left">[1.042, 9.713]</td>
+<td align="right">-1.073</td>
+<td align="left">[-8.679, 0.003]</td>
+<td align="right">0.052</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>deming_plot(dem_inf, &quot;InfMon2&quot;)</code></pre>
+<p><img src="C4_forward_prediction_files/figure-html/deming-infmon2-1.png" alt="" width="595.2" style="display: block; margin: auto;" /><img src="C4_forward_prediction_files/figure-html/deming-infmon2-2.png" alt="" width="595.2" style="display: block; margin: auto;" /><img src="C4_forward_prediction_files/figure-html/deming-infmon2-3.png" alt="" width="595.2" style="display: block; margin: auto;" /></p>
+</div>
+<div id="b.-maternal-delivery-predictor-reconciles-with-table-2"
+class="section level2">
+<h2>2b. Maternal-delivery predictor — reconciles with table 2</h2>
+<pre class="r"><code>dem_mat &lt;- run_deming_set(&quot;MatBirth&quot;)
+kable(dem_mat$table, row.names = FALSE,
+      col.names = c(&quot;Outcome&quot;, &quot;Predictor&quot;, &quot;n (TdaP)&quot;, &quot;n (TT)&quot;,
+                    &quot;slope TdaP&quot;, &quot;95% CI&quot;, &quot;slope TT&quot;, &quot;95% CI&quot;,
+                    &quot;Δslope&quot;, &quot;95% CI&quot;, &quot;p (diff)&quot;),
+      caption = sprintf(&quot;Table 2b. Deming regression (λ = %s) of infant function (InfMon2) on maternal-delivery IgG1 (MatBirth), within each maternal arm. Use this to reconcile the slope with the maternal-model coefficients in table 2.&quot;, params$lambda))</code></pre>
+<table style="width:100%;">
+<caption>Table 2b. Deming regression (λ = 1) of infant function
+(InfMon2) on maternal-delivery IgG1 (MatBirth), within each maternal
+arm. Use this to reconcile the slope with the maternal-model
+coefficients in table 2.</caption>
+<colgroup>
+<col width="21%" />
+<col width="12%" />
+<col width="5%" />
+<col width="4%" />
+<col width="7%" />
+<col width="9%" />
+<col width="5%" />
+<col width="11%" />
+<col width="4%" />
+<col width="11%" />
+<col width="5%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Outcome</th>
+<th align="left">Predictor</th>
+<th align="right">n (TdaP)</th>
+<th align="right">n (TT)</th>
+<th align="right">slope TdaP</th>
+<th align="left">95% CI</th>
+<th align="right">slope TT</th>
+<th align="left">95% CI</th>
+<th align="right">Δslope</th>
+<th align="left">95% CI</th>
+<th align="right">p (diff)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG @ MatBirth</td>
+<td align="right">96</td>
+<td align="right">113</td>
+<td align="right">0.779</td>
+<td align="left">[0.459, 1.635]</td>
+<td align="right">0.692</td>
+<td align="left">[0.464, 0.974]</td>
+<td align="right">0.086</td>
+<td align="left">[-0.356, 0.974]</td>
+<td align="right">0.695</td>
+</tr>
+<tr class="even">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG @ MatBirth</td>
+<td align="right">86</td>
+<td align="right">109</td>
+<td align="right">0.958</td>
+<td align="left">[0.799, 1.122]</td>
+<td align="right">0.380</td>
+<td align="left">[0.15, 0.574]</td>
+<td align="right">0.579</td>
+<td align="left">[0.335, 0.858]</td>
+<td align="right">0.001</td>
+</tr>
+<tr class="odd">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG @ MatBirth</td>
+<td align="right">94</td>
+<td align="right">101</td>
+<td align="right">0.642</td>
+<td align="left">[0.425, 0.864]</td>
+<td align="right">0.086</td>
+<td align="left">[-0.176, 0.251]</td>
+<td align="right">0.557</td>
+<td align="left">[0.281, 0.905]</td>
+<td align="right">0.001</td>
+</tr>
+<tr class="even">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="left">PT IgG1 @ MatBirth</td>
+<td align="right">82</td>
+<td align="right">95</td>
+<td align="right">1.579</td>
+<td align="left">[0.676, 2.626]</td>
+<td align="right">2.760</td>
+<td align="left">[1.641, 5.556]</td>
+<td align="right">-1.182</td>
+<td align="left">[-4.032, 0.355]</td>
+<td align="right">0.133</td>
+</tr>
+<tr class="odd">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="left">PRN IgG1 @ MatBirth</td>
+<td align="right">76</td>
+<td align="right">90</td>
+<td align="right">1.627</td>
+<td align="left">[1.427, 1.91]</td>
+<td align="right">1.505</td>
+<td align="left">[0.745, 4.818]</td>
+<td align="right">0.122</td>
+<td align="left">[-3.192, 0.934]</td>
+<td align="right">0.768</td>
+</tr>
+<tr class="even">
+<td align="left">whole-cell IgG binding</td>
+<td align="left">PRN IgG1 @ MatBirth</td>
+<td align="right">80</td>
+<td align="right">82</td>
+<td align="right">1.427</td>
+<td align="left">[1.013, 2.093]</td>
+<td align="right">4.086</td>
+<td align="left">[-56.847, 46.497]</td>
+<td align="right">-2.660</td>
+<td align="left">[-45.179, 58.254]</td>
+<td align="right">0.937</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>deming_plot(dem_mat, &quot;MatBirth&quot;)</code></pre>
+<p><img src="C4_forward_prediction_files/figure-html/deming-matbirth-1.png" alt="" width="595.2" style="display: block; margin: auto;" /><img src="C4_forward_prediction_files/figure-html/deming-matbirth-2.png" alt="" width="595.2" style="display: block; margin: auto;" /><img src="C4_forward_prediction_files/figure-html/deming-matbirth-3.png" alt="" width="595.2" style="display: block; margin: auto;" /></p>
+</div>
+</div>
+<div id="combined-summary-and-how-to-read-it" class="section level1">
+<h1>3. Combined summary and how to read it</h1>
+<pre class="r"><code>get_row &lt;- function(tab, fn, col) {
+  if (is.null(tab) || !&quot;Outcome&quot; %in% names(tab)) return(NA)
+  v &lt;- tab[tab$Outcome == fn, col]; if (length(v)) v[1] else NA
+}
+out &lt;- do.call(rbind, lapply(PAIRS, function(p) {
+  data.frame(
+    Outcome = p$fn,
+    `Interaction p (MatBirth predictor)`  = get_row(int_mat, p$fn, &quot;p_interaction&quot;),
+    `Interaction p (InfMon2 predictor)`   = get_row(int_inf, p$fn, &quot;p_interaction&quot;),
+    `Deming slope diff (InfMon2)`         = get_row(dem_inf$table, p$fn, &quot;slope_diff&quot;),
+    `Deming p (InfMon2)`                  = get_row(dem_inf$table, p$fn, &quot;p_diff&quot;),
+    check.names = FALSE)
+}))
+kable(out, row.names = FALSE, caption = &quot;Table 3. Combined slope-difference evidence. If interaction p and Deming p are non-significant, section D should remain phrased as a difference in variance explained, not a difference in slope. If significant (especially for the surface outcomes after Tdap-IPV), the antibody-to-function slope itself differs by maternal background and the wording can be strengthened.&quot;)</code></pre>
+<table>
+<caption>Table 3. Combined slope-difference evidence. If interaction p
+and Deming p are non-significant, section D should remain phrased as a
+difference in variance explained, not a difference in slope. If
+significant (especially for the surface outcomes after Tdap-IPV), the
+antibody-to-function slope itself differs by maternal background and the
+wording can be strengthened.</caption>
+<colgroup>
+<col width="22%" />
+<col width="23%" />
+<col width="22%" />
+<col width="18%" />
+<col width="12%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Outcome</th>
+<th align="right">Interaction p (MatBirth predictor)</th>
+<th align="right">Interaction p (InfMon2 predictor)</th>
+<th align="right">Deming slope diff (InfMon2)</th>
+<th align="right">Deming p (InfMon2)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT-neutralising activity (PTNA)</td>
+<td align="right">7.00e-01</td>
+<td align="right">4.91e-03</td>
+<td align="right">0.387</td>
+<td align="right">0.088</td>
+</tr>
+<tr class="even">
+<td align="left">serum bactericidal activity (SBA)</td>
+<td align="right">1.00e-07</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.642</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="odd">
+<td align="left">whole-cell IgG binding</td>
+<td align="right">1.22e-04</td>
+<td align="right">3.00e-07</td>
+<td align="right">0.572</td>
+<td align="right">0.000</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Interpretation.</strong></p>
+<ul>
+<li><strong>Interaction tests (section 1).</strong> The
+<code>group × antibody</code> term is the formal test the analyst note
+asks for. A non-significant interaction (with a clearly higher per-arm
+R² after Tdap-IPV in section D) indicates the section-D gap is driven by
+the <em>range and abundance</em> of transferable PRN antibody — there is
+more PRN to work with after Tdap-IPV — rather than by a steeper
+antibody→function conversion. In that case keep section D as “variance
+explained,” as currently written. A significant interaction licenses a
+slope-difference statement.</li>
+<li><strong>Deming (section 2).</strong> Error-corrected slopes are
+systematically steeper than the OLS (dashed) lines; the per-arm Deming
+slopes and their bootstrap difference give the errors-in-variables
+version of the same question and connect to the earlier GaPs Deming
+result. Table 2b (maternal-delivery predictor) is the panel to cite
+alongside results table 2.</li>
+<li><strong>λ caveat.</strong> Deming assumes a known error-variance
+ratio λ (set to 1). With replicate-based assay CVs you can set λ to the
+true ratio; the slopes are mildly sensitive to λ, the
+<em>slope-difference</em> test much less so.</li>
+</ul>
+<pre><code>## Cross-check: the &#39;deming&#39; package is available; closed-form slopes above can be  verified with deming::deming(y ~ x, data, ...). Not run by default.</code></pre>
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>## R version 4.5.1 (2025-06-13 ucrt)
+## Platform: x86_64-w64-mingw32/x64
+## Running under: Windows 11 x64 (build 26100)
+## 
+## Matrix products: default
+##   LAPACK version 3.12.1
+## 
+## locale:
+## [1] LC_COLLATE=English_United States.utf8 
+## [2] LC_CTYPE=English_United States.utf8   
+## [3] LC_MONETARY=English_United States.utf8
+## [4] LC_NUMERIC=C                          
+## [5] LC_TIME=English_United States.utf8    
+## 
+## time zone: America/New_York
+## tzcode source: internal
+## 
+## attached base packages:
+## [1] grid      stats     graphics  grDevices utils     datasets  methods  
+## [8] base     
+## 
+## other attached packages:
+##  [1] relaimpo_2.2-7  mitools_2.4     survey_4.5      survival_3.8-3 
+##  [5] Matrix_1.7-3    boot_1.3-31     MASS_7.3-65     broom_1.0.12   
+##  [9] lubridate_1.9.5 forcats_1.0.1   stringr_1.6.0   purrr_1.2.2    
+## [13] readr_2.2.0     tibble_3.3.1    tidyverse_2.0.0 here_1.0.2     
+## [17] knitr_1.51      ggplot2_4.0.3   tidyr_1.3.2     dplyr_1.2.1    
+## 
+## loaded via a namespace (and not attached):
+##  [1] gtable_0.3.6       xfun_0.57          bslib_0.11.0       lattice_0.22-7    
+##  [5] tzdb_0.5.0         vctrs_0.7.3        tools_4.5.1        generics_0.1.4    
+##  [9] pkgconfig_2.0.3    RColorBrewer_1.1-3 S7_0.2.2           lifecycle_1.0.5   
+## [13] compiler_4.5.1     farver_2.1.2       carData_3.0-6      httpuv_1.6.16     
+## [17] htmltools_0.5.9    sass_0.4.10        yaml_2.3.12        Formula_1.2-5     
+## [21] later_1.4.8        pillar_1.11.1      car_3.1-5          jquerylib_0.1.4   
+## [25] cachem_1.1.0       abind_1.4-8        nlme_3.1-168       tidyselect_1.2.1  
+## [29] digest_0.6.39      stringi_1.8.7      labeling_0.4.3     splines_4.5.1     
+## [33] rprojroot_2.1.1    fastmap_1.2.0      cli_3.6.6          magrittr_2.0.5    
+## [37] corpcor_1.6.10     withr_3.0.2        scales_1.4.0       promises_1.5.0    
+## [41] backports_1.5.1    timechange_0.4.0   rmarkdown_2.31     otel_0.2.0        
+## [45] workflowr_1.7.2    hms_1.1.4          evaluate_1.0.5     mgcv_1.9-3        
+## [49] deming_1.4-1       rlang_1.2.0        Rcpp_1.1.1-1.1     glue_1.8.1        
+## [53] DBI_1.3.0          rstudioapi_0.18.0  jsonlite_2.0.0     R6_2.6.1          
+## [57] fs_2.1.0</code></pre>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+<script>
+$(document).ready(function () {
+  window.initializeCodeFolding("show" === "show");
+});
+</script>
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Scot Zens and Anja Saso" />
+
+<meta name="date" content="2026-07-13" />
+
+<title>Figure 4 (rev2) — Three-panel determinants of maternal responder status + interval-robustness companion</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/readable.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Figure 4 (rev2) — Three-panel determinants
+of maternal responder status + interval-robustness companion</h1>
+<h3 class="subtitle"><p>Main figure (unchanged): Left AUC ladder /
+Middle pre-vaccination signature / Right all-maternal signature. NEW
+supplemental companion: the vaccination-to- delivery interval barely
+moves the delivery titres that build the responder score.</p></h3>
+<h4 class="author">Scot Zens and Anja Saso</h4>
+<h4 class="date">2026-07-13</h4>
+
+</div>
+
+
+<div id="main-figure-unchanged-from-rev1" class="section level1">
+<h1>Main figure (UNCHANGED from rev1)</h1>
+<p>Everything in this section is identical to
+<code>09_figure4_three_panel_rev.Rmd</code>; it is reproduced so the
+file is self-contained. The interval analysis does <strong>not</strong>
+change these three panels — they are the headline arm/serology result
+computed by the Phase-08 engine.</p>
+<pre class="r"><code>RESP_FEATS &lt;- params$responder_features
+MAT_VIS    &lt;- params$maternal_visits
+
+mat_cls &lt;- build_maternal_responder_class(
+  data_raw, MAT_VIS, RESP_FEATS,
+  breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
+arm_tbl &lt;- subject_maternal_arm(data_raw)
+
+.excl_anti &lt;- { av &lt;- unique(as.character(data_raw$feature))
+                av[sub(&quot;_.*$&quot;, &quot;&quot;, toupper(av)) %in% c(&quot;ACT&quot;, &quot;PENTAMER&quot;)] }
+.excl &lt;- union(RESP_FEATS, .excl_anti)
+W_all  &lt;- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = .excl,
+                                         min_coverage = params$min_coverage)
+W_base &lt;- build_maternal_serology_matrix(data_raw, params$baseline_visit,
+                                         exclude_feats = .excl, min_coverage = params$min_coverage)
+su_all  &lt;- serology_univariate_auc(W_all,  mat_cls)
+su_base &lt;- serology_univariate_auc(W_base, mat_cls)</code></pre>
+<pre class="r"><code>data_lr &lt;- merge(mat_cls[, c(&quot;subject_accession&quot;, &quot;responder&quot;)], arm_tbl, by = &quot;subject_accession&quot;)
+data_lr &lt;- data_lr[data_lr$arm_name %in% c(&quot;TdaP&quot;, &quot;TT&quot;), , drop = FALSE]
+arm_auc &lt;- auc_binary(as.numeric(data_lr$arm_name == &quot;TdaP&quot;), data_lr$responder)
+
+cv_base &lt;- cv_all &lt;- NA_real_
+if (has_glmnet) {
+  en_base &lt;- elastic_net_signature(W_base, mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds, seed = params$seed)
+  en_all  &lt;- elastic_net_signature(W_all,  mat_cls, arm_tbl = arm_tbl,
+                                   alpha = params$en_alpha, nfolds = params$en_folds, seed = params$seed)
+  if (isTRUE(en_base$ok)) cv_base &lt;- en_base$cv_auc
+  if (isTRUE(en_all$ok))  cv_all  &lt;- en_all$cv_auc
+} else { cv_base &lt;- 0.883; cv_all &lt;- 0.918
+  cat(&quot;&gt; *glmnet not installed — using the Table C2 CV-AUC values (0.88 / 0.92).*\n\n&quot;) }
+
+left_df &lt;- data.frame(
+  label = c(&quot;Maternal arm only\n(rank statistic)&quot;,
+            &quot;Arm + pre-vaccination\nserology (CV)&quot;,
+            &quot;Arm + all maternal\nserology (CV)&quot;),
+  auc = c(arm_auc, cv_base, cv_all), kind = c(&quot;arm&quot;, &quot;base&quot;, &quot;all&quot;), stringsAsFactors = FALSE)
+left_df$label &lt;- factor(left_df$label, levels = rev(left_df$label))</code></pre>
+<pre class="r"><code>ANTIGEN_COL &lt;- c(PRN = &quot;#206090&quot;, PT = &quot;#d04050&quot;, FHA = &quot;#308040&quot;,
+                 FIM = &quot;#0f9b9b&quot;, IPV = &quot;#e08000&quot;, DT = &quot;#7050a0&quot;,
+                 TT = &quot;#8a6d3b&quot;, DEFAULT = &quot;#9a9a9a&quot;)
+LEFT_COL &lt;- c(arm = &quot;#9a9a9a&quot;, base = &quot;#5b8fc0&quot;, all = &quot;#206090&quot;)
+VISIT_PRETTY &lt;- c(PregEarly = &quot;early&quot;, MatBirth = &quot;birth&quot;)
+pretty_feature &lt;- function(f) {
+  base &lt;- sub(&quot;@.*$&quot;, &quot;&quot;, f); visit &lt;- sub(&quot;^.*@&quot;, &quot;&quot;, f)
+  vp &lt;- ifelse(visit %in% names(VISIT_PRETTY), VISIT_PRETTY[visit], visit)
+  paste0(gsub(&quot;_&quot;, &quot; &quot;, base), &quot; @ &quot;, vp)
+}
+prep_features &lt;- function(su, keep = NULL, top_n = NULL, baseline_visit = params$baseline_visit) {
+  su$base_feature &lt;- sub(&quot;@.*$&quot;, &quot;&quot;, su$feature); su$visit &lt;- sub(&quot;^.*@&quot;, &quot;&quot;, su$feature)
+  cls &lt;- classify_feature(unique(su$base_feature))
+  su &lt;- dplyr::left_join(su, cls, by = c(&quot;base_feature&quot; = &quot;feature&quot;))
+  if (!is.null(keep)) { su &lt;- su[match(keep, su$feature), , drop = FALSE]
+    su &lt;- su[!is.na(su$feature), , drop = FALSE]
+  } else { su &lt;- su[order(-su$auc), , drop = FALSE]; if (!is.null(top_n)) su &lt;- utils::head(su, top_n) }
+  su$antigen &lt;- sub(&quot;^IPV[0-9]+$&quot;, &quot;IPV&quot;, su$antigen)
+  su$antigen &lt;- ifelse(su$antigen %in% names(ANTIGEN_COL), su$antigen, &quot;DEFAULT&quot;)
+  su$prevax &lt;- su$visit == baseline_visit; su$plabel &lt;- pretty_feature(su$feature)
+  su$plabel &lt;- factor(su$plabel, levels = rev(su$plabel)); su
+}
+use_pattern &lt;- requireNamespace(&quot;ggpattern&quot;, quietly = TRUE)
+signature_panel &lt;- function(df, title, show_legend = FALSE) {
+  ANT_BREAKS &lt;- c(&quot;PRN&quot;,&quot;PT&quot;,&quot;FHA&quot;,&quot;FIM&quot;,&quot;IPV&quot;,&quot;DT&quot;,&quot;TT&quot;)
+  fill_guide &lt;- if (show_legend) guide_legend(order = 1, nrow = 1) else &quot;none&quot;
+  mark_guide &lt;- if (show_legend) guide_legend(order = 2, nrow = 1) else &quot;none&quot;
+  p &lt;- ggplot(df, aes(auc, plabel, fill = antigen))
+  if (use_pattern) {
+    p &lt;- p + ggpattern::geom_col_pattern(aes(pattern = prevax), width = 0.72, colour = NA,
+      pattern_fill = &quot;white&quot;, pattern_angle = 45, pattern_density = 0.12,
+      pattern_spacing = 0.03, pattern_size = 0.05) +
+      ggpattern::scale_pattern_manual(values = c(`TRUE` = &quot;stripe&quot;, `FALSE` = &quot;none&quot;),
+        breaks = TRUE, labels = c(`TRUE` = &quot;pre-vaccination&quot;), name = NULL, guide = mark_guide)
+  } else {
+    p &lt;- p + geom_col(aes(colour = prevax), width = 0.72, linewidth = 0.6) +
+      scale_colour_manual(values = c(`TRUE` = &quot;grey15&quot;, `FALSE` = NA),
+        breaks = TRUE, labels = c(`TRUE` = &quot;pre-vaccination&quot;), name = NULL, guide = mark_guide)
+  }
+  df$inside &lt;- df$auc &gt;= 0.72
+  p + geom_text(data = df[df$inside, , drop = FALSE], aes(label = sprintf(&quot;%.2f&quot;, auc)),
+        hjust = 1.15, colour = &quot;white&quot;, fontface = &quot;bold&quot;, size = 3.1) +
+    geom_text(data = df[!df$inside, , drop = FALSE], aes(label = sprintf(&quot;%.2f&quot;, auc)),
+        hjust = -0.20, colour = &quot;grey20&quot;, fontface = &quot;bold&quot;, size = 3.1) +
+    scale_fill_manual(values = ANTIGEN_COL, limits = ANT_BREAKS, breaks = ANT_BREAKS,
+        na.value = &quot;#9a9a9a&quot;, name = NULL, guide = fill_guide) +
+    scale_x_continuous(breaks = seq(0.5, 1.0, 0.1), expand = c(0, 0)) +
+    coord_cartesian(xlim = c(0.5, 1.0)) +
+    labs(x = &quot;Univariate AUC (Low vs High responder)&quot;, y = NULL, title = title) +
+    theme_minimal(base_size = 11) +
+    theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+          plot.title = element_text(face = &quot;bold&quot;, size = 12), axis.ticks = element_blank(),
+          legend.position = if (show_legend) &quot;bottom&quot; else &quot;none&quot;, legend.box = &quot;horizontal&quot;,
+          legend.key.size = grid::unit(12, &quot;pt&quot;), legend.text = element_text(size = 9))
+}</code></pre>
+<pre class="r"><code>p_left &lt;- ggplot(left_df, aes(auc, label, fill = kind)) +
+  geom_col(width = 0.62) +
+  geom_text(aes(label = sprintf(&quot;%.2f&quot;, auc)), hjust = 1.2, colour = &quot;white&quot;, fontface = &quot;bold&quot;, size = 3.6) +
+  scale_fill_manual(values = LEFT_COL, guide = &quot;none&quot;) +
+  scale_x_continuous(breaks = seq(0.5, 1.0, 0.1), expand = c(0, 0)) +
+  coord_cartesian(xlim = c(0.5, 1.0)) +
+  labs(x = &quot;AUC (Low vs High responder)&quot;, y = NULL, title = &quot;Predicting responder status&quot;) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(face = &quot;bold&quot;, size = 12), axis.ticks = element_blank())
+mid_df   &lt;- prep_features(su_base, top_n = params$top_n_mid)
+p_mid    &lt;- signature_panel(mid_df, &quot;Pre-vaccination serology signature&quot;, show_legend = FALSE)
+right_keep &lt;- params$curated_right
+if (!is.null(right_keep)) right_keep &lt;- right_keep[right_keep %in% su_all$feature]
+right_df &lt;- if (length(right_keep)) prep_features(su_all, keep = right_keep) else
+                                    prep_features(su_all, top_n = params$top_n_right)
+p_right  &lt;- signature_panel(right_df, &quot;Maternal serology signature (all visits)&quot;, show_legend = TRUE)</code></pre>
+<pre class="r"><code>if (requireNamespace(&quot;patchwork&quot;, quietly = TRUE)) {
+  library(patchwork)
+  fig4 &lt;- p_left + p_mid + p_right +
+    plot_layout(widths = c(1.05, 1.05, 1.25), guides = &quot;collect&quot;) &amp;
+    theme(legend.position = &quot;bottom&quot;, legend.box = &quot;horizontal&quot;, legend.margin = margin(2, 2, 2, 2))
+} else stop(&quot;Please install `patchwork`.&quot;)
+fig4</code></pre>
+<div class="figure">
+<img src="C7_prn_pathway_figure4_files/figure-html/figure4-1.png" alt="Figure 4. Determinants of maternal responder status (unchanged from rev1)." width="1488" />
+<p class="caption">
+Figure 4. Determinants of maternal responder status (unchanged from
+rev1).
+</p>
+</div>
+<hr />
+</div>
+<div id="new-supplemental-companion-interval-robustness"
+class="section level1">
+<h1>NEW — Supplemental companion: interval robustness</h1>
+<p>This companion figure is the visual answer to the reviewer/coauthor
+concern that a mother’s <em>delivery</em> titre (half of the responder
+definition) is set by the vaccination-to-delivery interval. For each of
+the three <strong>score-defining</strong> antigens we plot delivery IgG
+against the interval (weeks), by arm, with the natural-spline fit used
+in Phase 10 (baseline-adjusted). Flat curves = the interval is not
+moving the titres that build the score.</p>
+<pre class="r"><code>arm_tbl$arm_name &lt;- factor(as.character(arm_tbl$arm_name), levels = c(&quot;TT&quot;, &quot;TdaP&quot;))
+interval_tbl &lt;- make_interval_tbl(arm_tbl, clin, maternal_arms = c(&quot;TT&quot;, &quot;TdaP&quot;))
+it_avail &lt;- interval_tbl[is.finite(interval_tbl$w_weeks), , drop = FALSE]
+
+paired &lt;- paired_change(data_raw, params$from_visit, params$to_visit)
+paired &lt;- paired[paired$arm_name %in% c(&quot;TT&quot;, &quot;TdaP&quot;), , drop = FALSE]
+paired$arm_name &lt;- factor(as.character(paired$arm_name), levels = c(&quot;TT&quot;, &quot;TdaP&quot;))
+paired &lt;- merge(paired, it_avail[, c(&quot;subject_accession&quot;, &quot;w_weeks&quot;)], by = &quot;subject_accession&quot;)
+
+DEF &lt;- params$responder_features
+ARM_COLS &lt;- c(TdaP = &quot;#8A1538&quot;, TT = &quot;#2C7A7B&quot;)
+
+# quantitative anchor: within-arm partial R^2 of the interval spline per antigen
+s1 &lt;- boost_spline_table(paired, DEF, spline_df = params$spline_df)
+
+# combined curve + point frames across the three defining antigens
+.cur &lt;- list(); .pts &lt;- list()
+for (ft in DEF) {
+  fit &lt;- fit_boost_spline(paired[paired$feature == ft, , drop = FALSE], spline_df = params$spline_df)
+  if (!isTRUE(fit$ok)) next
+  cd &lt;- spline_curve_df(fit); if (!is.null(cd)) { cd$feature &lt;- ft; .cur[[ft]] &lt;- cd }
+  pt &lt;- spline_points_df(fit); if (!is.null(pt)) { pt$feature &lt;- ft; .pts[[ft]] &lt;- pt }
+}
+curve_df &lt;- do.call(rbind, .cur); point_df &lt;- do.call(rbind, .pts)
+lab_df &lt;- data.frame(
+  feature = s1$feature,
+  lab = sprintf(&quot;partial R\u00b2 (w): TdaP %.2f | TT %.2f&quot;, s1$pR2_w_TdaP, s1$pR2_w_TT),
+  stringsAsFactors = FALSE)
+ord &lt;- intersect(DEF, unique(curve_df$feature))
+curve_df$feature &lt;- factor(curve_df$feature, levels = ord)
+point_df$feature &lt;- factor(point_df$feature, levels = ord)
+lab_df$feature   &lt;- factor(lab_df$feature,   levels = ord)</code></pre>
+<pre class="r"><code>p_iv &lt;- ggplot() +
+  geom_point(data = point_df, aes(w_weeks, adj, colour = arm_name), alpha = 0.30, size = 1.0) +
+  geom_ribbon(data = curve_df, aes(w_weeks, ymin = lwr, ymax = upr, fill = arm_name),
+              alpha = 0.15, colour = NA) +
+  geom_line(data = curve_df, aes(w_weeks, fit, colour = arm_name), linewidth = 0.9) +
+  geom_text(data = lab_df, aes(x = -Inf, y = Inf, label = lab), hjust = -0.05, vjust = 1.4,
+            size = 3.0, colour = &quot;grey25&quot;) +
+  facet_wrap(~ feature, nrow = 1, scales = &quot;free_y&quot;) +
+  scale_colour_manual(values = ARM_COLS, name = &quot;Arm&quot;) +
+  scale_fill_manual(values = ARM_COLS, guide = &quot;none&quot;) +
+  labs(x = &quot;weeks: vaccination \u2192 delivery&quot;,
+       y = expression(log[10]~&quot;delivery IgG (baseline-adjusted)&quot;),
+       title = &quot;Interval robustness of the score-defining delivery titres&quot;) +
+  theme_bw(base_size = 11) +
+  theme(plot.title = element_text(face = &quot;bold&quot;, size = 12), legend.position = &quot;bottom&quot;,
+        strip.text = element_text(face = &quot;bold&quot;))
+p_iv</code></pre>
+<div class="figure">
+<img src="C7_prn_pathway_figure4_files/figure-html/figureS-interval-1.png" alt="Figure S (interval robustness). Delivery (MatBirth) IgG for the three score-defining antigens against the vaccination-to-delivery interval (weeks), by maternal arm. Line = natural-spline fit at the median pre-vaccination baseline; band = 95% CI; points = per-mother values adjusted to that baseline (partial residuals). Within-arm partial R-squared of the interval spline is annotated per panel. The near-flat fits show the interval explains little of the delivery-titre variation that builds the responder score." width="1152" />
+<p class="caption">
+Figure S (interval robustness). Delivery (MatBirth) IgG for the three
+score-defining antigens against the vaccination-to-delivery interval
+(weeks), by maternal arm. Line = natural-spline fit at the median
+pre-vaccination baseline; band = 95% CI; points = per-mother values
+adjusted to that baseline (partial residuals). Within-arm partial
+R-squared of the interval spline is annotated per panel. The near-flat
+fits show the interval explains little of the delivery-titre variation
+that builds the responder score.
+</p>
+</div>
+<pre class="r"><code>dir.create(params$fig_out_dir, showWarnings = FALSE, recursive = TRUE)
+ggsave(file.path(params$fig_out_dir, &quot;figure4_three_panel.png&quot;), fig4,
+       width = 15.5, height = 5.2, dpi = 300, bg = &quot;white&quot;)
+ggsave(file.path(params$fig_out_dir, &quot;figure4_three_panel.pdf&quot;), fig4,
+       width = 15.5, height = 5.2, bg = &quot;white&quot;)
+ggsave(file.path(params$fig_out_dir, &quot;figureS_interval_robustness.png&quot;), p_iv,
+       width = 12, height = 4.2, dpi = 300, bg = &quot;white&quot;)
+ggsave(file.path(params$fig_out_dir, &quot;figureS_interval_robustness.pdf&quot;), p_iv,
+       width = 12, height = 4.2, bg = &quot;white&quot;)
+cat(&quot;Saved main Figure 4 and the interval-robustness companion to &#39;&quot;, params$fig_out_dir, &quot;/&#39;.\n&quot;, sep = &quot;&quot;)</code></pre>
+<pre><code>## Saved main Figure 4 and the interval-robustness companion to &#39;figures/&#39;.</code></pre>
+<hr />
+<p><em>rev2 keeps the three main panels identical to rev1 and adds a
+supplemental interval-robustness companion (Figure S) built from
+<code>R/C2_interval_helpers.R</code>. If you would rather fold the
+interval panel into the main figure as a fourth panel, assemble
+<code>(p_left + p_mid + p_right) / p_iv</code> with
+<code>plot_layout(heights = c(1, 0.9))</code> — but keeping it
+supplemental leaves the headline figure untouched.</em></p>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

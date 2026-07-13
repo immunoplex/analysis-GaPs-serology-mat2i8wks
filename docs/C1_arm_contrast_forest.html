@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>C1_arm_contrast_forest.knit</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+
+</div>
+
+
+<div id="inf2-effectors" class="section level1">
+<h1>8 Weeks: Whole-Bacterium Assays &amp; Effector Functions — Maternal
+TdaP vs TT</h1>
+<p>At the <strong>infant baseline visit (8 weeks, before primary
+vaccination)</strong> this part tests whether <strong>maternal
+TdaP</strong> shifts the infant’s whole-bacterium responses and antibody
+effector functions relative to <strong>maternal TT</strong> (referent).
+It covers two families:</p>
+<ul>
+<li><strong>Whole-bacterium assays</strong> — SBA, WT_IgG, PTNA (serum
+bactericidal activity, whole-cell-binding IgG, and pertussis-toxin
+neutralization).</li>
+<li><strong>Effector functions</strong> binding to individual antigens —
+<strong>ADCD</strong> (all six antigens PT, FHA, PRN, FIM, TT, DT), and
+<strong>ADCP</strong> / <strong>ADNP</strong> (PT, PRN, TT, DT only — no
+FHA or FIM assays).</li>
+</ul>
+<p>Each feature is a <strong>Wilcoxon rank-sum test of TdaP vs TT on
+log10 assay values — the same test used in the response-bubble
+grid.</strong> Multiplicity is handled by <strong>Benjamini–Hochberg
+within each assay class</strong> (Whole / ADCD / ADCP / ADNP as separate
+families). The forest plot additionally carries the point estimate +
+interval that natively pair with that test: the <strong>Hodges–Lehmann
+location shift and its Wilcoxon CI</strong>, oriented <strong>TdaP −
+TT</strong>. With <strong>TT as the reference level</strong>, this is
+the effect of TdaP relative to TT, so a positive value means <em>higher
+with maternal TdaP</em>.</p>
+<blockquote>
+<p><strong>🧭 Maps to interpretation:</strong> Infant-baseline
+(pre-primary-vaccination) read-out of the maternal vaccination effect on
+functional / whole-bacterium immunity, complementing the antigen×analyte
+bubble grid.</p>
+<ul>
+<li>Q3 — Function vs binding: does the maternal effect reach functional
+read-outs (SBA/PTNA, ADCD/ADCP/ADNP), not just IgG binding?</li>
+<li>Q2 — Antigen specificity: within each effector, is the effect
+concentrated in the vaccine antigens (PT/FHA/PRN) vs the toxoids
+(TT/DT)?</li>
+</ul>
+</blockquote>
+<hr />
+<div id="test-results-8-weeks" class="section level2">
+<h2>Test Results (8 weeks)</h2>
+<p><strong>Subjects at 8 weeks:</strong> TT n = 134, TdaP n = 131.
+<strong>17 features tested</strong> (3 whole-bacterium assays + 14
+effector×antigen cells); BH within each assay class.</p>
+<table style="width:100%;">
+<caption>8-week maternal TdaP-vs-TT differences (TT referent). Median =
+median log10 assay value per arm; HL shift = Hodges–Lehmann location
+shift (TdaP−TT, log10) with Wilcoxon CI; Fold = 10^(HL) = TdaP/TT ratio
+on the linear scale; Direction uses the bubble convention; p = Wilcoxon
+rank-sum (same test as the bubbles); p (BH) = Benjamini–Hochberg within
+the assay class.</caption>
+<colgroup>
+<col width="14%" />
+<col width="4%" />
+<col width="5%" />
+<col width="3%" />
+<col width="4%" />
+<col width="6%" />
+<col width="7%" />
+<col width="12%" />
+<col width="10%" />
+<col width="9%" />
+<col width="7%" />
+<col width="5%" />
+<col width="5%" />
+<col width="3%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Class</th>
+<th align="left">Assay</th>
+<th align="left">Antigen</th>
+<th align="right">n TT</th>
+<th align="right">n TdaP</th>
+<th align="right">Median TT</th>
+<th align="right">Median TdaP</th>
+<th align="right">HL shift (TdaP−TT)</th>
+<th align="center">95% CI</th>
+<th align="right">Fold (TdaP/TT)</th>
+<th align="left">Direction</th>
+<th align="right">p</th>
+<th align="right">p (BH)</th>
+<th align="center"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Whole bacterium assays</td>
+<td align="left">SBA</td>
+<td align="left">—</td>
+<td align="right">117</td>
+<td align="right">105</td>
+<td align="right">0.602</td>
+<td align="right">1.959</td>
+<td align="right">1.145</td>
+<td align="center">[0.86, 1.37]</td>
+<td align="right">13.97</td>
+<td align="left">Higher TdaP</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">Whole bacterium assays</td>
+<td align="left">WT IgG</td>
+<td align="left">—</td>
+<td align="right">109</td>
+<td align="right">114</td>
+<td align="right">-0.170</td>
+<td align="right">0.381</td>
+<td align="right">0.532</td>
+<td align="center">[0.38, 0.68]</td>
+<td align="right">3.40</td>
+<td align="left">Higher TdaP</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="center">***</td>
+</tr>
+<tr class="odd">
+<td align="left">Whole bacterium assays</td>
+<td align="left">PTNA</td>
+<td align="left">—</td>
+<td align="right">121</td>
+<td align="right">116</td>
+<td align="right">1.505</td>
+<td align="right">2.107</td>
+<td align="right">0.602</td>
+<td align="center">[0.60, 0.90]</td>
+<td align="right">4.00</td>
+<td align="left">Higher TdaP</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">ADCD</td>
+<td align="left">ADCD</td>
+<td align="left">PT</td>
+<td align="right">134</td>
+<td align="right">128</td>
+<td align="right">2.354</td>
+<td align="right">3.111</td>
+<td align="right">0.730</td>
+<td align="center">[0.63, 0.82]</td>
+<td align="right">5.37</td>
+<td align="left">Higher TdaP</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="center">***</td>
+</tr>
+<tr class="odd">
+<td align="left">ADCD</td>
+<td align="left">ADCD</td>
+<td align="left">FHA</td>
+<td align="right">134</td>
+<td align="right">128</td>
+<td align="right">2.423</td>
+<td align="right">3.109</td>
+<td align="right">0.674</td>
+<td align="center">[0.59, 0.75]</td>
+<td align="right">4.72</td>
+<td align="left">Higher TdaP</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">ADCD</td>
+<td align="left">ADCD</td>
+<td align="left">PRN</td>
+<td align="right">134</td>
+<td align="right">128</td>
+<td align="right">2.485</td>
+<td align="right">2.996</td>
+<td align="right">0.505</td>
+<td align="center">[0.42, 0.59]</td>
+<td align="right">3.20</td>
+<td align="left">Higher TdaP</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="center">***</td>
+</tr>
+<tr class="odd">
+<td align="left">ADCD</td>
+<td align="left">ADCD</td>
+<td align="left">FIM</td>
+<td align="right">134</td>
+<td align="right">128</td>
+<td align="right">1.550</td>
+<td align="right">1.623</td>
+<td align="right">0.077</td>
+<td align="center">[0.03, 0.13]</td>
+<td align="right">1.19</td>
+<td align="left">Higher TdaP</td>
+<td align="right">1.74e-03</td>
+<td align="right">2.09e-03</td>
+<td align="center">**</td>
+</tr>
+<tr class="even">
+<td align="left">ADCD</td>
+<td align="left">ADCD</td>
+<td align="left">TT</td>
+<td align="right">134</td>
+<td align="right">128</td>
+<td align="right">3.126</td>
+<td align="right">3.147</td>
+<td align="right">0.000</td>
+<td align="center">[-0.04, 0.04]</td>
+<td align="right">1.00</td>
+<td align="left">Higher TdaP</td>
+<td align="right">9.82e-01</td>
+<td align="right">9.82e-01</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">ADCD</td>
+<td align="left">ADCD</td>
+<td align="left">DT</td>
+<td align="right">134</td>
+<td align="right">128</td>
+<td align="right">3.036</td>
+<td align="right">3.206</td>
+<td align="right">0.221</td>
+<td align="center">[0.13, 0.32]</td>
+<td align="right">1.67</td>
+<td align="left">Higher TdaP</td>
+<td align="right">1.80e-06</td>
+<td align="right">2.70e-06</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">ADCP</td>
+<td align="left">ADCP</td>
+<td align="left">PT</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">0.778</td>
+<td align="right">1.000</td>
+<td align="right">0.211</td>
+<td align="center">[0.18, 0.27]</td>
+<td align="right">1.63</td>
+<td align="left">Higher TdaP</td>
+<td align="right">0.00e+00</td>
+<td align="right">0.00e+00</td>
+<td align="center">***</td>
+</tr>
+<tr class="odd">
+<td align="left">ADCP</td>
+<td align="left">ADCP</td>
+<td align="left">PRN</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">1.362</td>
+<td align="right">1.398</td>
+<td align="right">0.053</td>
+<td align="center">[0.02, 0.09]</td>
+<td align="right">1.13</td>
+<td align="left">Higher TdaP</td>
+<td align="right">1.24e-03</td>
+<td align="right">2.47e-03</td>
+<td align="center">**</td>
+</tr>
+<tr class="even">
+<td align="left">ADCP</td>
+<td align="left">ADCP</td>
+<td align="left">TT</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">1.663</td>
+<td align="right">1.602</td>
+<td align="right">-0.054</td>
+<td align="center">[-0.11, -0.00]</td>
+<td align="right">0.88</td>
+<td align="left">Lower TdaP</td>
+<td align="right">4.68e-02</td>
+<td align="right">6.24e-02</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">ADCP</td>
+<td align="left">ADCP</td>
+<td align="left">DT</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">1.000</td>
+<td align="right">1.000</td>
+<td align="right">0.000</td>
+<td align="center">[-0.00, 0.03]</td>
+<td align="right">1.00</td>
+<td align="left">No effect</td>
+<td align="right">6.72e-01</td>
+<td align="right">6.72e-01</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">ADNP</td>
+<td align="left">ADNP</td>
+<td align="left">PT</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">1.000</td>
+<td align="right">1.041</td>
+<td align="right">0.041</td>
+<td align="center">[-0.00, 0.08]</td>
+<td align="right">1.10</td>
+<td align="left">Higher TdaP</td>
+<td align="right">7.59e-02</td>
+<td align="right">1.52e-01</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">ADNP</td>
+<td align="left">ADNP</td>
+<td align="left">PRN</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">1.477</td>
+<td align="right">1.585</td>
+<td align="right">0.118</td>
+<td align="center">[0.06, 0.18]</td>
+<td align="right">1.31</td>
+<td align="left">Higher TdaP</td>
+<td align="right">5.98e-05</td>
+<td align="right">2.39e-04</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">ADNP</td>
+<td align="left">ADNP</td>
+<td align="left">TT</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">1.146</td>
+<td align="right">1.114</td>
+<td align="right">0.000</td>
+<td align="center">[-0.07, 0.07]</td>
+<td align="right">1.00</td>
+<td align="left">Lower TdaP</td>
+<td align="right">9.73e-01</td>
+<td align="right">9.73e-01</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">ADNP</td>
+<td align="left">ADNP</td>
+<td align="left">DT</td>
+<td align="right">127</td>
+<td align="right">126</td>
+<td align="right">0.903</td>
+<td align="right">0.954</td>
+<td align="right">0.000</td>
+<td align="center">[-0.00, 0.05]</td>
+<td align="right">1.00</td>
+<td align="left">Higher TdaP</td>
+<td align="right">5.67e-01</td>
+<td align="right">7.56e-01</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+<hr />
+</div>
+<div id="forest-plot-8-weeks" class="section level2">
+<h2>Forest Plot (8 weeks)</h2>
+<div class="figure">
+<img src="C1_arm_contrast_forest_files/figure-html/inf2-forest-1.png" alt="Maternal TdaP-vs-TT effect at 8 weeks for whole-bacterium assays (SBA, WT IgG, PTNA) and antibody effector functions (ADCD, ADCP, ADNP). Point = Hodges–Lehmann shift (TdaP−TT, log10); line = 95% CI; dashed line = no difference; positive = higher with maternal TdaP. BH-adjusted p at right; larger dot = BH p &lt; 0.05. Colour differentiates each whole-bacterium assay and each effector function." width="816" />
+<p class="caption">
+Maternal TdaP-vs-TT effect at 8 weeks for whole-bacterium assays (SBA,
+WT IgG, PTNA) and antibody effector functions (ADCD, ADCP, ADNP). Point
+= Hodges–Lehmann shift (TdaP−TT, log10); line = 95% CI; dashed line = no
+difference; positive = higher with maternal TdaP. BH-adjusted p at
+right; larger dot = BH p &lt; 0.05. Colour differentiates each
+whole-bacterium assay and each effector function.
+</p>
+</div>
+<hr />
+</div>
+<div id="notes-on-method-choices" class="section level2">
+<h2>Notes on Method Choices</h2>
+<ul>
+<li><strong>Same test as the bubbles.</strong> The p-values above come
+from <code>wilcox.test()</code> on log10 assay values, TT vs TdaP,
+exactly as in <code>bubble_arm_effect()</code>. Only the effect
+<em>display</em> differs: the bubbles show a bare difference of medians
+(no interval), whereas a forest plot needs one, so the point/CI use the
+Hodges–Lehmann shift and Wilcoxon <code>conf.int</code> — the
+estimator/interval that belongs to this test. The raw <code>p</code> is
+identical to the bubble p.</li>
+<li><strong>Orientation.</strong> Everything is oriented <strong>TdaP −
+TT</strong> with <strong>TT as the reference level</strong>, so the
+estimate is the effect of TdaP relative to TT (positive = higher with
+maternal TdaP), the sign convention of Saso et al. 2026 Figure 2C/D. The
+<code>Direction</code> column reuses the bubble labels (“Higher TdaP” /
+“Lower TdaP”). Magnitudes and p-values are identical to the bubble grid;
+only the displayed sign convention differs (the bubble reports
+median(TT) − median(TdaP)).</li>
+<li><strong>Multiplicity.</strong> Benjamini–Hochberg is applied
+<strong>within each assay class</strong> (Whole = 3, ADCD = 6, ADCP = 4,
+ADNP = 4 tests), so each functional family is corrected on its own. To
+correct across the whole panel instead, call
+<code>infmon2_arm_effect(..., by_class = FALSE)</code>; to change
+method, set <code>p_adjust_method</code>.</li>
+<li><strong>Antigen coverage.</strong> ADCP and ADNP have no FHA or FIM
+assays, so those cells are absent by design (not missing data). ADCD
+spans all six antigens.</li>
+<li><strong>Infant arms pooled.</strong> This is the overall maternal
+effect at baseline. For an aP/wP-stratified version, pass
+<code>infant_arm_sel = "aP"</code> / <code>"wP"</code> to
+<code>infmon2_arm_effect()</code>.</li>
+</ul>
+</div>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

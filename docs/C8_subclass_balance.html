@@ -1,0 +1,2671 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+<meta name="date" content="2026-07-13" />
+
+<title>Subclass polarisation and infant SBA: a compositional (balance) re-analysis with a complement-mediation check</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Subclass polarisation and infant SBA: a
+compositional (balance) re-analysis with a complement-mediation
+check</h1>
+<h3 class="subtitle">Rationale, methods, and staged results — GaPS
+cohort, SBA at the 8-week baseline</h3>
+<h4 class="date">2026-07-13</h4>
+
+</div>
+
+
+<div id="background-what-the-pro-tolerogenic-ratio-assumes"
+class="section level1" number="1">
+<h1><span class="header-section-number">1</span> Background: what the
+pro-/tolerogenic ratio assumes</h1>
+<p>Our earlier analyses summarised each antigen’s IgG-subclass response
+as a single <strong>pro-inflammatory-to-tolerogenic ratio</strong>,
+log10[(IgG1+IgG3)/(IgG2+IgG4)], and related it to serum bactericidal
+activity (SBA) at 8 weeks. That ratio is a reasonable first pass, but it
+bundles together several biological and statistical assumptions that are
+worth making explicit before we extend the work.</p>
+<p>The <strong>effector split itself is well grounded.</strong> Across
+the literature the functional hierarchy runs roughly IgG4 &lt; IgG2 &lt;
+IgG1 &lt; IgG3 for complement fixation and activating-Fc3b3-receptor
+engagement: IgG1 and IgG3 are the strong mediators of complement- and
+Fc3b3R-dependent functions, IgG2 is a weak mediator tied to
+polysaccharide responses, and IgG4 has minimal effector capacity and can
+actively block IgG1/IgG3 complement activation while preferentially
+engaging the inhibitory receptor Fc3b3RIIb [10134]. This matters here
+because <strong>our readout is itself complement-mediated</strong> 014
+SBA is complement-dependent bacterial killing 014 so placing the
+complement-fixing subclasses in the numerator and the
+non-complement-fixing IgG4 in the denominator is mechanistically
+defensible, and almost certainly explains why the ratio predicts SBA at
+all.</p>
+<p>But the dichotomy is crude in ways that matter for this dataset:</p>
+<ul>
+<li><strong>IgG2 is not “tolerogenic”.</strong> IgG4 is the genuinely
+immunoregulatory, chronic-antigen “blocking” subclass; IgG2 is simply
+the low-effector anti-polysaccharide subclass. Summing them conflates
+“does little” with “actively suppresses” [1,3].</li>
+<li><strong>In pertussis the contrast is really IgG1 vs IgG4.</strong>
+For pertussis antigens IgG1 dominates and IgG3 contributes little, while
+IgG4 rises specifically after repeated acellular vaccination and
+reflects Th2 skewing; whole-cell priming instead favours IgG1 and a
+Th1/Th17 profile with better opsonisation and killing [50137]. Because
+IgG4 does not fix complement, a high IgG4 share is expected to depress a
+complement-dependent readout such as SBA, and low IgG1/IgG4 ratios have
+been linked to reduced protection [7]. So our “polarisation” axis is, in
+this cohort, largely an aP-vs-wP / Th2-vs-Th1 axis 014 which is
+meaningful, but should be named as such.</li>
+<li><strong>Cord blood adds a placental-transfer confound.</strong> The
+subclasses cross the placenta with different efficiencies (IgG1 most
+efficiently, IgG2 least; the exact hierarchy is not settled and transfer
+falls as maternal titre rises) [8,9]. A cord ratio therefore mixes
+maternal production with differential transfer, and will not equal the
+maternal ratio in the same woman.</li>
+<li><strong>The arithmetic hides the potency we care about.</strong> The
+original ratio sums <em>linear</em> concentrations, so it is dominated
+by the most abundant subclass; IgG3 014 the most potent per molecule 014
+barely moves it.</li>
+<li><strong>Effector class is not fixed by subclass.</strong> Fc
+glycosylation (galactosylation, sialylation, fucosylation) strongly
+re-tunes the activating/inhibitory balance of any given subclass [4]. A
+subclass-only index cannot see this.</li>
+</ul>
+</div>
+<div id="why-a-balance-and-why-a-complement-mediation-check"
+class="section level1" number="2">
+<h1><span class="header-section-number">2</span> Why a balance, and why
+a complement-mediation check</h1>
+<p>Two consequences follow, and they define this analysis.</p>
+<p><strong>(2) Use a compositional balance rather than a linear-sum
+ratio.</strong> The four subclasses are parts of a whole and carry
+<em>relative</em> information, which is exactly the setting
+compositional data analysis (CoDA) was built for; naive ratios of parts
+have produced spurious correlations since Pearson (1897), and the
+principled fix is a log-ratio <em>balance</em> [1001313]. For the
+{IgG1,IgG3} vs {IgG2,IgG4} partition the isometric-log-ratio balance
+is</p>
+<p><span class="math display">\[ b \;=\; \tfrac{1}{2}\big(\log
+\mathrm{IgG1} + \log \mathrm{IgG3}\big) \;-\; \tfrac{1}{2}\big(\log
+\mathrm{IgG2} + \log \mathrm{IgG4}\big), \]</span></p>
+<p>i.e. a <strong>geometric-mean contrast</strong> that weights each
+subclass equally (so IgG3 counts as much as IgG1) and is
+scale-invariant. This is the same move the microbiome field made away
+from the crude Firmicutes/Bacteroidetes ratio toward CoDA balances
+[1101313].</p>
+<p><strong>Scale note (crucial for our arbitrary-unit assays).</strong>
+Each subclass is measured in its own arbitrary unit, so absolute balance
+values are not concentration-interpretable. However, a per-subclass unit
+change multiplies each subclass by a constant, i.e. adds a constant to
+its log 014 shifting <span class="math inline">\(b\)</span> by a fixed
+offset that is identical for every subject. In a regression SBA ~ <span
+class="math inline">\(b\)</span> (+ arm) that offset is absorbed by the
+intercept: the <strong>slope, its confidence interval and p value are
+unchanged</strong>. Stage <strong>deltas</strong> (<span
+class="math inline">\(b_{\text{to}}-b_{\text{from}}\)</span>) cancel the
+offset entirely. So associations, ordering, <span
+class="math inline">\(\Delta R^2\)</span> and proportion-mediated are
+all interpretable on ordinal data; only absolute balance levels and
+individual mediation path coefficients are not.</p>
+<p><strong>(6) Ask whether the balance acts through measured complement
+deposition, at every stage.</strong> Because SBA is complement killing,
+the sharpest mechanistic test is whether a polarisation signal predicts
+SBA <em>through</em> the antibody’s measured complement-deposition
+capacity (antigen-specific ADCD). Now that ADCD is available at the
+maternal and cord visits as well as the 8-week baseline, we can
+<strong>walk complement through the chain</strong> 014 at the maternal,
+cord and baseline nodes in turn 014 fitting balance 192 ADCD 192 SBA at
+each, so complement is analysed with the same stage machinery as the
+subclasses rather than at a single timepoint.</p>
+</div>
+<div id="methods" class="section level1" number="3">
+<h1><span class="header-section-number">3</span> Methods</h1>
+<p>We work on the recoded, mixed-case chain frame produced by
+<code>load_serology_data()</code> and compute, for each antigen and
+visit, the balance <span class="math inline">\(b\)</span> above
+(<code>add_subclass_balances()</code>). Antigens comprise the three
+pertussis targets (PT, FHA, PRN) plus the two shared vaccine-control
+toxoids, <strong>tetanus toxoid (TT)</strong> and <strong>diphtheria
+toxoid (DT)</strong>. TT and DT serve as a specificity check: because
+the outcome (SBA) is bactericidal killing of <em>B pertussis</em>, a
+pertussis-specific mechanism should show the balance192SBA and
+balance192ADCD192SBA signal for PT/FHA/PRN but <em>not</em> for TT/DT;
+association of the toxoid balances with SBA would instead point to a
+nonspecific, global IgG-polarisation effect. We then run <strong>two
+measures in parallel through the same stage machinery</strong> 014 the
+subclass balance and antibody-dependent complement deposition (ADCD) 014
+decomposing the maternal192cord192infant chain into three
+<strong>stages</strong>: maternal production (level at delivery),
+placental transfer (<span class="math inline">\(\Delta\)</span>
+delivery192cord) and post-natal decay (<span
+class="math inline">\(\Delta\)</span> cord1928 weeks)
+(<code>add_stage_deltas()</code>, generic over the measure). All models
+take log10 SBA at 8 weeks (WHOLE_SBA_InfMon2) as the outcome and adjust
+for maternal vaccine group (Tdap-IPV vs tetanus toxoid, Tdap-IPV
+reference).</p>
+<p>Four questions are addressed: (i) <em>within each stage</em>, does
+that stage’s quantity predict SBA, for balance and for ADCD (one antigen
+at a time, arm-adjusted); (ii) <em>sequentially</em>, do transfer and
+decay add predictive value once maternal production is in the model
+(nested models on one common complete-case sample, reporting <span
+class="math inline">\(\Delta R^2\)</span>); (iii) a <strong>complement
+walk</strong> tracing balance 192 ADCD 192 SBA at the maternal, cord and
+baseline nodes (a-path ADCD~balance, b-path SBA~ADCD, and the mediated
+effect; bootstrap product-of-coefficients, and the
+<code>mediation</code> package where available); and (iv) a robustness
+check of the geometric balance against the original linear-sum ratio.
+Analyses were run in R; participant accounting for every model is
+tabulated at the end.</p>
+<hr />
+</div>
+<div id="result-a-within-each-stage-what-predicts-sba"
+class="section level1" number="4">
+<h1><span class="header-section-number">4</span> Result A — within each
+stage, what predicts SBA?</h1>
+<p>Each row is a single arm-adjusted model, SBA ~ (that stage’s
+quantity) + maternal group, run in parallel for the subclass
+<strong>balance</strong> and for <strong>complement deposition
+(ADCD)</strong>.</p>
+<div id="subclass-balance" class="section level2" number="4.1">
+<h2><span class="header-section-number">4.1</span> Subclass balance</h2>
+<table>
+<caption>Within-stage subclass balance vs SBA at 8 weeks (SBA ~ stage
+quantity + maternal group).</caption>
+<colgroup>
+<col width="9%" />
+<col width="45%" />
+<col width="4%" />
+<col width="8%" />
+<col width="18%" />
+<col width="8%" />
+<col width="5%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Antigen</th>
+<th align="left">Stage</th>
+<th align="right">n</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">151</td>
+<td align="right">0.398</td>
+<td align="right">0.019 to 0.776</td>
+<td align="right">0.0396</td>
+<td align="center">*</td>
+</tr>
+<tr class="even">
+<td align="left">FHA</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">151</td>
+<td align="right">0.008</td>
+<td align="right">-0.089 to 0.105</td>
+<td align="right">0.8730</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">151</td>
+<td align="right">0.768</td>
+<td align="right">0.511 to 1.025</td>
+<td align="right">0.0000</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">151</td>
+<td align="right">-0.097</td>
+<td align="right">-0.274 to 0.081</td>
+<td align="right">0.2840</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">151</td>
+<td align="right">-0.069</td>
+<td align="right">-0.222 to 0.084</td>
+<td align="right">0.3720</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">PT</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.246</td>
+<td align="right">-0.344 to 0.837</td>
+<td align="right">0.4110</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">FHA</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.020</td>
+<td align="right">-0.122 to 0.162</td>
+<td align="right">0.7810</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">PRN</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.401</td>
+<td align="right">-0.228 to 1.031</td>
+<td align="right">0.2100</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.005</td>
+<td align="right">-0.450 to 0.460</td>
+<td align="right">0.9830</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">DT</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.008</td>
+<td align="right">-0.572 to 0.588</td>
+<td align="right">0.9780</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">PT</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">144</td>
+<td align="right">0.179</td>
+<td align="right">-0.235 to 0.593</td>
+<td align="right">0.3930</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">FHA</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">144</td>
+<td align="right">-0.003</td>
+<td align="right">-0.098 to 0.092</td>
+<td align="right">0.9530</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">144</td>
+<td align="right">0.188</td>
+<td align="right">-0.221 to 0.596</td>
+<td align="right">0.3650</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">144</td>
+<td align="right">0.010</td>
+<td align="right">-0.212 to 0.232</td>
+<td align="right">0.9290</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">144</td>
+<td align="right">0.197</td>
+<td align="right">-0.052 to 0.446</td>
+<td align="right">0.1190</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+<div class="figure">
+<img src="C8_subclass_balance_files/figure-html/stage-forest-bal-1.png" alt="Within-stage arm-adjusted association of each antigen's subclass balance with SBA at 8 weeks. Filled points: 95% CI excludes zero." width="768" />
+<p class="caption">
+Within-stage arm-adjusted association of each antigen’s subclass balance
+with SBA at 8 weeks. Filled points: 95% CI excludes zero.
+</p>
+</div>
+</div>
+<div id="complement-deposition-adcd" class="section level2"
+number="4.2">
+<h2><span class="header-section-number">4.2</span> Complement deposition
+(ADCD)</h2>
+<table>
+<caption>Within-stage complement (ADCD) vs SBA at 8 weeks (SBA ~ stage
+quantity + maternal group).</caption>
+<colgroup>
+<col width="8%" />
+<col width="44%" />
+<col width="4%" />
+<col width="7%" />
+<col width="19%" />
+<col width="8%" />
+<col width="5%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Antigen</th>
+<th align="left">Stage</th>
+<th align="right">n</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PT</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">160</td>
+<td align="right">0.251</td>
+<td align="right">0.026 to 0.476</td>
+<td align="right">0.02900</td>
+<td align="center">*</td>
+</tr>
+<tr class="even">
+<td align="left">FHA</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">160</td>
+<td align="right">0.476</td>
+<td align="right">0.144 to 0.808</td>
+<td align="right">0.00524</td>
+<td align="center">**</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">160</td>
+<td align="right">1.108</td>
+<td align="right">0.945 to 1.271</td>
+<td align="right">0.00000</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">160</td>
+<td align="right">0.387</td>
+<td align="right">-0.066 to 0.840</td>
+<td align="right">0.09350</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">160</td>
+<td align="right">0.178</td>
+<td align="right">-0.037 to 0.392</td>
+<td align="right">0.10400</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">PT</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">159</td>
+<td align="right">0.369</td>
+<td align="right">-0.076 to 0.814</td>
+<td align="right">0.10300</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">FHA</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">159</td>
+<td align="right">0.080</td>
+<td align="right">-0.440 to 0.600</td>
+<td align="right">0.76100</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">PRN</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">159</td>
+<td align="right">0.515</td>
+<td align="right">-0.059 to 1.089</td>
+<td align="right">0.07840</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">159</td>
+<td align="right">-0.096</td>
+<td align="right">-0.855 to 0.663</td>
+<td align="right">0.80300</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">DT</td>
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">159</td>
+<td align="right">0.148</td>
+<td align="right">-0.269 to 0.566</td>
+<td align="right">0.48300</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">PT</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">164</td>
+<td align="right">-0.072</td>
+<td align="right">-0.279 to 0.135</td>
+<td align="right">0.49200</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">FHA</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">164</td>
+<td align="right">0.018</td>
+<td align="right">-0.277 to 0.312</td>
+<td align="right">0.90600</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">164</td>
+<td align="right">-0.663</td>
+<td align="right">-0.879 to -0.447</td>
+<td align="right">0.00000</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">164</td>
+<td align="right">-0.108</td>
+<td align="right">-0.455 to 0.240</td>
+<td align="right">0.54100</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">164</td>
+<td align="right">-0.158</td>
+<td align="right">-0.420 to 0.105</td>
+<td align="right">0.23700</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+<div class="figure">
+<img src="C8_subclass_balance_files/figure-html/stage-forest-adcd-1.png" alt="Within-stage arm-adjusted association of each antigen's ADCD with SBA at 8 weeks. Filled points: 95% CI excludes zero." width="768" />
+<p class="caption">
+Within-stage arm-adjusted association of each antigen’s ADCD with SBA at
+8 weeks. Filled points: 95% CI excludes zero.
+</p>
+</div>
+</div>
+</div>
+<div
+id="result-b-do-transfer-and-decay-survive-once-maternal-production-is-in-the-model"
+class="section level1" number="5">
+<h1><span class="header-section-number">5</span> Result B — do transfer
+and decay survive once maternal production is in the model?</h1>
+<p>For each antigen we fit three nested models on one common
+complete-case sample: production alone (+ arm), then adding transfer,
+then adding decay, reporting the term added at each step and the gain in
+variance explained (<span class="math inline">\(\Delta R^2\)</span>).
+This is run for the balance and, in parallel, for complement.</p>
+<div id="subclass-balance-1" class="section level2" number="5.1">
+<h2><span class="header-section-number">5.1</span> Subclass balance</h2>
+<p><strong>PT</strong></p>
+<table>
+<caption>PT (subclass balance): incremental fit as stages are added
+(common n=143).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">143</td>
+<td align="right">0.341</td>
+<td align="right">0.331</td>
+<td align="right">0.341</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.350</td>
+<td align="right">0.336</td>
+<td align="right">0.009</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">143</td>
+<td align="right">0.433</td>
+<td align="right">0.417</td>
+<td align="right">0.083</td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;">
+<caption>PT (subclass balance): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="53%" />
+<col width="8%" />
+<col width="20%" />
+<col width="12%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">1.435</td>
+<td align="right">0.851 to 2.019</td>
+<td align="right">3.10e-06</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">1.510</td>
+<td align="right">0.769 to 2.252</td>
+<td align="right">9.31e-05</td>
+<td align="center">***</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">1.409</td>
+<td align="right">0.790 to 2.028</td>
+<td align="right">1.43e-05</td>
+<td align="center">***</td>
+</tr>
+</tbody>
+</table>
+<p><strong>FHA</strong></p>
+<table>
+<caption>FHA (subclass balance): incremental fit as stages are added
+(common n=143).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">143</td>
+<td align="right">0.327</td>
+<td align="right">0.317</td>
+<td align="right">0.327</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.327</td>
+<td align="right">0.313</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">143</td>
+<td align="right">0.328</td>
+<td align="right">0.309</td>
+<td align="right">0.001</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>FHA (subclass balance): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="54%" />
+<col width="9%" />
+<col width="21%" />
+<col width="8%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">-0.069</td>
+<td align="right">-0.355 to 0.217</td>
+<td align="right">0.634</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">-0.044</td>
+<td align="right">-0.350 to 0.263</td>
+<td align="right">0.779</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">-0.058</td>
+<td align="right">-0.325 to 0.209</td>
+<td align="right">0.667</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PRN</strong></p>
+<table>
+<caption>PRN (subclass balance): incremental fit as stages are added
+(common n=143).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">143</td>
+<td align="right">0.461</td>
+<td align="right">0.453</td>
+<td align="right">0.461</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.499</td>
+<td align="right">0.488</td>
+<td align="right">0.038</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">143</td>
+<td align="right">0.689</td>
+<td align="right">0.680</td>
+<td align="right">0.190</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>PRN (subclass balance): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="57%" />
+<col width="8%" />
+<col width="21%" />
+<col width="4%" />
+<col width="7%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">1.720</td>
+<td align="right">1.447 to 1.993</td>
+<td align="right">0</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">1.810</td>
+<td align="right">1.322 to 2.299</td>
+<td align="right">0</td>
+<td align="center">***</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">1.724</td>
+<td align="right">1.353 to 2.094</td>
+<td align="right">0</td>
+<td align="center">***</td>
+</tr>
+</tbody>
+</table>
+<p><strong>TT</strong></p>
+<table>
+<caption>TT (subclass balance): incremental fit as stages are added
+(common n=143).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">143</td>
+<td align="right">0.336</td>
+<td align="right">0.326</td>
+<td align="right">0.336</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.336</td>
+<td align="right">0.322</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">143</td>
+<td align="right">0.336</td>
+<td align="right">0.317</td>
+<td align="right">0.000</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>TT (subclass balance): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="54%" />
+<col width="9%" />
+<col width="21%" />
+<col width="8%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">-0.129</td>
+<td align="right">-0.312 to 0.055</td>
+<td align="right">0.168</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">-0.041</td>
+<td align="right">-0.531 to 0.450</td>
+<td align="right">0.870</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">0.000</td>
+<td align="right">-0.237 to 0.237</td>
+<td align="right">0.999</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>DT</strong></p>
+<table>
+<caption>DT (subclass balance): incremental fit as stages are added
+(common n=143).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">143</td>
+<td align="right">0.331</td>
+<td align="right">0.321</td>
+<td align="right">0.331</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">143</td>
+<td align="right">0.331</td>
+<td align="right">0.317</td>
+<td align="right">0.000</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">143</td>
+<td align="right">0.342</td>
+<td align="right">0.323</td>
+<td align="right">0.011</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>DT (subclass balance): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="54%" />
+<col width="8%" />
+<col width="21%" />
+<col width="8%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">0.007</td>
+<td align="right">-0.182 to 0.196</td>
+<td align="right">0.941</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">0.342</td>
+<td align="right">-0.357 to 1.041</td>
+<td align="right">0.335</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">0.280</td>
+<td align="right">-0.078 to 0.637</td>
+<td align="right">0.124</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="complement-deposition-adcd-1" class="section level2"
+number="5.2">
+<h2><span class="header-section-number">5.2</span> Complement deposition
+(ADCD)</h2>
+<p><strong>PT</strong></p>
+<table>
+<caption>PT (complement (ADCD)): incremental fit as stages are added
+(common n=158).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">158</td>
+<td align="right">0.358</td>
+<td align="right">0.349</td>
+<td align="right">0.358</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">158</td>
+<td align="right">0.385</td>
+<td align="right">0.373</td>
+<td align="right">0.028</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">158</td>
+<td align="right">0.404</td>
+<td align="right">0.388</td>
+<td align="right">0.019</td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;">
+<caption>PT (complement (ADCD)): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="53%" />
+<col width="8%" />
+<col width="20%" />
+<col width="12%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">0.629</td>
+<td align="right">0.301 to 0.958</td>
+<td align="right">0.000221</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">0.806</td>
+<td align="right">0.319 to 1.294</td>
+<td align="right">0.001330</td>
+<td align="center">**</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">0.317</td>
+<td align="right">0.031 to 0.603</td>
+<td align="right">0.029900</td>
+<td align="center">*</td>
+</tr>
+</tbody>
+</table>
+<p><strong>FHA</strong></p>
+<table>
+<caption>FHA (complement (ADCD)): incremental fit as stages are added
+(common n=158).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">158</td>
+<td align="right">0.368</td>
+<td align="right">0.36</td>
+<td align="right">0.368</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">158</td>
+<td align="right">0.373</td>
+<td align="right">0.36</td>
+<td align="right">0.004</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">158</td>
+<td align="right">0.386</td>
+<td align="right">0.37</td>
+<td align="right">0.013</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>FHA (complement (ADCD)): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="52%" />
+<col width="7%" />
+<col width="21%" />
+<col width="11%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">0.701</td>
+<td align="right">0.308 to 1.095</td>
+<td align="right">0.000569</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">0.462</td>
+<td align="right">-0.096 to 1.021</td>
+<td align="right">0.104000</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">0.323</td>
+<td align="right">-0.026 to 0.673</td>
+<td align="right">0.069700</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PRN</strong></p>
+<table>
+<caption>PRN (complement (ADCD)): incremental fit as stages are added
+(common n=158).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">158</td>
+<td align="right">0.687</td>
+<td align="right">0.683</td>
+<td align="right">0.687</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">158</td>
+<td align="right">0.755</td>
+<td align="right">0.750</td>
+<td align="right">0.068</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">158</td>
+<td align="right">0.776</td>
+<td align="right">0.771</td>
+<td align="right">0.022</td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;">
+<caption>PRN (complement (ADCD)): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="53%" />
+<col width="8%" />
+<col width="20%" />
+<col width="12%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">1.503</td>
+<td align="right">1.299 to 1.708</td>
+<td align="right">0.000000</td>
+<td align="center">***</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">1.505</td>
+<td align="right">1.124 to 1.885</td>
+<td align="right">0.000000</td>
+<td align="center">***</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">0.393</td>
+<td align="right">0.191 to 0.596</td>
+<td align="right">0.000179</td>
+<td align="center">***</td>
+</tr>
+</tbody>
+</table>
+<p><strong>TT</strong></p>
+<table>
+<caption>TT (complement (ADCD)): incremental fit as stages are added
+(common n=158).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">158</td>
+<td align="right">0.349</td>
+<td align="right">0.341</td>
+<td align="right">0.349</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">158</td>
+<td align="right">0.352</td>
+<td align="right">0.340</td>
+<td align="right">0.003</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">158</td>
+<td align="right">0.359</td>
+<td align="right">0.342</td>
+<td align="right">0.007</td>
+</tr>
+</tbody>
+</table>
+<table style="width:100%;">
+<caption>TT (complement (ADCD)): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="54%" />
+<col width="8%" />
+<col width="21%" />
+<col width="9%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">1.042</td>
+<td align="right">0.098 to 1.985</td>
+<td align="right">0.0308</td>
+<td align="center">*</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">0.955</td>
+<td align="right">-0.296 to 2.206</td>
+<td align="right">0.1330</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">0.380</td>
+<td align="right">-0.211 to 0.972</td>
+<td align="right">0.2060</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+<p><strong>DT</strong></p>
+<table>
+<caption>DT (complement (ADCD)): incremental fit as stages are added
+(common n=158).</caption>
+<thead>
+<tr class="header">
+<th align="left">Step</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adj_R2</th>
+<th align="right">ΔR²</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">158</td>
+<td align="right">0.346</td>
+<td align="right">0.338</td>
+<td align="right">0.346</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">158</td>
+<td align="right">0.352</td>
+<td align="right">0.340</td>
+<td align="right">0.006</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">158</td>
+<td align="right">0.352</td>
+<td align="right">0.335</td>
+<td align="right">0.000</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>DT (complement (ADCD)): all three stage terms together +
+arm.</caption>
+<colgroup>
+<col width="54%" />
+<col width="9%" />
+<col width="21%" />
+<col width="8%" />
+<col width="6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Stage</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="center">sig</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Maternal production (level at delivery)</td>
+<td align="right">0.218</td>
+<td align="right">-0.089 to 0.526</td>
+<td align="right">0.163</td>
+<td align="center">ns</td>
+</tr>
+<tr class="even">
+<td align="left">Placental transfer (Δ delivery→cord)</td>
+<td align="right">0.265</td>
+<td align="right">-0.216 to 0.745</td>
+<td align="right">0.279</td>
+<td align="center">ns</td>
+</tr>
+<tr class="odd">
+<td align="left">Post-natal decay (Δ cord→8 weeks)</td>
+<td align="right">-0.002</td>
+<td align="right">-0.361 to 0.357</td>
+<td align="right">0.991</td>
+<td align="center">ns</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div
+id="result-c-walking-complement-through-the-stages-maternal-cord-baseline"
+class="section level1" number="6">
+<h1><span class="header-section-number">6</span> Result C — walking
+complement through the stages (maternal → cord → baseline)</h1>
+<p>At each node we fit the two mechanistic paths and the mediated
+effect: the <strong>a-path</strong> (ADCD ~ balance + arm) asks whether
+polarisation drives complement deposition <em>at that node</em>; the
+<strong>b-path</strong> (SBA ~ ADCD + arm) asks whether complement
+<em>at that node</em> predicts 8-week SBA; and the <strong>indirect
+effect</strong> is the balance → ADCD → SBA path, with a dimensionless
+proportion mediated.</p>
+<table>
+<caption>Complement walk (ADCD): balance → ADCD → SBA at 8 weeks, by
+antigen and node. a-path = ADCD ~ balance + arm; b-path = SBA ~ ADCD +
+arm; indirect = balance→ADCD→SBA (bootstrap). Proportion mediated is
+dimensionless.</caption>
+<colgroup>
+<col width="7%" />
+<col width="8%" />
+<col width="9%" />
+<col width="3%" />
+<col width="20%" />
+<col width="17%" />
+<col width="20%" />
+<col width="13%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Antigen</th>
+<th align="left">Node</th>
+<th align="left">Visit</th>
+<th align="right">n</th>
+<th align="right">a: ADCD~balance, β (p)</th>
+<th align="right">b: SBA~ADCD, β (p)</th>
+<th align="right">indirect (95% CI)</th>
+<th align="right">prop. mediated</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">Maternal</td>
+<td align="left">MatBirth</td>
+<td align="right">145</td>
+<td align="right">0.090 (0.053)</td>
+<td align="right">0.178 (0.1)</td>
+<td align="right">0.017 (-0.005, 0.063)</td>
+<td align="right">-25%</td>
+</tr>
+<tr class="even">
+<td align="left">DT</td>
+<td align="left">Cord</td>
+<td align="left">CordBlood</td>
+<td align="right">143</td>
+<td align="right">0.052 (0.22)</td>
+<td align="right">0.222 (0.05)</td>
+<td align="right">0.014 (-0.007, 0.059)</td>
+<td align="right">-20%</td>
+</tr>
+<tr class="odd">
+<td align="left">DT</td>
+<td align="left">Baseline</td>
+<td align="left">InfMon2</td>
+<td align="right">219</td>
+<td align="right">0.016 (0.66)</td>
+<td align="right">0.181 (0.15)</td>
+<td align="right">0.004 (-0.008, 0.019)</td>
+<td align="right">7%</td>
+</tr>
+<tr class="even">
+<td align="left">FHA</td>
+<td align="left">Maternal</td>
+<td align="left">MatBirth</td>
+<td align="right">145</td>
+<td align="right">0.045 (0.017)</td>
+<td align="right">0.476 (0.0052)</td>
+<td align="right">0.020 (0.000, 0.046)</td>
+<td align="right">105%</td>
+</tr>
+<tr class="odd">
+<td align="left">FHA</td>
+<td align="left">Cord</td>
+<td align="left">CordBlood</td>
+<td align="right">143</td>
+<td align="right">0.042 (0.026)</td>
+<td align="right">0.430 (0.0068)</td>
+<td align="right">0.016 (-0.003, 0.041)</td>
+<td align="right">-346%</td>
+</tr>
+<tr class="even">
+<td align="left">FHA</td>
+<td align="left">Baseline</td>
+<td align="left">InfMon2</td>
+<td align="right">219</td>
+<td align="right">0.116 (0.021)</td>
+<td align="right">0.436 (0.0015)</td>
+<td align="right">0.079 (0.027, 0.157)</td>
+<td align="right">-134%</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN</td>
+<td align="left">Maternal</td>
+<td align="left">MatBirth</td>
+<td align="right">145</td>
+<td align="right">0.610 (9.6e-14)</td>
+<td align="right">1.108 (6.8e-28)</td>
+<td align="right">0.563 (0.350, 0.796)</td>
+<td align="right">74%</td>
+</tr>
+<tr class="even">
+<td align="left">PRN</td>
+<td align="left">Cord</td>
+<td align="left">CordBlood</td>
+<td align="right">143</td>
+<td align="right">0.617 (3.4e-14)</td>
+<td align="right">1.227 (4e-36)</td>
+<td align="right">0.633 (0.425, 0.896)</td>
+<td align="right">69%</td>
+</tr>
+<tr class="odd">
+<td align="left">PRN</td>
+<td align="left">Baseline</td>
+<td align="left">InfMon2</td>
+<td align="right">219</td>
+<td align="right">0.448 (5.7e-10)</td>
+<td align="right">0.844 (1.4e-10)</td>
+<td align="right">0.157 (0.051, 0.269)</td>
+<td align="right">9%</td>
+</tr>
+<tr class="even">
+<td align="left">PT</td>
+<td align="left">Maternal</td>
+<td align="left">MatBirth</td>
+<td align="right">145</td>
+<td align="right">0.336 (0.0038)</td>
+<td align="right">0.251 (0.029)</td>
+<td align="right">0.031 (-0.049, 0.133)</td>
+<td align="right">8%</td>
+</tr>
+<tr class="odd">
+<td align="left">PT</td>
+<td align="left">Cord</td>
+<td align="left">CordBlood</td>
+<td align="right">143</td>
+<td align="right">0.318 (0.0025)</td>
+<td align="right">0.383 (0.0012)</td>
+<td align="right">0.078 (-0.012, 0.216)</td>
+<td align="right">18%</td>
+</tr>
+<tr class="even">
+<td align="left">PT</td>
+<td align="left">Baseline</td>
+<td align="left">InfMon2</td>
+<td align="right">219</td>
+<td align="right">1.030 (7.9e-21)</td>
+<td align="right">0.402 (0.00095)</td>
+<td align="right">0.151 (-0.196, 0.472)</td>
+<td align="right">13%</td>
+</tr>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="left">Maternal</td>
+<td align="left">MatBirth</td>
+<td align="right">145</td>
+<td align="right">0.021 (0.44)</td>
+<td align="right">0.387 (0.093)</td>
+<td align="right">0.001 (-0.023, 0.038)</td>
+<td align="right">-1%</td>
+</tr>
+<tr class="even">
+<td align="left">TT</td>
+<td align="left">Cord</td>
+<td align="left">CordBlood</td>
+<td align="right">143</td>
+<td align="right">0.004 (0.86)</td>
+<td align="right">0.493 (0.081)</td>
+<td align="right">-0.005 (-0.038, 0.024)</td>
+<td align="right">4%</td>
+</tr>
+<tr class="odd">
+<td align="left">TT</td>
+<td align="left">Baseline</td>
+<td align="left">InfMon2</td>
+<td align="right">219</td>
+<td align="right">-0.001 (0.95)</td>
+<td align="right">0.082 (0.75)</td>
+<td align="right">0.001 (-0.010, 0.014)</td>
+<td align="right">-11%</td>
+</tr>
+</tbody>
+</table>
+<p><em>Path coefficients are on arbitrary units and are not comparable
+in magnitude across nodes; signs, p values and proportion mediated are
+the interpretable quantities.</em></p>
+</div>
+<div id="result-d-balance-vs-the-original-linear-sum-ratio-robustness"
+class="section level1" number="7">
+<h1><span class="header-section-number">7</span> Result D — balance vs
+the original linear-sum ratio (robustness)</h1>
+<p>For the driver antigen at cord blood, does the CoDA balance recover
+the same signal as the original linear-sum ratio?</p>
+<table>
+<caption>PRN at CordBlood: geometric balance vs linear-sum ratio as
+predictors of SBA at 8 weeks.</caption>
+<thead>
+<tr class="header">
+<th align="left">Representation</th>
+<th align="right">n</th>
+<th align="right">beta</th>
+<th align="right">95% CI</th>
+<th align="right">p</th>
+<th align="right">R2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ILR balance (geometric)</td>
+<td align="right">144</td>
+<td align="right">0.909</td>
+<td align="right">0.650 to 1.167</td>
+<td align="right">0</td>
+<td align="right">0.500</td>
+</tr>
+<tr class="even">
+<td align="left">linear-sum ratio</td>
+<td align="right">144</td>
+<td align="right">0.761</td>
+<td align="right">0.546 to 0.977</td>
+<td align="right">0</td>
+<td align="right">0.501</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="interpretation" class="section level1" number="8">
+<h1><span class="header-section-number">8</span> Interpretation</h1>
+<p>Read together: Result A localises which <em>stage</em> of the
+maternal192cord192infant chain carries the signal for SBA, separately
+for subclass polarisation and for complement deposition; Result B asks
+whether transfer and decay add anything once maternal production is
+accounted for (if their coefficients collapse, the 8-week profile is
+essentially inherited maternal production; if they survive, transfer
+selectivity and/or differential decay independently shape it), again for
+both measures; Result C <strong>walks complement through the
+chain</strong> 014 the a-path shows where polarisation drives complement
+deposition, the b-path shows which node’s complement predicts eventual
+SBA, and the mediated effect shows where the
+balance192complement192killing mechanism is operative (given that SBA is
+complement killing, we expect the b-path and mediation to be strongest
+at the cord and baseline nodes closest to the readout); and Result D
+confirms the compositional balance is not an artefact of the original
+ratio’s arithmetic. Throughout, only associations, <span
+class="math inline">\(\Delta R^2\)</span> and proportion-mediated are
+interpreted, consistent with the ordinal nature of the arbitrary-unit
+assays.</p>
+<p>The tetanus (TT) and diphtheria (DT) toxoids are read as specificity
+controls: their balances and ADCD are processed identically to the
+pertussis antigens, so if the pertussis PT/FHA/PRN signals reflect a
+genuinely pertussis-specific, complement-dependent mechanism we expect
+the TT/DT rows to be null (weak a-path, weak b-path, little mediation),
+whereas broadly positive TT/DT associations would flag a nonspecific
+global-polarisation or shared-arm effect that any interpretation of the
+pertussis findings would need to accommodate.</p>
+</div>
+<div id="participant-accounting" class="section level1" number="9">
+<h1><span class="header-section-number">9</span> Participant
+accounting</h1>
+<table>
+<caption>Participant accounting for the balance, complement, sequential,
+and walk models.</caption>
+<colgroup>
+<col width="15%" />
+<col width="11%" />
+<col width="32%" />
+<col width="7%" />
+<col width="5%" />
+<col width="7%" />
+<col width="20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Section</th>
+<th align="left">Stratum</th>
+<th align="left">Model</th>
+<th align="right">N entered</th>
+<th align="right">N used</th>
+<th align="right">N dropped</th>
+<th align="left">Dropped due to (NA driver)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">production</td>
+<td align="left">PT production bal + arm</td>
+<td align="right">312</td>
+<td align="right">151</td>
+<td align="right">161</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (bal)</td>
+<td align="left">transfer</td>
+<td align="left">PT transfer bal + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">decay</td>
+<td align="left">PT decay bal + arm</td>
+<td align="right">312</td>
+<td align="right">144</td>
+<td align="right">168</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (bal)</td>
+<td align="left">production</td>
+<td align="left">FHA production bal + arm</td>
+<td align="right">312</td>
+<td align="right">151</td>
+<td align="right">161</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">transfer</td>
+<td align="left">FHA transfer bal + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (bal)</td>
+<td align="left">decay</td>
+<td align="left">FHA decay bal + arm</td>
+<td align="right">312</td>
+<td align="right">144</td>
+<td align="right">168</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">production</td>
+<td align="left">PRN production bal + arm</td>
+<td align="right">312</td>
+<td align="right">151</td>
+<td align="right">161</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (bal)</td>
+<td align="left">transfer</td>
+<td align="left">PRN transfer bal + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">decay</td>
+<td align="left">PRN decay bal + arm</td>
+<td align="right">312</td>
+<td align="right">144</td>
+<td align="right">168</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (bal)</td>
+<td align="left">production</td>
+<td align="left">TT production bal + arm</td>
+<td align="right">312</td>
+<td align="right">151</td>
+<td align="right">161</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">transfer</td>
+<td align="left">TT transfer bal + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (bal)</td>
+<td align="left">decay</td>
+<td align="left">TT decay bal + arm</td>
+<td align="right">312</td>
+<td align="right">144</td>
+<td align="right">168</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">production</td>
+<td align="left">DT production bal + arm</td>
+<td align="right">312</td>
+<td align="right">151</td>
+<td align="right">161</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (bal)</td>
+<td align="left">transfer</td>
+<td align="left">DT transfer bal + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (bal)</td>
+<td align="left">decay</td>
+<td align="left">DT decay bal + arm</td>
+<td align="right">312</td>
+<td align="right">144</td>
+<td align="right">168</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">production</td>
+<td align="left">PT production ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">160</td>
+<td align="right">152</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">transfer</td>
+<td align="left">PT transfer ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">159</td>
+<td align="right">153</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">decay</td>
+<td align="left">PT decay ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">164</td>
+<td align="right">148</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">production</td>
+<td align="left">FHA production ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">160</td>
+<td align="right">152</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">transfer</td>
+<td align="left">FHA transfer ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">159</td>
+<td align="right">153</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">decay</td>
+<td align="left">FHA decay ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">164</td>
+<td align="right">148</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">production</td>
+<td align="left">PRN production ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">160</td>
+<td align="right">152</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">transfer</td>
+<td align="left">PRN transfer ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">159</td>
+<td align="right">153</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">decay</td>
+<td align="left">PRN decay ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">164</td>
+<td align="right">148</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">production</td>
+<td align="left">TT production ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">160</td>
+<td align="right">152</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">transfer</td>
+<td align="left">TT transfer ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">159</td>
+<td align="right">153</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">decay</td>
+<td align="left">TT decay ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">164</td>
+<td align="right">148</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">production</td>
+<td align="left">DT production ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">160</td>
+<td align="right">152</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">transfer</td>
+<td align="left">DT transfer ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">159</td>
+<td align="right">153</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Within-stage (ADCD)</td>
+<td align="left">decay</td>
+<td align="left">DT decay ADCD + arm</td>
+<td align="right">312</td>
+<td align="right">164</td>
+<td align="right">148</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Sequential (bal)</td>
+<td align="left">PT</td>
+<td align="left">PT bal: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Sequential (bal)</td>
+<td align="left">FHA</td>
+<td align="left">FHA bal: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Sequential (bal)</td>
+<td align="left">PRN</td>
+<td align="left">PRN bal: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Sequential (bal)</td>
+<td align="left">TT</td>
+<td align="left">TT bal: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Sequential (bal)</td>
+<td align="left">DT</td>
+<td align="left">DT bal: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Sequential (ADCD)</td>
+<td align="left">PT</td>
+<td align="left">PT ADCD: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">158</td>
+<td align="right">154</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Sequential (ADCD)</td>
+<td align="left">FHA</td>
+<td align="left">FHA ADCD: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">158</td>
+<td align="right">154</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Sequential (ADCD)</td>
+<td align="left">PRN</td>
+<td align="left">PRN ADCD: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">158</td>
+<td align="right">154</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Sequential (ADCD)</td>
+<td align="left">TT</td>
+<td align="left">TT ADCD: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">158</td>
+<td align="right">154</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Sequential (ADCD)</td>
+<td align="left">DT</td>
+<td align="left">DT ADCD: production/transfer/decay + arm</td>
+<td align="right">312</td>
+<td align="right">158</td>
+<td align="right">154</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">PT @ Maternal</td>
+<td align="left">PT balance-&gt;ADCD-&gt;SBA at Maternal</td>
+<td align="right">312</td>
+<td align="right">145</td>
+<td align="right">167</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Complement walk</td>
+<td align="left">PT @ Cord</td>
+<td align="left">PT balance-&gt;ADCD-&gt;SBA at Cord</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">PT @ Baseline</td>
+<td align="left">PT balance-&gt;ADCD-&gt;SBA at Baseline</td>
+<td align="right">312</td>
+<td align="right">219</td>
+<td align="right">93</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Complement walk</td>
+<td align="left">FHA @ Maternal</td>
+<td align="left">FHA balance-&gt;ADCD-&gt;SBA at Maternal</td>
+<td align="right">312</td>
+<td align="right">145</td>
+<td align="right">167</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">FHA @ Cord</td>
+<td align="left">FHA balance-&gt;ADCD-&gt;SBA at Cord</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Complement walk</td>
+<td align="left">FHA @ Baseline</td>
+<td align="left">FHA balance-&gt;ADCD-&gt;SBA at Baseline</td>
+<td align="right">312</td>
+<td align="right">219</td>
+<td align="right">93</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">PRN @ Maternal</td>
+<td align="left">PRN balance-&gt;ADCD-&gt;SBA at Maternal</td>
+<td align="right">312</td>
+<td align="right">145</td>
+<td align="right">167</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Complement walk</td>
+<td align="left">PRN @ Cord</td>
+<td align="left">PRN balance-&gt;ADCD-&gt;SBA at Cord</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">PRN @ Baseline</td>
+<td align="left">PRN balance-&gt;ADCD-&gt;SBA at Baseline</td>
+<td align="right">312</td>
+<td align="right">219</td>
+<td align="right">93</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Complement walk</td>
+<td align="left">TT @ Maternal</td>
+<td align="left">TT balance-&gt;ADCD-&gt;SBA at Maternal</td>
+<td align="right">312</td>
+<td align="right">145</td>
+<td align="right">167</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">TT @ Cord</td>
+<td align="left">TT balance-&gt;ADCD-&gt;SBA at Cord</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Complement walk</td>
+<td align="left">TT @ Baseline</td>
+<td align="left">TT balance-&gt;ADCD-&gt;SBA at Baseline</td>
+<td align="right">312</td>
+<td align="right">219</td>
+<td align="right">93</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">DT @ Maternal</td>
+<td align="left">DT balance-&gt;ADCD-&gt;SBA at Maternal</td>
+<td align="right">312</td>
+<td align="right">145</td>
+<td align="right">167</td>
+<td align="left">—</td>
+</tr>
+<tr class="even">
+<td align="left">Complement walk</td>
+<td align="left">DT @ Cord</td>
+<td align="left">DT balance-&gt;ADCD-&gt;SBA at Cord</td>
+<td align="right">312</td>
+<td align="right">143</td>
+<td align="right">169</td>
+<td align="left">—</td>
+</tr>
+<tr class="odd">
+<td align="left">Complement walk</td>
+<td align="left">DT @ Baseline</td>
+<td align="left">DT balance-&gt;ADCD-&gt;SBA at Baseline</td>
+<td align="right">312</td>
+<td align="right">219</td>
+<td align="right">93</td>
+<td align="left">—</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="references" class="section level1" number="10">
+<h1><span class="header-section-number">10</span> References</h1>
+<ol style="list-style-type: decimal">
+<li>Vidarsson G, Dekkers G, Rispens T. IgG subclasses and allotypes:
+from structure to effector functions. <em>Front Immunol</em>
+2014;5:520.</li>
+<li>IgG subclass FcγR and complement effector functions (technical
+review). Effector hierarchy IgG4 &lt; IgG2 &lt; IgG1 &lt; IgG3.</li>
+<li>Lilienthal G-M, et al. Potential of murine IgG1 and human IgG4 to
+inhibit the classical complement and Fcγ receptor activation pathways.
+<em>Front Immunol</em> 2018;9:958 (PMC5954034).</li>
+<li>Harnessing IgG Fc glycosylation for clinical benefit (review), 2023
+(PMC9870045).</li>
+<li>Hendrikx LH, et al. Different IgG-subclass distributions after
+whole-cell and acellular pertussis infant primary vaccinations.
+<em>Vaccine</em> 2011.</li>
+<li>What is wrong with pertussis vaccine immunity? Why immunological
+memory to pertussis is failing (review), 2017 (PMID 28289059).</li>
+<li>Whole-cell or acellular pertussis vaccination in infancy determines
+IgG subclass profiles to DTaP booster vaccination. <em>Vaccine</em>
+2017.</li>
+<li>Clements T, et al. Update on transplacental transfer of IgG
+subclasses: impact of maternal and fetal factors. <em>Front Immunol</em>
+2020;11:1920 (PMC7516031).</li>
+<li>On the perplexingly low rate of transport of IgG2 across the human
+placenta. <em>PLoS One</em> 2014;9:e108319 (PMID 25251461).</li>
+<li>Aitchison J. The statistical analysis of compositional data. <em>J R
+Stat Soc Ser B</em> 1982;44:139013177.</li>
+<li>Pearson K. On a form of spurious correlation which may arise when
+indices are used in the measurement of organs. <em>Proc R Soc Lond</em>
+1897;60:489013498.</li>
+<li>Rivera-Pinto J, et al. Balances: a new perspective for microbiome
+analysis. <em>mSystems</em> 2018;3:e00053-18.</li>
+<li>Calle ML, Susin A. coda4microbiome: compositional data analysis for
+microbiome studies. <em>BMC Bioinformatics</em> 2023;24:82.</li>
+<li>Chung AW, et al. Dissecting polyclonal vaccine-induced humoral
+immunity against HIV using systems serology. <em>Cell</em>
+2015;163:988013998.</li>
+</ol>
+<pre><code>## R version 4.5.1 (2025-06-13 ucrt)
+## Platform: x86_64-w64-mingw32/x64
+## Running under: Windows 11 x64 (build 26100)
+## 
+## Matrix products: default
+##   LAPACK version 3.12.1
+## 
+## locale:
+## [1] LC_COLLATE=English_United States.utf8 
+## [2] LC_CTYPE=English_United States.utf8   
+## [3] LC_MONETARY=English_United States.utf8
+## [4] LC_NUMERIC=C                          
+## [5] LC_TIME=English_United States.utf8    
+## 
+## time zone: America/New_York
+## tzcode source: internal
+## 
+## attached base packages:
+## [1] grid      stats     graphics  grDevices utils     datasets  methods  
+## [8] base     
+## 
+## other attached packages:
+##  [1] knitr_1.51      relaimpo_2.2-7  mitools_2.4     survey_4.5     
+##  [5] survival_3.8-3  Matrix_1.7-3    boot_1.3-31     MASS_7.3-65    
+##  [9] broom_1.0.12    lubridate_1.9.5 forcats_1.0.1   stringr_1.6.0  
+## [13] purrr_1.2.2     readr_2.2.0     tibble_3.3.1    tidyverse_2.0.0
+## [17] ggplot2_4.0.3   tidyr_1.3.2     dplyr_1.2.1    
+## 
+## loaded via a namespace (and not attached):
+##  [1] sass_0.4.10        generics_0.1.4     lattice_0.22-7     stringi_1.8.7     
+##  [5] hms_1.1.4          digest_0.6.39      magrittr_2.0.5     evaluate_1.0.5    
+##  [9] timechange_0.4.0   RColorBrewer_1.1-3 fastmap_1.2.0      rprojroot_2.1.1   
+## [13] workflowr_1.7.2    jsonlite_2.0.0     backports_1.5.1    DBI_1.3.0         
+## [17] promises_1.5.0     scales_1.4.0       jquerylib_0.1.4    cli_3.6.6         
+## [21] rlang_1.2.0        splines_4.5.1      withr_3.0.2        cachem_1.1.0      
+## [25] yaml_2.3.12        otel_0.2.0         tools_4.5.1        tzdb_0.5.0        
+## [29] corpcor_1.6.10     httpuv_1.6.16      here_1.0.2         vctrs_0.7.3       
+## [33] R6_2.6.1           lifecycle_1.0.5    fs_2.1.0           pkgconfig_2.0.3   
+## [37] pillar_1.11.1      bslib_0.11.0       later_1.4.8        gtable_0.3.6      
+## [41] glue_1.8.1         Rcpp_1.1.1-1.1     xfun_0.57          tidyselect_1.2.1  
+## [45] rstudioapi_0.18.0  farver_2.1.2       htmltools_0.5.9    labeling_0.4.3    
+## [49] rmarkdown_2.31     compiler_4.5.1     S7_0.2.2</code></pre>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

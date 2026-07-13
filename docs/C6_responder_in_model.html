@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Scot Zens and Anja Saso" />
+
+<meta name="date" content="2026-07-13" />
+
+<title>GaPs (Part B): predicting infant InfMon2 whole-bacterial function from maternal responder status, in excess of the maternal arm</title>
+
+<script src="site_libs/header-attrs-2.31/header-attrs.js"></script>
+<script src="site_libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/readable.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="site_libs/jqueryui-1.13.2/jquery-ui.min.js"></script>
+<link href="site_libs/tocify-1.9.1/jquery.tocify.css" rel="stylesheet" />
+<script src="site_libs/tocify-1.9.1/jquery.tocify.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<script src="site_libs/navigation-1.1/codefolding.js"></script>
+<link href="site_libs/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="site_libs/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+details > summary > p:only-child {
+  display: inline;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+<style type="text/css">
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #adb5bd;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script type="text/javascript">
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark the anchor link active (and if it's in a dropdown, also mark that active)
+  var dropdown = menuAnchor.closest('li.dropdown');
+  if (window.bootstrap) { // Bootstrap 4+
+    menuAnchor.addClass('active');
+    dropdown.find('> .dropdown-toggle').addClass('active');
+  } else { // Bootstrap 3
+    menuAnchor.parent().addClass('active');
+    dropdown.addClass('active');
+  }
+
+  // Navbar adjustments
+  var navHeight = $(".navbar").first().height() + 15;
+  var style = document.createElement('style');
+  var pt = "padding-top: " + navHeight + "px; ";
+  var mt = "margin-top: -" + navHeight + "px; ";
+  var css = "";
+  // offset scroll position for anchor links (for fixed navbar)
+  for (var i = 1; i <= 6; i++) {
+    css += ".section h" + i + "{ " + pt + mt + "}\n";
+  }
+  style.innerHTML = "body {" + pt + "padding-bottom: 40px; }\n" + css;
+  document.head.appendChild(style);
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before, .tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "\e259";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "\e258";
+  font-family: 'Glyphicons Halflings';
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+<style type="text/css">
+.code-folding-btn { margin-bottom: 4px; }
+</style>
+
+
+
+<style type="text/css">
+
+#TOC {
+  margin: 25px 0px 20px 0px;
+}
+@media (max-width: 768px) {
+#TOC {
+  position: relative;
+  width: 100%;
+}
+}
+
+@media print {
+.toc-content {
+  /* see https://github.com/w3c/csswg-drafts/issues/4434 */
+  float: right;
+}
+}
+
+.toc-content {
+  padding-left: 30px;
+  padding-right: 40px;
+}
+
+div.main-container {
+  max-width: 1200px;
+}
+
+div.tocify {
+  width: 20%;
+  max-width: 260px;
+  max-height: 85%;
+}
+
+@media (min-width: 768px) and (max-width: 991px) {
+  div.tocify {
+    width: 25%;
+  }
+}
+
+@media (max-width: 767px) {
+  div.tocify {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+.tocify ul, .tocify li {
+  line-height: 20px;
+}
+
+.tocify-subheader .tocify-item {
+  font-size: 0.90em;
+}
+
+.tocify .list-group-item {
+  border-radius: 0px;
+}
+
+
+</style>
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+<!-- setup 3col/9col grid for toc_float and main content  -->
+<div class="row">
+<div class="col-xs-12 col-sm-4 col-md-3">
+<div id="TOC" class="tocify">
+</div>
+</div>
+
+<div class="toc-content col-xs-12 col-sm-8 col-md-9">
+
+
+
+
+<div class="navbar navbar-default  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-bs-toggle="collapse" data-target="#navbar" data-bs-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">GaPs Mat→Infant Serology</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html">Overview</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Data &amp; Methods
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C0_data_harmonisation.html">C0 · Data Harmonisation &amp; IgG Standardisation</a>
+    </li>
+  </ul>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+    Results
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li>
+      <a href="C1_arm_contrast.html">C1 · Arm Contrast (Results A)</a>
+    </li>
+    <li>
+      <a href="C2_antibody_chain.html">C2 · Antibody Chain (Results B)</a>
+    </li>
+    <li>
+      <a href="C3_responder_phenotype.html">C3 · Responder Phenotype (Results C)</a>
+    </li>
+    <li>
+      <a href="#">─── Forward Prediction (Results D–E) ───</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_PTNA.html">C4 · PTNA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_SBA.html">C4 · SBA prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction_WTIgG.html">C4 · WT IgG prediction</a>
+    </li>
+    <li>
+      <a href="C4_forward_prediction.html">C4 · Interaction &amp; Deming</a>
+    </li>
+    <li>
+      <a href="C5_concurrent_models.html">C5 · Concurrent Models (Results F)</a>
+    </li>
+    <li>
+      <a href="C6_responder_in_model.html">C6 · Responder in Model (Results J)</a>
+    </li>
+    <li>
+      <a href="C7_effector_pathway.html">C7 · Effector Pathway (Results H)</a>
+    </li>
+    <li>
+      <a href="C8_subclass_balance.html">C8 · Subclass Balance (Results I)</a>
+    </li>
+    <li>
+      <a href="CK_block_ladder.html">CK · Block Ladder (Results K)</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div id="header">
+
+<div class="btn-group pull-right float-right">
+<button type="button" class="btn btn-default btn-xs btn-secondary btn-sm dropdown-toggle" data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Code</span> <span class="caret"></span></button>
+<ul class="dropdown-menu dropdown-menu-right" style="min-width: 50px;">
+<li><a id="rmd-show-all-code" href="#">Show All Code</a></li>
+<li><a id="rmd-hide-all-code" href="#">Hide All Code</a></li>
+</ul>
+</div>
+
+
+
+<h1 class="title toc-ignore">GaPs (Part B): predicting infant InfMon2
+whole-bacterial function from maternal responder status, in excess of
+the maternal arm</h1>
+<h3 class="subtitle"><p>An equal-chance test. Brings the Phase-07/08
+maternal responder score into the infant InfMon2 functional models on
+the same footing as the matched antigen-specific antibody, using
+order-independent (Shapley) variance attribution, an orthogonalised
+breadth predictor for the genuinely non-redundant signal, honest
+out-of-sample (cross-validated) increments, and a within-arm
+de-confounding check.</p></h3>
+<h4 class="author">Scot Zens and Anja Saso</h4>
+<h4 class="date">2026-07-13</h4>
+
+</div>
+
+
+<div id="what-this-tests" class="section level1">
+<h1>What this tests</h1>
+<p>The responder score is a function of maternal PT, FHA and PRN IgG —
+the same antibodies that already dominate the Section C–E
+infant-function models. A fair (“equal-chance”) test must therefore (1)
+put the score in the <strong>same</strong> InfMon2 outcome frame and CV
+protocol as those models, (2) credit shared variance by an
+<strong>order-independent Shapley decomposition</strong> rather than by
+entry order, (3) isolate the genuinely non-redundant part of the
+Phase-08 signal as a <strong>breadth predictor orthogonalised to the
+matched antibody</strong>, and (4) keep the test
+<strong>forward</strong> (maternal-at-delivery) and
+<strong>within-arm</strong> so the score cannot win by proxying the
+matched antigen or the vaccine label.</p>
+<p>Matched antibody per outcome: <strong>PT IgG1 → PTNA</strong>,
+<strong>PRN IgG1 → SBA and whole-cell IgG</strong>.</p>
+<pre class="r"><code>RESP_FEATS &lt;- params$responder_features
+MAT_VIS    &lt;- params$maternal_visits
+
+mat_cls &lt;- build_maternal_responder_class(data_raw, MAT_VIS, RESP_FEATS,
+                                          breadth_thresh = params$breadth_thresh, has_cluster = has_cluster)
+# expected columns: subject_accession, responder (Low/High), score (continuous)
+stopifnot(all(c(&quot;subject_accession&quot;, &quot;responder&quot;, &quot;score&quot;) %in% names(mat_cls)))
+arm_tbl &lt;- subject_maternal_arm(data_raw)
+
+# Maternal serology matrix (Blom-standardised; score-defining features excluded) for the breadth index
+.excl_anti &lt;- { .av &lt;- unique(as.character(data_raw$feature)); .av[sub(&quot;_.*$&quot;, &quot;&quot;, toupper(.av)) %in% c(&quot;ACT&quot;, &quot;PENTAMER&quot;)] }
+W_all &lt;- build_maternal_serology_matrix(data_raw, MAT_VIS, exclude_feats = union(RESP_FEATS, .excl_anti),
+                                        min_coverage = params$min_coverage)
+feat_cols &lt;- setdiff(names(W_all), &quot;subject_accession&quot;)</code></pre>
+<pre class="r"><code>## case-insensitive feature resolver
+.avail &lt;- as.character(unique(data_raw$feature))
+resolve_feat &lt;- function(w) { hit &lt;- .avail[toupper(.avail) == toupper(w)]; if (length(hit)) hit[[1]] else NA_character_ }
+
+## per-subject log value of one feature at one visit
+subj_value &lt;- function(feat, visit, newname) {
+  f &lt;- resolve_feat(feat); if (is.na(f)) return(NULL)
+  data_raw %&gt;%
+    dplyr::filter(feature == f, visit_name == visit) %&gt;%
+    dplyr::group_by(subject_accession) %&gt;%
+    dplyr::summarise(!!newname := mean(log_assay_value, na.rm = TRUE), .groups = &quot;drop&quot;)
+}
+
+## breadth index for an outcome = rowMeans of Blom-standardised maternal features,
+## EXCLUDING every feature of the matched antigen (so it is non-redundant with the matched antibody)
+breadth_index &lt;- function(matched_antigen) {
+  drop &lt;- feat_cols[startsWith(sub(&quot;@.*$&quot;, &quot;&quot;, feat_cols), paste0(matched_antigen, &quot;_&quot;))]
+  keep &lt;- setdiff(feat_cols, drop)
+  M &lt;- as.matrix(W_all[, keep, drop = FALSE])
+  nok &lt;- rowSums(is.finite(M))
+  br &lt;- ifelse(nok &gt;= params$min_breadth_feats, rowMeans(M, na.rm = TRUE), NA_real_)
+  tibble::tibble(subject_accession = W_all$subject_accession, breadth_raw = br)
+}
+
+## k-fold CV R^2, folds stratified by maternal arm so every fold has both levels
+cv_r2 &lt;- function(formula, data, k = params$cv_folds, seed = params$seed) {
+  set.seed(seed)
+  resp &lt;- all.vars(formula)[1]
+  fold &lt;- integer(nrow(data))
+  for (a in unique(data$arm)) { idx &lt;- which(data$arm == a); fold[idx] &lt;- sample(rep(seq_len(k), length.out = length(idx))) }
+  pred &lt;- numeric(nrow(data))
+  for (i in seq_len(k)) {
+    tr &lt;- data[fold != i, , drop = FALSE]; te &lt;- data[fold == i, , drop = FALSE]
+    m  &lt;- lm(formula, tr)
+    pred[fold == i] &lt;- tryCatch(predict(m, te), error = function(e) rep(mean(tr[[resp]]), nrow(te)))
+  }
+  y &lt;- data[[resp]]
+  1 - sum((y - pred)^2) / sum((y - mean(y))^2)
+}
+r2_of &lt;- function(terms, base, resp, data) summary(lm(reformulate(c(base, terms), resp), data))$r.squared
+
+## Shapley shares of candidate predictors over the R^2 increment beyond a fixed base set
+shapley &lt;- function(resp, base, cands, data) {
+  k &lt;- length(cands)
+  subsets_of &lt;- function(v) unlist(lapply(0:length(v), function(m) combn(v, m, simplify = FALSE)), recursive = FALSE)
+  phi &lt;- setNames(numeric(k), cands)
+  for (j in cands) {
+    others &lt;- setdiff(cands, j)
+    for (S in subsets_of(others)) {
+      w &lt;- factorial(length(S)) * factorial(k - length(S) - 1) / factorial(k)
+      phi[j] &lt;- phi[j] + w * (r2_of(c(S, j), base, resp, data) - r2_of(S, base, resp, data))
+    }
+  }
+  phi  # sums to R2(full) - R2(base)
+}</code></pre>
+<pre class="r"><code>OUTCOMES &lt;- list(
+  PTNA = list(out = &quot;WHOLE_PTNA&quot;,   antigen = &quot;PT&quot;,  matched = &quot;PT_IgG1&quot;,  label = &quot;PT-neutralising activity&quot;),
+  SBA  = list(out = &quot;WHOLE_SBA&quot;,    antigen = &quot;PRN&quot;, matched = &quot;PRN_IgG1&quot;, label = &quot;serum bactericidal activity&quot;),
+  WT   = list(out = &quot;WHOLE_WT_IgG&quot;, antigen = &quot;PRN&quot;, matched = &quot;PRN_IgG1&quot;, label = &quot;whole-cell IgG binding&quot;)
+)
+
+## Build the per-outcome modelling frame and z-score predictors within the analysis sample.
+build_df &lt;- function(spec) {
+  y  &lt;- subj_value(spec$out,     params$outcome_visit,   &quot;y&quot;)
+  ab &lt;- subj_value(spec$matched, params$predictor_visit, &quot;ab&quot;)
+  if (is.null(y) || is.null(ab)) return(NULL)
+  br &lt;- breadth_index(spec$antigen)
+  d &lt;- y %&gt;%
+    dplyr::inner_join(ab, by = &quot;subject_accession&quot;) %&gt;%
+    dplyr::inner_join(mat_cls[, c(&quot;subject_accession&quot;, &quot;score&quot;, &quot;responder&quot;)], by = &quot;subject_accession&quot;) %&gt;%
+    dplyr::inner_join(arm_tbl, by = &quot;subject_accession&quot;) %&gt;%
+    dplyr::left_join(clin_age, by = &quot;subject_accession&quot;) %&gt;%
+    dplyr::left_join(br, by = &quot;subject_accession&quot;) %&gt;%
+    dplyr::filter(as.character(arm_name) %in% MATERNAL_ARMS, is.finite(y), is.finite(ab),
+                  is.finite(score), is.finite(maternal_age))
+  d$arm &lt;- relevel(factor(as.character(d$arm_name), levels = MATERNAL_ARMS), ref = &quot;TT&quot;)
+  z &lt;- function(v) as.numeric(scale(v))
+  d$ab_z &lt;- z(d$ab); d$score_z &lt;- z(d$score); d$age_z &lt;- z(d$maternal_age); d$y &lt;- as.numeric(scale(d$y))
+  # orthogonalise breadth to the matched antibody (the non-redundant part), on rows where breadth exists
+  d$breadth_resid_z &lt;- NA_real_
+  ok &lt;- is.finite(d$breadth_raw)
+  if (sum(ok) &gt; 20) {
+    bz &lt;- z(d$breadth_raw[ok])
+    d$breadth_resid_z[ok] &lt;- as.numeric(scale(residuals(lm(bz ~ d$ab_z[ok]))))
+  }
+  d
+}
+DFS &lt;- lapply(OUTCOMES, build_df)</code></pre>
+</div>
+<div id="responder-status-in-excess-of-the-maternal-arm"
+class="section level1">
+<h1>Responder status in excess of the maternal arm</h1>
+<p>The primary question of Part B: do the maternal responder predictors
+— the <strong>High vs Low class</strong> and the continuous
+<strong>responder score</strong> — predict each infant InfMon2
+whole-bacterial outcome (SBA, whole-cell IgG, PTNA) <strong>over and
+above the maternal arm (Tdap-IPV vs TT)</strong>? The maternal arm is
+the base block, and we report the honest cross-validated gain from
+adding responder status on top of it. Because the arm largely
+<em>creates</em> the High/Low split (Part A), most of the responder
+signal is expected to be shared with the arm; what matters is the part
+that is <em>unique</em> to responder status. All predictors are
+maternal-at-delivery (forward).</p>
+<pre class="r"><code>excess_tbl &lt;- function(d) {
+  base &lt;- c(&quot;arm&quot;, &quot;age_z&quot;)
+  models &lt;- list(
+    &quot;Arm only&quot;          = c(&quot;arm&quot;),
+    &quot;Arm + age (base)&quot;  = base,
+    &quot;+ responder class&quot; = c(base, &quot;responder&quot;),
+    &quot;+ responder score&quot; = c(base, &quot;score_z&quot;))
+  rows &lt;- lapply(names(models), function(nm) {
+    tr &lt;- models[[nm]]
+    dd &lt;- d[stats::complete.cases(d[, intersect(tr, names(d)), drop = FALSE]), , drop = FALSE]
+    f  &lt;- reformulate(tr, &quot;y&quot;); m &lt;- lm(f, dd)
+    data.frame(Model = nm, n = nrow(dd),
+               R2    = round(summary(m)$r.squared, 3),
+               adjR2 = round(summary(m)$adj.r.squared, 3),
+               CV_R2 = round(cv_r2(f, dd), 3))
+  })
+  tab &lt;- do.call(rbind, rows)
+  base_cv &lt;- tab$CV_R2[tab$Model == &quot;Arm + age (base)&quot;]
+  tab$dCV_vs_arm &lt;- round(tab$CV_R2 - base_cv, 3)
+  tab$dCV_vs_arm[tab$Model %in% c(&quot;Arm only&quot;, &quot;Arm + age (base)&quot;)] &lt;- NA
+  tab
+}
+for (k in names(OUTCOMES)) {
+  d &lt;- DFS[[k]]; if (is.null(d)) next
+  cat(sprintf(&quot;\n\n### %s (%s); n = %d\n\n&quot;, k, OUTCOMES[[k]]$label, nrow(d)))
+  print(kable(excess_tbl(d), row.names = FALSE,
+        caption = sprintf(&quot;Incremental prediction of infant %s by maternal responder status beyond the maternal arm. dCV_vs_arm is the cross-validated R\u00b2 gain over the arm + age base; a positive, stable value is responder information the vaccine label does not already carry.&quot;, k)))
+}</code></pre>
+<div id="ptna-pt-neutralising-activity-n-175" class="section level3">
+<h3>PTNA (PT-neutralising activity); n = 175</h3>
+<table>
+<caption>Incremental prediction of infant PTNA by maternal responder
+status beyond the maternal arm. dCV_vs_arm is the cross-validated R²
+gain over the arm + age base; a positive, stable value is responder
+information the vaccine label does not already carry.</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adjR2</th>
+<th align="right">CV_R2</th>
+<th align="right">dCV_vs_arm</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Arm only</td>
+<td align="right">175</td>
+<td align="right">0.316</td>
+<td align="right">0.312</td>
+<td align="right">0.294</td>
+<td align="right">NA</td>
+</tr>
+<tr class="even">
+<td align="left">Arm + age (base)</td>
+<td align="right">175</td>
+<td align="right">0.344</td>
+<td align="right">0.336</td>
+<td align="right">0.313</td>
+<td align="right">NA</td>
+</tr>
+<tr class="odd">
+<td align="left">+ responder class</td>
+<td align="right">175</td>
+<td align="right">0.389</td>
+<td align="right">0.379</td>
+<td align="right">0.342</td>
+<td align="right">0.029</td>
+</tr>
+<tr class="even">
+<td align="left">+ responder score</td>
+<td align="right">175</td>
+<td align="right">0.448</td>
+<td align="right">0.438</td>
+<td align="right">0.418</td>
+<td align="right">0.105</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="sba-serum-bactericidal-activity-n-164" class="section level3">
+<h3>SBA (serum bactericidal activity); n = 164</h3>
+<table>
+<caption>Incremental prediction of infant SBA by maternal responder
+status beyond the maternal arm. dCV_vs_arm is the cross-validated R²
+gain over the arm + age base; a positive, stable value is responder
+information the vaccine label does not already carry.</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adjR2</th>
+<th align="right">CV_R2</th>
+<th align="right">dCV_vs_arm</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Arm only</td>
+<td align="right">164</td>
+<td align="right">0.342</td>
+<td align="right">0.338</td>
+<td align="right">0.319</td>
+<td align="right">NA</td>
+</tr>
+<tr class="even">
+<td align="left">Arm + age (base)</td>
+<td align="right">164</td>
+<td align="right">0.372</td>
+<td align="right">0.364</td>
+<td align="right">0.343</td>
+<td align="right">NA</td>
+</tr>
+<tr class="odd">
+<td align="left">+ responder class</td>
+<td align="right">164</td>
+<td align="right">0.432</td>
+<td align="right">0.421</td>
+<td align="right">0.402</td>
+<td align="right">0.059</td>
+</tr>
+<tr class="even">
+<td align="left">+ responder score</td>
+<td align="right">164</td>
+<td align="right">0.525</td>
+<td align="right">0.516</td>
+<td align="right">0.504</td>
+<td align="right">0.161</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="wt-whole-cell-igg-binding-n-160" class="section level3">
+<h3>WT (whole-cell IgG binding); n = 160</h3>
+<table>
+<caption>Incremental prediction of infant WT by maternal responder
+status beyond the maternal arm. dCV_vs_arm is the cross-validated R²
+gain over the arm + age base; a positive, stable value is responder
+information the vaccine label does not already carry.</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adjR2</th>
+<th align="right">CV_R2</th>
+<th align="right">dCV_vs_arm</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Arm only</td>
+<td align="right">160</td>
+<td align="right">0.202</td>
+<td align="right">0.197</td>
+<td align="right">0.180</td>
+<td align="right">NA</td>
+</tr>
+<tr class="even">
+<td align="left">Arm + age (base)</td>
+<td align="right">160</td>
+<td align="right">0.249</td>
+<td align="right">0.240</td>
+<td align="right">0.225</td>
+<td align="right">NA</td>
+</tr>
+<tr class="odd">
+<td align="left">+ responder class</td>
+<td align="right">160</td>
+<td align="right">0.257</td>
+<td align="right">0.243</td>
+<td align="right">0.229</td>
+<td align="right">0.004</td>
+</tr>
+<tr class="even">
+<td align="left">+ responder score</td>
+<td align="right">160</td>
+<td align="right">0.344</td>
+<td align="right">0.331</td>
+<td align="right">0.313</td>
+<td align="right">0.088</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div
+id="how-much-of-the-arm-responder-signal-is-unique-to-the-responder"
+class="section level2">
+<h2>How much of the {arm + responder} signal is unique to the
+responder?</h2>
+<pre class="r"><code>ex &lt;- lapply(names(OUTCOMES), function(k) {
+  d &lt;- DFS[[k]]; if (is.null(d)) return(NULL)
+  dd &lt;- d[stats::complete.cases(d[, c(&quot;arm&quot;, &quot;age_z&quot;, &quot;score_z&quot;)]), ]
+  sh &lt;- shapley(&quot;y&quot;, &quot;age_z&quot;, c(&quot;arm&quot;, &quot;score_z&quot;), dd)          # order-independent split, beyond age
+  r_arm  &lt;- r2_of(&quot;arm&quot;, &quot;age_z&quot;, &quot;y&quot;, dd)               - r2_of(character(0), &quot;age_z&quot;, &quot;y&quot;, dd)
+  r_scr  &lt;- r2_of(&quot;score_z&quot;, &quot;age_z&quot;, &quot;y&quot;, dd)           - r2_of(character(0), &quot;age_z&quot;, &quot;y&quot;, dd)
+  r_both &lt;- r2_of(c(&quot;arm&quot;, &quot;score_z&quot;), &quot;age_z&quot;, &quot;y&quot;, dd) - r2_of(character(0), &quot;age_z&quot;, &quot;y&quot;, dd)
+  uniq_arm &lt;- r_both - r_scr; uniq_scr &lt;- r_both - r_arm; common &lt;- r_both - uniq_arm - uniq_scr
+  data.frame(Outcome = k,
+             `Shapley arm`   = round(unname(sh[&quot;arm&quot;]), 3),
+             `Shapley score` = round(unname(sh[&quot;score_z&quot;]), 3),
+             `Unique arm`    = round(uniq_arm, 3),
+             `Unique score`  = round(uniq_scr, 3),
+             `Shared`        = round(common, 3),
+             check.names = FALSE)
+})
+kable(do.call(rbind, ex), row.names = FALSE,
+      caption = &quot;Order-independent (Shapley) and commonality split of the joint {arm, responder-score} explained variance, beyond maternal age. &#39;Unique score&#39; is the responder signal in excess of the arm; &#39;Shared&#39; is the variance the arm and the score both carry (expected large, since the arm largely creates the High/Low split).&quot;)</code></pre>
+<table>
+<caption>Order-independent (Shapley) and commonality split of the joint
+{arm, responder-score} explained variance, beyond maternal age. ‘Unique
+score’ is the responder signal in excess of the arm; ‘Shared’ is the
+variance the arm and the score both carry (expected large, since the arm
+largely creates the High/Low split).</caption>
+<thead>
+<tr class="header">
+<th align="left">Outcome</th>
+<th align="right">Shapley arm</th>
+<th align="right">Shapley score</th>
+<th align="right">Unique arm</th>
+<th align="right">Unique score</th>
+<th align="right">Shared</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PTNA</td>
+<td align="right">0.204</td>
+<td align="right">0.210</td>
+<td align="right">0.098</td>
+<td align="right">0.104</td>
+<td align="right">0.211</td>
+</tr>
+<tr class="even">
+<td align="left">SBA</td>
+<td align="right">0.206</td>
+<td align="right">0.276</td>
+<td align="right">0.083</td>
+<td align="right">0.153</td>
+<td align="right">0.245</td>
+</tr>
+<tr class="odd">
+<td align="left">WT</td>
+<td align="right">0.122</td>
+<td align="right">0.170</td>
+<td align="right">0.047</td>
+<td align="right">0.095</td>
+<td align="right">0.150</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div
+id="nested-models-does-the-score-add-out-of-sample-beyond-the-matched-antibody"
+class="section level1">
+<h1>1. Nested models — does the score add out-of-sample beyond the
+matched antibody?</h1>
+<p>All predictors are maternal-at-delivery (forward). Base = maternal
+arm + maternal age. We report in-sample R^2/adjusted R^2 and honest
+10-fold cross-validated R^2 (CV-R^2). The score earns its place only if
+it improves <strong>CV-R^2</strong> beyond the matched antibody —
+in-sample gains alone do not count.</p>
+<pre class="r"><code>nested_tbl &lt;- function(spec, d) {
+  base &lt;- c(&quot;arm&quot;, &quot;age_z&quot;)
+  models &lt;- list(
+    &quot;Base (arm + age)&quot;                 = base,
+    &quot;+ matched IgG1&quot;                   = c(base, &quot;ab_z&quot;),
+    &quot;+ responder score&quot;               = c(base, &quot;score_z&quot;),
+    &quot;+ matched IgG1 + score&quot;          = c(base, &quot;ab_z&quot;, &quot;score_z&quot;),
+    &quot;+ matched IgG1 + breadth(resid)&quot; = c(base, &quot;ab_z&quot;, &quot;breadth_resid_z&quot;)
+  )
+  rows &lt;- lapply(names(models), function(nm) {
+    tr &lt;- models[[nm]]
+    dd &lt;- d[stats::complete.cases(d[, intersect(tr, names(d)), drop = FALSE]), , drop = FALSE]
+    f  &lt;- reformulate(tr, &quot;y&quot;)
+    m  &lt;- lm(f, dd)
+    data.frame(Model = nm, n = nrow(dd),
+               R2 = round(summary(m)$r.squared, 3),
+               adjR2 = round(summary(m)$adj.r.squared, 3),
+               CV_R2 = round(cv_r2(f, dd), 3))
+  })
+  do.call(rbind, rows)
+}
+for (k in names(OUTCOMES)) {
+  d &lt;- DFS[[k]]; if (is.null(d)) next
+  cat(sprintf(&quot;\n\n### %s (%s); n = %d\n\n&quot;, k, OUTCOMES[[k]]$label, nrow(d)))
+  print(kable(nested_tbl(OUTCOMES[[k]], d), row.names = FALSE,
+        caption = sprintf(&quot;Nested forward models for infant %s. The decisive rows are &#39;+ matched IgG1&#39; vs &#39;+ matched IgG1 + score&#39; (does the score add beyond the antibody already used?) and &#39;+ matched IgG1 + breadth(resid)&#39; (does the orthogonal breadth add?). Judge on CV-R\u00b2.&quot;, k)))
+}</code></pre>
+<div id="ptna-pt-neutralising-activity-n-175-1" class="section level3">
+<h3>PTNA (PT-neutralising activity); n = 175</h3>
+<table>
+<caption>Nested forward models for infant PTNA. The decisive rows are ‘+
+matched IgG1’ vs ‘+ matched IgG1 + score’ (does the score add beyond the
+antibody already used?) and ‘+ matched IgG1 + breadth(resid)’ (does the
+orthogonal breadth add?). Judge on CV-R².</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adjR2</th>
+<th align="right">CV_R2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Base (arm + age)</td>
+<td align="right">175</td>
+<td align="right">0.344</td>
+<td align="right">0.336</td>
+<td align="right">0.313</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1</td>
+<td align="right">175</td>
+<td align="right">0.443</td>
+<td align="right">0.434</td>
+<td align="right">0.404</td>
+</tr>
+<tr class="odd">
+<td align="left">+ responder score</td>
+<td align="right">175</td>
+<td align="right">0.448</td>
+<td align="right">0.438</td>
+<td align="right">0.418</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1 + score</td>
+<td align="right">175</td>
+<td align="right">0.478</td>
+<td align="right">0.466</td>
+<td align="right">0.440</td>
+</tr>
+<tr class="odd">
+<td align="left">+ matched IgG1 + breadth(resid)</td>
+<td align="right">175</td>
+<td align="right">0.465</td>
+<td align="right">0.453</td>
+<td align="right">0.417</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="sba-serum-bactericidal-activity-n-164-1"
+class="section level3">
+<h3>SBA (serum bactericidal activity); n = 164</h3>
+<table>
+<caption>Nested forward models for infant SBA. The decisive rows are ‘+
+matched IgG1’ vs ‘+ matched IgG1 + score’ (does the score add beyond the
+antibody already used?) and ‘+ matched IgG1 + breadth(resid)’ (does the
+orthogonal breadth add?). Judge on CV-R².</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adjR2</th>
+<th align="right">CV_R2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Base (arm + age)</td>
+<td align="right">164</td>
+<td align="right">0.372</td>
+<td align="right">0.364</td>
+<td align="right">0.343</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1</td>
+<td align="right">164</td>
+<td align="right">0.663</td>
+<td align="right">0.657</td>
+<td align="right">0.641</td>
+</tr>
+<tr class="odd">
+<td align="left">+ responder score</td>
+<td align="right">164</td>
+<td align="right">0.525</td>
+<td align="right">0.516</td>
+<td align="right">0.504</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1 + score</td>
+<td align="right">164</td>
+<td align="right">0.671</td>
+<td align="right">0.663</td>
+<td align="right">0.642</td>
+</tr>
+<tr class="odd">
+<td align="left">+ matched IgG1 + breadth(resid)</td>
+<td align="right">164</td>
+<td align="right">0.668</td>
+<td align="right">0.660</td>
+<td align="right">0.641</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="wt-whole-cell-igg-binding-n-160-1" class="section level3">
+<h3>WT (whole-cell IgG binding); n = 160</h3>
+<table>
+<caption>Nested forward models for infant WT. The decisive rows are ‘+
+matched IgG1’ vs ‘+ matched IgG1 + score’ (does the score add beyond the
+antibody already used?) and ‘+ matched IgG1 + breadth(resid)’ (does the
+orthogonal breadth add?). Judge on CV-R².</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">R2</th>
+<th align="right">adjR2</th>
+<th align="right">CV_R2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Base (arm + age)</td>
+<td align="right">160</td>
+<td align="right">0.249</td>
+<td align="right">0.240</td>
+<td align="right">0.225</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1</td>
+<td align="right">160</td>
+<td align="right">0.360</td>
+<td align="right">0.347</td>
+<td align="right">0.317</td>
+</tr>
+<tr class="odd">
+<td align="left">+ responder score</td>
+<td align="right">160</td>
+<td align="right">0.344</td>
+<td align="right">0.331</td>
+<td align="right">0.313</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1 + score</td>
+<td align="right">160</td>
+<td align="right">0.378</td>
+<td align="right">0.362</td>
+<td align="right">0.328</td>
+</tr>
+<tr class="odd">
+<td align="left">+ matched IgG1 + breadth(resid)</td>
+<td align="right">160</td>
+<td align="right">0.368</td>
+<td align="right">0.351</td>
+<td align="right">0.321</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="equal-chance-variance-attribution-shapley"
+class="section level1">
+<h1>2. Equal-chance variance attribution (Shapley)</h1>
+<p>Entry order decides nothing here: each predictor’s share of the
+explained variance (beyond arm + age) is averaged over all entry orders.
+We do this for the matched antibody vs the score (how much is
+<em>shared</em> vs <em>unique to the score</em>), and for the matched
+antibody vs the orthogonal breadth.</p>
+<pre class="r"><code>boot_shapley &lt;- function(resp, base, cands, data, B = params$boot_B, seed = params$seed) {
+  obs &lt;- shapley(resp, base, cands, data)
+  set.seed(seed)
+  M &lt;- matrix(NA_real_, B, length(cands), dimnames = list(NULL, cands))
+  for (b in seq_len(B)) {
+    db &lt;- data[sample(nrow(data), replace = TRUE), , drop = FALSE]
+    M[b, ] &lt;- tryCatch(shapley(resp, base, cands, db), error = function(e) rep(NA, length(cands)))
+  }
+  ci &lt;- apply(M, 2, function(v) round(quantile(v, c(.025, .975), na.rm = TRUE), 3))
+  data.frame(predictor = cands, shapley_R2 = round(obs, 3),
+             ci_low = ci[1, ], ci_high = ci[2, ], row.names = NULL)
+}
+for (k in names(OUTCOMES)) {
+  d &lt;- DFS[[k]]; if (is.null(d)) next
+  base &lt;- c(&quot;arm&quot;, &quot;age_z&quot;)
+  cat(sprintf(&quot;\n\n### %s\n\n&quot;, k))
+  s1 &lt;- boot_shapley(&quot;y&quot;, base, c(&quot;ab_z&quot;, &quot;score_z&quot;), d[stats::complete.cases(d[, c(&quot;ab_z&quot;,&quot;score_z&quot;)]), ])
+  print(kable(s1, row.names = FALSE,
+        caption = sprintf(&quot;Shapley shares (matched antibody vs responder score) for %s. A score share near zero with the antibody share carrying the increment means the score is redundant; a non-trivial score share with a CI excluding ~0 means it carries information the matched antibody does not.&quot;, k)))
+  db &lt;- d[stats::complete.cases(d[, c(&quot;ab_z&quot;,&quot;breadth_resid_z&quot;)]), ]
+  if (nrow(db) &gt; 30) {
+    s2 &lt;- boot_shapley(&quot;y&quot;, base, c(&quot;ab_z&quot;, &quot;breadth_resid_z&quot;), db)
+    print(kable(s2, row.names = FALSE,
+          caption = sprintf(&quot;Shapley shares (matched antibody vs orthogonal maternal breadth) for %s. The breadth term is the part of the coordinated maternal panel that is NOT the matched antigen; a non-trivial, CI-positive share here is the result that would license including the breadth construct in the model.&quot;, k)))
+  }
+}</code></pre>
+<div id="ptna" class="section level3">
+<h3>PTNA</h3>
+<table>
+<caption>Shapley shares (matched antibody vs responder score) for PTNA.
+A score share near zero with the antibody share carrying the increment
+means the score is redundant; a non-trivial score share with a CI
+excluding ~0 means it carries information the matched antibody does
+not.</caption>
+<thead>
+<tr class="header">
+<th align="left">predictor</th>
+<th align="right">shapley_R2</th>
+<th align="right">ci_low</th>
+<th align="right">ci_high</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ab_z</td>
+<td align="right">0.065</td>
+<td align="right">0.024</td>
+<td align="right">0.123</td>
+</tr>
+<tr class="even">
+<td align="left">score_z</td>
+<td align="right">0.070</td>
+<td align="right">0.029</td>
+<td align="right">0.125</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Shapley shares (matched antibody vs orthogonal maternal
+breadth) for PTNA. The breadth term is the part of the coordinated
+maternal panel that is NOT the matched antigen; a non-trivial,
+CI-positive share here is the result that would license including the
+breadth construct in the model.</caption>
+<thead>
+<tr class="header">
+<th align="left">predictor</th>
+<th align="right">shapley_R2</th>
+<th align="right">ci_low</th>
+<th align="right">ci_high</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ab_z</td>
+<td align="right">0.094</td>
+<td align="right">0.034</td>
+<td align="right">0.171</td>
+</tr>
+<tr class="even">
+<td align="left">breadth_resid_z</td>
+<td align="right">0.028</td>
+<td align="right">0.004</td>
+<td align="right">0.072</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="sba" class="section level3">
+<h3>SBA</h3>
+<table>
+<caption>Shapley shares (matched antibody vs responder score) for SBA. A
+score share near zero with the antibody share carrying the increment
+means the score is redundant; a non-trivial score share with a CI
+excluding ~0 means it carries information the matched antibody does
+not.</caption>
+<thead>
+<tr class="header">
+<th align="left">predictor</th>
+<th align="right">shapley_R2</th>
+<th align="right">ci_low</th>
+<th align="right">ci_high</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ab_z</td>
+<td align="right">0.219</td>
+<td align="right">0.125</td>
+<td align="right">0.333</td>
+</tr>
+<tr class="even">
+<td align="left">score_z</td>
+<td align="right">0.080</td>
+<td align="right">0.042</td>
+<td align="right">0.130</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Shapley shares (matched antibody vs orthogonal maternal
+breadth) for SBA. The breadth term is the part of the coordinated
+maternal panel that is NOT the matched antigen; a non-trivial,
+CI-positive share here is the result that would license including the
+breadth construct in the model.</caption>
+<thead>
+<tr class="header">
+<th align="left">predictor</th>
+<th align="right">shapley_R2</th>
+<th align="right">ci_low</th>
+<th align="right">ci_high</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ab_z</td>
+<td align="right">0.294</td>
+<td align="right">0.172</td>
+<td align="right">0.43</td>
+</tr>
+<tr class="even">
+<td align="left">breadth_resid_z</td>
+<td align="right">0.002</td>
+<td align="right">0.000</td>
+<td align="right">0.02</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="wt" class="section level3">
+<h3>WT</h3>
+<table>
+<caption>Shapley shares (matched antibody vs responder score) for WT. A
+score share near zero with the antibody share carrying the increment
+means the score is redundant; a non-trivial score share with a CI
+excluding ~0 means it carries information the matched antibody does
+not.</caption>
+<thead>
+<tr class="header">
+<th align="left">predictor</th>
+<th align="right">shapley_R2</th>
+<th align="right">ci_low</th>
+<th align="right">ci_high</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ab_z</td>
+<td align="right">0.072</td>
+<td align="right">0.025</td>
+<td align="right">0.146</td>
+</tr>
+<tr class="even">
+<td align="left">score_z</td>
+<td align="right">0.057</td>
+<td align="right">0.019</td>
+<td align="right">0.112</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption>Shapley shares (matched antibody vs orthogonal maternal
+breadth) for WT. The breadth term is the part of the coordinated
+maternal panel that is NOT the matched antigen; a non-trivial,
+CI-positive share here is the result that would license including the
+breadth construct in the model.</caption>
+<thead>
+<tr class="header">
+<th align="left">predictor</th>
+<th align="right">shapley_R2</th>
+<th align="right">ci_low</th>
+<th align="right">ci_high</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">ab_z</td>
+<td align="right">0.113</td>
+<td align="right">0.042</td>
+<td align="right">0.207</td>
+</tr>
+<tr class="even">
+<td align="left">breadth_resid_z</td>
+<td align="right">0.006</td>
+<td align="right">0.000</td>
+<td align="right">0.042</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div
+id="collinearity-how-much-do-the-score-and-the-matched-antibody-overlap"
+class="section level1">
+<h1>3. Collinearity — how much do the score and the matched antibody
+overlap?</h1>
+<pre class="r"><code>co &lt;- lapply(names(OUTCOMES), function(k) {
+  d &lt;- DFS[[k]]; if (is.null(d)) return(NULL)
+  r &lt;- cor(d$ab_z, d$score_z, use = &quot;complete.obs&quot;)
+  vif &lt;- 1 / (1 - r^2)   # 2-predictor VIF for {matched antibody, score}
+  rb &lt;- suppressWarnings(cor(d$ab_z, d$breadth_resid_z, use = &quot;complete.obs&quot;))
+  data.frame(Outcome = k, `cor(antibody, score)` = round(r, 3), `VIF` = round(vif, 2),
+             `cor(antibody, breadth_resid)` = round(rb, 3), check.names = FALSE)
+})
+kable(do.call(rbind, co), row.names = FALSE,
+      caption = &quot;Overlap diagnostics. A high antibody-score correlation (and VIF) is exactly why entry order would mislead and why the Shapley split is needed. The orthogonal breadth term should correlate ~0 with the matched antibody by construction.&quot;)</code></pre>
+<table>
+<caption>Overlap diagnostics. A high antibody-score correlation (and
+VIF) is exactly why entry order would mislead and why the Shapley split
+is needed. The orthogonal breadth term should correlate ~0 with the
+matched antibody by construction.</caption>
+<thead>
+<tr class="header">
+<th align="left">Outcome</th>
+<th align="right">cor(antibody, score)</th>
+<th align="right">VIF</th>
+<th align="right">cor(antibody, breadth_resid)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PTNA</td>
+<td align="right">0.674</td>
+<td align="right">1.83</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="left">SBA</td>
+<td align="right">0.730</td>
+<td align="right">2.14</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="left">WT</td>
+<td align="right">0.734</td>
+<td align="right">2.17</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="within-arm-de-confounding-tdap-ipv-mothers-only"
+class="section level1">
+<h1>4. Within-arm de-confounding (Tdap-IPV mothers only)</h1>
+<p>If the score predicts infant function only because it labels the
+vaccine arm, it should add nothing <em>within</em> an arm. Refit the
+decisive increments among Tdap-IPV mothers (where responder status is
+not the arm), dropping the arm term.</p>
+<pre class="r"><code>within_tbl &lt;- function(spec, d) {
+  d &lt;- d[d$arm == &quot;TdaP&quot;, , drop = FALSE]
+  if (nrow(d) &lt; 40) return(data.frame(note = sprintf(&quot;Too few Tdap-IPV mothers (n=%d) for a stable within-arm fit.&quot;, nrow(d))))
+  base &lt;- c(&quot;age_z&quot;)
+  out &lt;- function(tr, nm) { dd &lt;- d[stats::complete.cases(d[, intersect(tr, names(d))]), ]; f &lt;- reformulate(tr, &quot;y&quot;)
+    data.frame(Model = nm, n = nrow(dd), CV_R2 = round(cv_r2(f, dd), 3)) }
+  rbind(out(c(base, &quot;ab_z&quot;), &quot;+ matched IgG1&quot;),
+        out(c(base, &quot;ab_z&quot;, &quot;score_z&quot;), &quot;+ matched IgG1 + score&quot;),
+        out(c(base, &quot;ab_z&quot;, &quot;breadth_resid_z&quot;), &quot;+ matched IgG1 + breadth(resid)&quot;))
+}
+for (k in names(OUTCOMES)) {
+  d &lt;- DFS[[k]]; if (is.null(d)) next
+  cat(sprintf(&quot;\n\n### %s — within Tdap-IPV\n\n&quot;, k))
+  print(kable(within_tbl(OUTCOMES[[k]], d), row.names = FALSE,
+        caption = sprintf(&quot;Within-arm CV-R\u00b2 for %s. A score/breadth CV gain that survives here is not the vaccine label.&quot;, k)))
+}</code></pre>
+<div id="ptna-within-tdap-ipv" class="section level3">
+<h3>PTNA — within Tdap-IPV</h3>
+<table>
+<caption>Within-arm CV-R² for PTNA. A score/breadth CV gain that
+survives here is not the vaccine label.</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">CV_R2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">+ matched IgG1</td>
+<td align="right">81</td>
+<td align="right">0.127</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1 + score</td>
+<td align="right">81</td>
+<td align="right">0.160</td>
+</tr>
+<tr class="odd">
+<td align="left">+ matched IgG1 + breadth(resid)</td>
+<td align="right">81</td>
+<td align="right">0.164</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="sba-within-tdap-ipv" class="section level3">
+<h3>SBA — within Tdap-IPV</h3>
+<table>
+<caption>Within-arm CV-R² for SBA. A score/breadth CV gain that survives
+here is not the vaccine label.</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">CV_R2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">+ matched IgG1</td>
+<td align="right">75</td>
+<td align="right">0.548</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1 + score</td>
+<td align="right">75</td>
+<td align="right">0.571</td>
+</tr>
+<tr class="odd">
+<td align="left">+ matched IgG1 + breadth(resid)</td>
+<td align="right">75</td>
+<td align="right">0.559</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="wt-within-tdap-ipv" class="section level3">
+<h3>WT — within Tdap-IPV</h3>
+<table>
+<caption>Within-arm CV-R² for WT. A score/breadth CV gain that survives
+here is not the vaccine label.</caption>
+<thead>
+<tr class="header">
+<th align="left">Model</th>
+<th align="right">n</th>
+<th align="right">CV_R2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">+ matched IgG1</td>
+<td align="right">79</td>
+<td align="right">0.205</td>
+</tr>
+<tr class="even">
+<td align="left">+ matched IgG1 + score</td>
+<td align="right">79</td>
+<td align="right">0.257</td>
+</tr>
+<tr class="odd">
+<td align="left">+ matched IgG1 + breadth(resid)</td>
+<td align="right">79</td>
+<td align="right">0.252</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="decision-summary-and-how-to-read-it" class="section level1">
+<h1>5. Decision summary and how to read it</h1>
+<pre class="r"><code>summ &lt;- lapply(names(OUTCOMES), function(k) {
+  d &lt;- DFS[[k]]; if (is.null(d)) return(NULL)
+  base &lt;- c(&quot;arm&quot;, &quot;age_z&quot;)
+  f_ab   &lt;- reformulate(c(base, &quot;ab_z&quot;), &quot;y&quot;)
+  f_both &lt;- reformulate(c(base, &quot;ab_z&quot;, &quot;score_z&quot;), &quot;y&quot;)
+  f_brd  &lt;- reformulate(c(base, &quot;ab_z&quot;, &quot;breadth_resid_z&quot;), &quot;y&quot;)
+  d2  &lt;- d[stats::complete.cases(d[, c(&quot;ab_z&quot;,&quot;score_z&quot;)]), ]
+  db  &lt;- d[stats::complete.cases(d[, c(&quot;ab_z&quot;,&quot;breadth_resid_z&quot;)]), ]
+  sh  &lt;- shapley(&quot;y&quot;, base, c(&quot;ab_z&quot;, &quot;score_z&quot;), d2)
+  shb &lt;- if (nrow(db) &gt; 30) shapley(&quot;y&quot;, base, c(&quot;ab_z&quot;, &quot;breadth_resid_z&quot;), db) else c(breadth_resid_z = NA)
+  data.frame(
+    Outcome = k,
+    `CV gain: score beyond antibody`  = round(cv_r2(f_both, d2) - cv_r2(f_ab, d2), 3),
+    `CV gain: breadth beyond antibody`= if (nrow(db) &gt; 30) round(cv_r2(f_brd, db) - cv_r2(f_ab, db), 3) else NA,
+    `Shapley share: score`            = round(unname(sh[&quot;score_z&quot;]), 3),
+    `Shapley share: breadth`          = round(unname(shb[&quot;breadth_resid_z&quot;]), 3),
+    check.names = FALSE)
+})
+kable(do.call(rbind, summ), row.names = FALSE,
+      caption = &quot;Decision table. Positive CV gain + a Shapley share whose bootstrap CI (section 2) excludes ~0 + survival within-arm (section 4) = the construct earns a place in the model. A null here empirically confirms the current caveat (the score is a re-packaging of antibodies already modelled), which is itself a stronger statement than &#39;not tested&#39;.&quot;)</code></pre>
+<table style="width:100%;">
+<caption>Decision table. Positive CV gain + a Shapley share whose
+bootstrap CI (section 2) excludes ~0 + survival within-arm (section 4) =
+the construct earns a place in the model. A null here empirically
+confirms the current caveat (the score is a re-packaging of antibodies
+already modelled), which is itself a stronger statement than ‘not
+tested’.</caption>
+<colgroup>
+<col width="6%" />
+<col width="26%" />
+<col width="28%" />
+<col width="18%" />
+<col width="19%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Outcome</th>
+<th align="right">CV gain: score beyond antibody</th>
+<th align="right">CV gain: breadth beyond antibody</th>
+<th align="right">Shapley share: score</th>
+<th align="right">Shapley share: breadth</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PTNA</td>
+<td align="right">0.036</td>
+<td align="right">0.013</td>
+<td align="right">0.070</td>
+<td align="right">0.028</td>
+</tr>
+<tr class="even">
+<td align="left">SBA</td>
+<td align="right">0.001</td>
+<td align="right">0.000</td>
+<td align="right">0.080</td>
+<td align="right">0.002</td>
+</tr>
+<tr class="odd">
+<td align="left">WT</td>
+<td align="right">0.012</td>
+<td align="right">0.004</td>
+<td align="right">0.057</td>
+<td align="right">0.006</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Reading the result.</strong></p>
+<ul>
+<li><em>Score, beyond the matched antibody.</em> Expected to be
+small/redundant — the score contains the matched antibody. The honest
+report is the Shapley split: how much of the explained variance is
+shared vs unique to the score.</li>
+<li><em>Orthogonal breadth.</em> This is the term that can change the
+conclusion. If it adds CV-R^2 beyond the matched antibody, holds a
+CI-positive Shapley share, and survives within-arm, then the coordinated
+maternal breadth phenotype has <strong>incremental forward predictive
+value for infant function</strong>, and the responder construct moves
+from a side-analysis to a modelled predictor.</li>
+<li><em>Causality remains bounded.</em> Even a positive breadth result
+is associational and partly mediated by the antibody the mother
+transfers; the within-arm + forward + orthogonalised design makes it a
+credible <em>independent maternal contribution</em>, not a causal claim.
+The “Phase 08 does not test infant function” caveat is retired either
+way, because this analysis tests exactly that.</li>
+</ul>
+<pre class="r"><code>sessionInfo()</code></pre>
+<pre><code>## R version 4.5.1 (2025-06-13 ucrt)
+## Platform: x86_64-w64-mingw32/x64
+## Running under: Windows 11 x64 (build 26100)
+## 
+## Matrix products: default
+##   LAPACK version 3.12.1
+## 
+## locale:
+## [1] LC_COLLATE=English_United States.utf8 
+## [2] LC_CTYPE=English_United States.utf8   
+## [3] LC_MONETARY=English_United States.utf8
+## [4] LC_NUMERIC=C                          
+## [5] LC_TIME=English_United States.utf8    
+## 
+## time zone: America/New_York
+## tzcode source: internal
+## 
+## attached base packages:
+## [1] grid      stats     graphics  grDevices utils     datasets  methods  
+## [8] base     
+## 
+## other attached packages:
+##  [1] relaimpo_2.2-7  mitools_2.4     survey_4.5      survival_3.8-3 
+##  [5] Matrix_1.7-3    boot_1.3-31     MASS_7.3-65     broom_1.0.12   
+##  [9] lubridate_1.9.5 forcats_1.0.1   stringr_1.6.0   purrr_1.2.2    
+## [13] readr_2.2.0     tibble_3.3.1    tidyverse_2.0.0 here_1.0.2     
+## [17] knitr_1.51      ggplot2_4.0.3   tidyr_1.3.2     dplyr_1.2.1    
+## 
+## loaded via a namespace (and not attached):
+##  [1] gtable_0.3.6       xfun_0.57          bslib_0.11.0       lattice_0.22-7    
+##  [5] tzdb_0.5.0         vctrs_0.7.3        tools_4.5.1        generics_0.1.4    
+##  [9] cluster_2.1.8.2    pkgconfig_2.0.3    RColorBrewer_1.1-3 S7_0.2.2          
+## [13] lifecycle_1.0.5    compiler_4.5.1     farver_2.1.2       carData_3.0-6     
+## [17] httpuv_1.6.16      htmltools_0.5.9    sass_0.4.10        yaml_2.3.12       
+## [21] Formula_1.2-5      later_1.4.8        pillar_1.11.1      car_3.1-5         
+## [25] jquerylib_0.1.4    cachem_1.1.0       abind_1.4-8        tidyselect_1.2.1  
+## [29] digest_0.6.39      stringi_1.8.7      splines_4.5.1      rprojroot_2.1.1   
+## [33] fastmap_1.2.0      cli_3.6.6          magrittr_2.0.5     corpcor_1.6.10    
+## [37] withr_3.0.2        backports_1.5.1    scales_1.4.0       promises_1.5.0    
+## [41] timechange_0.4.0   rmarkdown_2.31     otel_0.2.0         workflowr_1.7.2   
+## [45] hms_1.1.4          evaluate_1.0.5     rlang_1.2.0        Rcpp_1.1.1-1.1    
+## [49] glue_1.8.1         DBI_1.3.0          rstudioapi_0.18.0  jsonlite_2.0.0    
+## [53] R6_2.6.1           fs_2.1.0</code></pre>
+</div>
+
+
+
+</div>
+</div>
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+<script>
+$(document).ready(function () {
+  window.initializeCodeFolding("show" === "show");
+});
+</script>
+
+<script>
+$(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
+
+    // move toc-ignore selectors from section div to header
+    $('div.section.toc-ignore')
+        .removeClass('toc-ignore')
+        .children('h1,h2,h3,h4,h5').addClass('toc-ignore');
+
+    // establish options
+    var options = {
+      selectors: "h1,h2,h3",
+      theme: "bootstrap3",
+      context: '.toc-content',
+      hashGenerator: function (text) {
+        return text.replace(/[.\\/?&!#<>]/g, '').replace(/\s/g, '_');
+      },
+      ignoreSelector: ".toc-ignore",
+      scrollTo: 0
+    };
+    options.showAndHide = true;
+    options.smoothScroll = true;
+
+    // tocify
+    var toc = $("#TOC").tocify(options).data("toc-tocify");
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
