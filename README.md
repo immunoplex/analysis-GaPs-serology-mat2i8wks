@@ -1,8 +1,8 @@
-readme <- '# GaPs Systems Serology — Maternal-to-Infant Antibody Pipeline
+# GaPs Systems Serology — Maternal-to-Infant Antibody Pipeline
 
 > **Pertussis immunisation in pregnancy shapes the functional antibody
 > landscape before primary infant pertussis vaccination**
-> Anja Saso, Michael Scot Zens et al. 
+> Anja Saso, Michael Scot Zens et al.
 
 Analysis code for the systems-serology sub-study of the
 [Gambian Pertussis Study (GaPs)](https://doi.org/10.1016/s1473-3099(25)00072-6),
@@ -15,7 +15,21 @@ through placental transfer to the pre-primary infant baseline at 8 weeks.
 
 ---
 
+## Table of contents
+
+- [Analysis components](#analysis-components)
+- [Quick start](#quick-start)
+- [Execution order](#execution-order)
+- [Data requirements](#data-requirements)
+  - [Summary of required data objects](#summary-of-required-data-objects)
+- [Key design decisions](#key-design-decisions)
+- [R environment](#r-environment)
+- [Repository layout](#repository-layout)
+
+---
+
 ## Analysis components
+
 Each component maps to a manuscript section and one or more analysis files:
 
 | Code | Rmd file(s) | Manuscript | What it does |
@@ -29,6 +43,7 @@ Each component maps to a manuscript section and one or more analysis files:
 | **C7** | `C7_effector_pathway.Rmd` `C7_prn_pathway_figure4.Rmd` | Results H | Concurrent effector-pathway dissection: IgG1/IgG3 → FcγRIIa/FcγRIIIb → ADCD → SBA/WT-IgG. Graphical-lasso networks, serial mediation, layered LMG decomposition, NCT arm comparison. Fig 4, Tables S6–S7. |
 | **C8** | `C8_subclass_balance.Rmd` | Results I | Compositional IgG subclass balance (ILR) and ADCD across the three chain stages. Mediation walk: balance→ADCD→SBA at maternal, cord and 8-week nodes. Fig 5, Table S8. |
 | **CK** | `CK_block_ladder.Rmd` | Results K | Cross-validated block-ladder decomposition. Six blocks entered in temporal order; Shapley/LMG antigen attribution within the maternal-production block; commonality analysis. Fig 6. |
+
 ---
 
 ## Quick start
@@ -47,24 +62,28 @@ wflow_build(republish = TRUE)
 
 ---
 
-## Execution Order
+## Execution order
 
+```text
 C0 (data prep, run once)
   ↓
 C1 → C2 → C3 → C4 (PTNA / SBA / WTIgG / interaction, can run in parallel)
                 ↓
                C5 → C6 → C7 → C8 → CK
-               
+```
+
 All components are independent once data files are in place.
-wflow_build() will only rebuild files that have changed since the last build.
+`wflow_build()` will only rebuild files that have changed since the last build.
 
 ---
 
 ## Data requirements
-Data are not included in this repository. See data/README.md
+
+Data are **not** included in this repository. See [`data/README.md`](data/README.md)
 for the full file list and per-component dependency table.
 
-Summary of required data objects
+### Summary of required data objects
+
 | File | Contents | Used by |
 |------|----------|---------|
 | `d_set.RData` | **Canonical dataset.** Full bead-array long-format object (`ebaa_extra2`). All timepoints, all antigens, all analytes. | C1–C8, CK |
@@ -80,7 +99,7 @@ Summary of required data objects
 
 ---
 
-## Key Design Decisions
+## Key design decisions
 
 | Decision | Rationale |
 |----------|-----------|
@@ -94,16 +113,18 @@ Summary of required data objects
 
 ---
 
-R environment
- - R version: 4.5.1 (2025-06-13, Great Square Root)
- - Key packages: workflowr, tidyverse, here, broom, relaimpo,
-    knitr, RColorBrewer, data.table, ppcor, glmnet, igraph,
-    qgraph, NetworkComparisonTest, mediation
+## R environment
+
+- **R version:** 4.5.1 (2025-06-13, "Great Square Root")
+- **Key packages:** `workflowr`, `tidyverse`, `here`, `broom`, `relaimpo`,
+  `knitr`, `RColorBrewer`, `data.table`, `ppcor`, `glmnet`, `igraph`,
+  `qgraph`, `NetworkComparisonTest`, `mediation`
 
 ---
 
 ## Repository layout
 
+```text
 gaps_system_serology/
 │
 ├── _workflowr.yml                    # knit_root_dir: "."  seed: 1
@@ -139,25 +160,25 @@ gaps_system_serology/
 │   ├── CK_block_ladder.Rmd           # Results K · CV block-ladder decomposition (Fig 6)
 │   │
 │   └── parts/                        # Child Rmd fragments — sourced via child=, NOT knitted directly
-│       ├── C1_response_bubbles.Rmd   # Bubble plot engine for C1
-│       ├── C2_chain_main.Rmd         # Chain transition engine for C2
-│       ├── C3_clinical_covariates.Rmd# Clinical covariate models for C3
+│       ├── C1_response_bubbles.Rmd          # Bubble plot engine for C1
+│       ├── C2_chain_main.Rmd                # Chain transition engine for C2
+│       ├── C3_clinical_covariates.Rmd       # Clinical covariate models for C3
 │       ├── C4_antigen_subclass_predictors.Rmd # Subclass predictor models for C4
-│       └── C7_step00_networks.Rmd    # Effector pathway steps 0–14 for C7
-│           C7_step01_pathway_by_arm.Rmd
-│           C7_step02_link_regressions.Rmd
-│           C7_step03_mediation.Rmd
-│           C7_step04_variance_decomp.Rmd
-│           C7_step05_fcgr_collinearity.Rmd
-│           C7_step06_nct.Rmd
-│           C7_step07_fcgr3b_unique.Rmd
-│           C7_step08_agg_complement.Rmd
-│           C7_step09_arm_interactions.Rmd
-│           C7_step10_fcgr3b_vs_adcd.Rmd
-│           C7_step11_effector_activation.Rmd
-│           C7_step12_effector_to_sba.Rmd
-│           C7_step13_effector_aggregate.Rmd
-│           C7_step14_effector_functions.Rmd
+│       ├── C7_step00_networks.Rmd           # Effector pathway step 0 for C7
+│       ├── C7_step01_pathway_by_arm.Rmd     # Effector pathway step 1 for C7
+│       ├── C7_step02_link_regressions.Rmd   # Effector pathway step 2 for C7
+│       ├── C7_step03_mediation.Rmd          # Effector pathway step 3 for C7
+│       ├── C7_step04_variance_decomp.Rmd    # Effector pathway step 4 for C7
+│       ├── C7_step05_fcgr_collinearity.Rmd  # Effector pathway step 5 for C7
+│       ├── C7_step06_nct.Rmd                # Effector pathway step 6 for C7
+│       ├── C7_step07_fcgr3b_unique.Rmd      # Effector pathway step 7 for C7
+│       ├── C7_step08_agg_complement.Rmd     # Effector pathway step 8 for C7
+│       ├── C7_step09_arm_interactions.Rmd   # Effector pathway step 9 for C7
+│       ├── C7_step10_fcgr3b_vs_adcd.Rmd      # Effector pathway step 10 for C7
+│       ├── C7_step11_effector_activation.Rmd # Effector pathway step 11 for C7
+│       ├── C7_step12_effector_to_sba.Rmd    # Effector pathway step 12 for C7
+│       ├── C7_step13_effector_aggregate.Rmd # Effector pathway step 13 for C7
+│       └── C7_step14_effector_functions.Rmd # Effector pathway step 14 for C7
 │
 ├── R/                                # Helper functions sourced at knit time (NOT knitted directly)
 │   ├── shared_utils.R                # find_proj_file(), %||% operator
@@ -195,3 +216,4 @@ gaps_system_serology/
 │   └── (do not edit manually)
 │
 └── scratch/                          # Archived pre-refactor files (146 files, not used)
+```
