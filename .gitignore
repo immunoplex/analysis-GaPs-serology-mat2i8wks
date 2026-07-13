@@ -9,3 +9,16 @@ analysis/*_cache/
 analysis/*.html
 *.Rproj
 .Rproj.user
+
+# knitr figure cache — build artefacts, figures are served from docs/
+analysis/*_files/
+
+# Data files not shared in this repository
+data/*.RData
+data/*.csv
+!data/README.md
+!data/S1_data.csv
+
+# OS artefacts
+.DS_Store
+Thumbs.db

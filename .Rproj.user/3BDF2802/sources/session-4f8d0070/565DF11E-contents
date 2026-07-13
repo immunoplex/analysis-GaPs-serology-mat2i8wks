@@ -1,132 +1,197 @@
-# GaPs systems-serology — repository layout
+readme <- '# GaPs Systems Serology — Maternal-to-Infant Antibody Pipeline
 
-This is the canonical directory structure for the refactored codebase. The
-self-locating resolver `R/find_proj_file.R` finds `config/`, `R/`, `parts/`, and
-`data/` whether they sit beside the calling `.Rmd`, under an `analysis/` subfolder,
-or at the project root — so the **flat repo-root layout below is the simplest and
-recommended one**. Knit/run from the repository root.
+> **Pertussis immunisation in pregnancy shapes the functional antibody
+> landscape before primary infant pertussis vaccination**
+> Anja Saso, Michael Scot Zens et al. 
 
-```
-gaps-systems-serology/
-│
-├── .here                         # empty sentinel so here::here() anchors to the root
-├── README.md                     # this file
-├── CHANGELOG.md                  # what changed in the refactor (★)
-│
-├── config/                       # sourced first by every driver
-│   ├── endpoints.R               # (●) ANTIGEN_ORDER, vocab, ENDPOINTS, BUBBLE_*, verify_predictor_casing
-│   └── endpoints_additions.R     # (●) Parts 4/5 feature constants (ANTIGENS ← ANTIGEN_ORDER)
-│
-├── R/                            # sourced helpers (NOT knitted)
-│   ├── find_proj_file.R          # (★ NEW) single canonical path resolver
-│   ├── serology_helpers.R        # (●) loader+casing guard, demographics_by_arm, bubble/paired/chain helpers
-│   ├── within_visit_helpers.R    # (●) within-visit engine + transition_subgroups()/_scan() (★ added)
-│   ├── maternal_responder_helpers.R  # (●) responder classifier (pvalue_to_label de-duplicated)
-│   └── connection_transform.R    # (○ unchanged) IgG-standardisation for the bubble residuals
-│
-├── parts/                        # CHILD documents — included via child=; do NOT knit directly
-│   ├── 01_maternal_chain.Rmd            # (○)
-│   ├── 02_clinical_covariates.Rmd       # (○)
-│   ├── 03_concurrent_networks.Rmd       # (○)
-│   ├── 04_response_bubbles.Rmd          # (○ reverted to original)
-│   ├── 04_antigen_subclass_predictors.Rmd  # (○)  ← latent casing bug flagged in CHANGELOG
-│   └── 05_effector_functions.Rmd        # (●) + inert ADCD scaffold (eval=FALSE)
-│
-├── data/                         # inputs (○ unchanged)
-│   ├── c_set.RData
-│   ├── clin_assess.RData
-│   ├── igg_standard_residuals_ap_matpm_prevacvacc_k.RData
-│   └── igg_standard_residuals_wp_matpm_prevacvacc_k.RData
-│
-├── figures/                      # static study-design assets (○)
-│   ├── Fig_coverage_matrix.png   /  Fig_coverage_matrix.pdf
-│   └── Fig_samples_flow.png      /  Fig_samples_flow.pdf
-│
-├── docs/                         # manuscript text — NOT edited; regenerate from analysis
-│   ├── GaPs_methods_and_results_section_baseline_prediction_chapter.docx
-│   └── statistical_methods_section-PartA_maternal_pre_vacc_to_infant_baseline.docx
-│
-├── output/                       # created at knit time (e.g. v4's M02 effect-table .docx)
-│
-└── (repo root) ── TOP-LEVEL DRIVERS — these are the files you knit ───────────────
-    │
-    │   Endpoint-parameterised pipeline (each includes parts/01–05):
-    ├── SBA_analysis.Rmd                  # (●)
-    ├── WT_IgG_analysis.Rmd               # (●)
-    ├── PTNA_analysis.Rmd                 # (●)
-    │
-    │   Standalone analyses:
-    ├── 06_prediction_models.Rmd          # (●) + Family 4 (IgG vs IgG1 vs IgG+IgG1)
-    ├── 07_within_visit_correlations_and_responder_subgroups.Rmd   # (●) responder = PT/FHA/PRN
-    ├── 08_maternal_responder_predictors.Rmd                       # (●) responder = PT/FHA/PRN
-    ├── matprevacc_to_matbirth_analysis.Rmd      # (●)  production transition
-    ├── matbirth_to_cordblood_analysis.Rmd       # (●)  transfer transition
-    ├── cord_to_infmon2_analysis_refactored.Rmd  # (●)  decay transition
-    ├── interaction_and_deming.Rmd        # (●) + IgG vs IgG1 slope tables
-    ├── responder_in_infant_model.Rmd     # (●) responder = PT/FHA/PRN
-    ├── standards_comparison.Rmd          # (○ unchanged)
-    ├── results_B_to_F.Rmd                # (●) Table 1 demographics + expanded Figure 3 (+per-arm, +WT_IgG)
-    ├── response_bubbles_analysis.Rmd     # (●) wraps parts/04_response_bubbles
-    ├── response_bubbles_matpm_v4.Rmd     # (★ NEW/refactored) manuscript bubble Figs 1–2 (SBA removed, PTNA kept, 60°)
-    └── transition_subgroup_heterogeneity.Rmd     # (★ NEW) per-antigen × per-transition subgroups
-```
+Analysis code for the systems-serology sub-study of the
+[Gambian Pertussis Study (GaPs)](https://doi.org/10.1016/s1473-3099(25)00072-6),
+a randomised 2×2 maternal–infant pertussis vaccine trial (n = 312
+mother–infant dyads). The pipeline traces antigen-specific IgG quantity,
+subclass composition and Fc-effector function from maternal vaccination
+through placental transfer to the pre-primary infant baseline at 8 weeks.
 
-Legend: ★ new · ● changed in the refactor · ○ unchanged (use your original copy).
+📊 **[View the analysis site](https://immunoplex.github.io/analysis-GaPs-serology-mat2i8wks/)**
 
 ---
 
-## Where each downloaded file goes
+## Analysis components
+Each component maps to a manuscript section and one or more analysis files:
 
-The files were delivered flat (no folders). Place them as follows:
+| Code | Rmd file(s) | Manuscript | What it does |
+|------|-------------|------------|--------------|
+| **C1** | `C1_arm_contrast.Rmd` `C1_arm_contrast_forest.Rmd` | Results A | Maternal arm contrast at the 8-week baseline — bubble plots (Fig 1B/C) and forest plot (Fig 1A). Runs in both untransformed and IgG-standardised representations. |
+| **C2** | `C2_antibody_chain.Rmd` | Results B | Within-subject antibody changes across three transitions: maternal production (PregEarly→MatBirth), placental transfer (MatBirth→CordBlood), and postnatal decay (CordBlood→8 weeks). Fig 2, Table 1, half-life comparison with Oguti et al. |
+| **C3** | `C3_responder_phenotype.Rmd` | Results C | Predictors of maternal High/Low responder status. Elastic-net logistic regression (CV-AUC), pre-vaccination model, interval-robustness check. Fig 3, Table 2. |
+| **C4** | `C4_forward_prediction_PTNA.Rmd` `C4_forward_prediction_SBA.Rmd` `C4_forward_prediction_WTIgG.Rmd` `C4_forward_prediction.Rmd` | Results D–E | Forward prediction of infant function from maternal antibody at delivery. Six-block framework (quantity and class-switching at each chain stage). Arm×antibody interactions and Deming EIV regression. Tables 3, 4a/4b. |
+| **C5** | `C5_concurrent_models.Rmd` | Results F | Concurrent (same-visit) infant models at 8 weeks. Hierarchical model building: arm → clinical → total IgG → IgG1 → effectors. Forward-vs-concurrent contrast. Table 5, Table 6a/6b. |
+| **C6** | `C6_responder_in_model.Rmd` | Results J | Tests whether the maternal responder phenotype adds predictive information beyond vaccine arm and matched IgG1. Incremental CV-R², Shapley partition. Table S5. |
+| **C7** | `C7_effector_pathway.Rmd` `C7_prn_pathway_figure4.Rmd` | Results H | Concurrent effector-pathway dissection: IgG1/IgG3 → FcγRIIa/FcγRIIIb → ADCD → SBA/WT-IgG. Graphical-lasso networks, serial mediation, layered LMG decomposition, NCT arm comparison. Fig 4, Tables S6–S7. |
+| **C8** | `C8_subclass_balance.Rmd` | Results I | Compositional IgG subclass balance (ILR) and ADCD across the three chain stages. Mediation walk: balance→ADCD→SBA at maternal, cord and 8-week nodes. Fig 5, Table S8. |
+| **CK** | `CK_block_ladder.Rmd` | Results K | Cross-validated block-ladder decomposition. Six blocks entered in temporal order; Shapley/LMG antigen attribution within the maternal-production block; commonality analysis. Fig 6. |
+---
 
-| Downloaded file | → Repository path |
-|---|---|
-| `endpoints.R`, `endpoints_additions.R` | `config/` |
-| `find_proj_file.R`, `serology_helpers.R`, `within_visit_helpers.R`, `maternal_responder_helpers.R`, `connection_transform.R` | `R/` |
-| `01_maternal_chain.Rmd`, `02_clinical_covariates.Rmd`, `03_concurrent_networks.Rmd`, `04_response_bubbles.Rmd`, `04_antigen_subclass_predictors.Rmd`, `05_effector_functions.Rmd` | `parts/` |
-| `*.RData` (4 files) | `data/` |
-| `Fig_*.png` / `Fig_*.pdf` | `figures/` |
-| `*.docx` (2 files) | `docs/` |
-| every other `*.Rmd` (SBA/WT_IgG/PTNA, 06/07/08, transitions, interaction, responder, standards, results_B_to_F, response_bubbles_analysis, response_bubbles_matpm_v4, transition_subgroup_heterogeneity) | repo root |
-| `CHANGELOG.md`, `README.md` | repo root |
+## Quick start
 
-**The one thing to watch:** `01`–`05` live in `parts/`, but `06`/`07`/`08` live at the
-**root** — they are standalone drivers, not children.
+```r
+# 1. Open the project — always via the .Rproj file to anchor here::here()
+#    Double-click gaps_system_serology.Rproj in File Explorer
 
-Unchanged files (○) can come from your existing originals; the changed (●) and new
-(★) ones are the 22 deliverables from this refactor.
+# 2. Build all pages
+library(workflowr)
+wflow_build()
+
+# 3. To force a full rebuild of all pages
+wflow_build(republish = TRUE)
+```
 
 ---
 
-## How `find_proj_file()` resolves paths
+## Execution Order
 
-For a request like `find_proj_file("config/endpoints.R")` it tries, in order:
-`here::here("config/endpoints.R")`, `here::here("analysis/config/endpoints.R")`, the
-calling `.Rmd`'s own directory and its parent, then `getwd()`, then the bare relative
-path — returning the first that exists. So as long as `config/`, `R/`, `parts/`,
-`data/` sit at the repo root (or under `analysis/`), it resolves correctly from any of
-those working directories. Add an empty `.here` file at the root so `here::here()`
-anchors reliably (or open the folder as an RStudio Project).
+C0 (data prep, run once)
+  ↓
+C1 → C2 → C3 → C4 (PTNA / SBA / WTIgG / interaction, can run in parallel)
+                ↓
+               C5 → C6 → C7 → C8 → CK
+               
+All components are independent once data files are in place.
+wflow_build() will only rebuild files that have changed since the last build.
 
-## Render order / entry points
+---
 
-You don't knit `parts/` or `R/` directly. The documents you render are the root
-drivers. A sensible order:
+## Data requirements
+Data are not included in this repository. See data/README.md
+for the full file list and per-component dependency table.
 
-1. `results_B_to_F.Rmd` — study population (Table 1) + Figure 3 pathway.
-2. `response_bubbles_matpm_v4.Rmd` — manuscript bubble Figures 1–2.
-3. `SBA_analysis.Rmd`, `WT_IgG_analysis.Rmd`, `PTNA_analysis.Rmd` — full per-endpoint reports (pull in parts/01–05).
-4. `06_prediction_models.Rmd`, `07_…`, `08_…` — prediction / responder analyses.
-5. `matprevacc_to_matbirth`, `matbirth_to_cordblood`, `cord_to_infmon2`, `interaction_and_deming`, `responder_in_infant_model`, `standards_comparison`, `response_bubbles_analysis`, `transition_subgroup_heterogeneity` — supporting analyses.
+Summary of required data objects
+| File | Contents | Used by |
+|------|----------|---------|
+| `d_set.RData` | **Canonical dataset.** Full bead-array long-format object (`ebaa_extra2`). All timepoints, all antigens, all analytes. | C1–C8, CK |
+| `clin_assess.RData` | Clinical and demographic variables per subject | C3, C6 |
+| `igg_standard_residuals_ap_matpm_prevacvacc_k.RData` | aP-arm IgG-standardised residuals (infant visit) | C1, C5, C7 |
+| `igg_standard_residuals_wp_matpm_prevacvacc_k.RData` | wP-arm IgG-standardised residuals (infant visit) | C1, C5, C7 |
+| `igg_standard_residuals_*_mat.RData` | Maternal-visit IgG-standardised residuals (aP and wP arms) | C4 |
+| `igg_standard_residuals_*_trn.RData` | Cord-blood IgG-standardised residuals (aP and wP arms) | C4 |
+| `igg_standard_model_fit_*_mat.RData` | IgG standardisation model fits (for applying to new data) | C0 |
+| `INTERVAL_DAYS_BY_SUBJECT.RData` | Exact cord-blood to 8-week interval per subject (days) | C2 |
+| `S1_data.csv` | Supplementary Table S1 summary: paired within-subject changes across transitions | C7 |
+| `figure3_abc_data.csv` | Pre-computed data for Figure 3 panels A/B/C | C3 |
 
-Suggested R packages: tidyverse, broom, relaimpo, knitr, here, cluster (for #4),
-glmnet/ppcor (Parts 4 importance / partial cor), data.table + flextable + officer
-(v4 standardised grid + Lancet tables), deming (optional cross-check), RColorBrewer.
+---
 
-## Notes carried over from the refactor (see CHANGELOG.md)
+## Key Design Decisions
 
-- Nothing is knit-verified (no R in the build environment) — knit once before relying on output.
-- `parts/04_antigen_subclass_predictors.Rmd` has a pre-existing uppercase-casing bug
-  (Blocks 7–9 silently empty) flagged but not fixed.
-- The two `docs/*.docx` still say "four defining features" (now three) and use old
-  figure numbering — regenerate them from the updated analysis.
+| Decision | Rationale |
+|----------|-----------|
+| **workflowr** for pipeline management | Each HTML page records the git commit, R session, working directory and seed at render time — full reproducibility audit trail |
+| **`here::here()`** for all file paths | Path-agnostic; works from any working directory as long as the `.Rproj` file is used to open the session |
+| **`d_set.RData` / `ebaa_extra2`** as canonical data | Includes additional ADCD timepoints (P02, P09, M00, P18) not present in the earlier `c_set.RData` |
+| **C-prefix naming** for all analysis files | Maps one-to-one to the eight prespecified analytical components in the manuscript (Supplementary Table S.10) |
+| **`calc.relimp()` gated** to `compute_relimp = TRUE` | Without gating, Shapley/LMG decomposition runs on ~88 models per file (2^12 permutations each), causing >1 hour build time. Gated to the three full 12-subclass models that feed the comparison tables |
+| **`dplyr::` explicit namespacing** in analysis chunks | Prevents silent masking of `select()`/`filter()` by `fs`, `MASS`, or other packages loaded in the knit environment |
+| **`analysis/*_files/` gitignored** | knitr writes figure files beside the Rmd as a build cache; workflowr copies them to `docs/` for GitHub Pages. Only `docs/` figures are committed |
+
+---
+
+R environment
+ - R version: 4.5.1 (2025-06-13, Great Square Root)
+ - Key packages: workflowr, tidyverse, here, broom, relaimpo,
+    knitr, RColorBrewer, data.table, ppcor, glmnet, igraph,
+    qgraph, NetworkComparisonTest, mediation
+
+---
+
+## Repository layout
+
+gaps_system_serology/
+│
+├── _workflowr.yml                    # knit_root_dir: "."  seed: 1
+├── gaps_system_serology.Rproj        # always open R via this file
+├── README.md                         # this file
+├── CHANGELOG.md                      # refactor history
+├── LICENSE
+│
+├── analysis/                         # PRIMARY RMD FILES — knit via wflow_build()
+│   ├── index.Rmd                     # Pipeline overview (GitHub Pages home)
+│   │
+│   ├── C1_arm_contrast.Rmd           # Results A · arm contrast bubble plots (Fig 1B/C)
+│   ├── C1_arm_contrast_forest.Rmd    # Results A · forest plot (Fig 1A)
+│   │
+│   ├── C2_antibody_chain.Rmd         # Results B · production/transfer/decay (Fig 2, Table 1)
+│   │
+│   ├── C3_responder_phenotype.Rmd    # Results C · maternal responder predictors (Fig 3, Table 2)
+│   │
+│   ├── C4_forward_prediction.Rmd     # Results E · arm interaction & Deming EIV (Tables 4a/4b)
+│   ├── C4_forward_prediction_PTNA.Rmd# Results D · maternal→infant PTNA (six-block framework)
+│   ├── C4_forward_prediction_SBA.Rmd # Results D · maternal→infant SBA (six-block framework)
+│   ├── C4_forward_prediction_WTIgG.Rmd# Results D · maternal→infant WT IgG binding
+│   │
+│   ├── C5_concurrent_models.Rmd      # Results F · concurrent infant models (Table 5)
+│   │
+│   ├── C6_responder_in_model.Rmd     # Results J · responder phenotype as predictor (Table S5)
+│   │
+│   ├── C7_effector_pathway.Rmd       # Results H · antibody chain transition summary (Fig 2)
+│   ├── C7_prn_pathway_figure4.Rmd    # Results H · PRN effector pathway (Fig 4, Tables S6–S7)
+│   │
+│   ├── C8_subclass_balance.Rmd       # Results I · subclass balance & complement (Fig 5, Table S8)
+│   │
+│   ├── CK_block_ladder.Rmd           # Results K · CV block-ladder decomposition (Fig 6)
+│   │
+│   └── parts/                        # Child Rmd fragments — sourced via child=, NOT knitted directly
+│       ├── C1_response_bubbles.Rmd   # Bubble plot engine for C1
+│       ├── C2_chain_main.Rmd         # Chain transition engine for C2
+│       ├── C3_clinical_covariates.Rmd# Clinical covariate models for C3
+│       ├── C4_antigen_subclass_predictors.Rmd # Subclass predictor models for C4
+│       └── C7_step00_networks.Rmd    # Effector pathway steps 0–14 for C7
+│           C7_step01_pathway_by_arm.Rmd
+│           C7_step02_link_regressions.Rmd
+│           C7_step03_mediation.Rmd
+│           C7_step04_variance_decomp.Rmd
+│           C7_step05_fcgr_collinearity.Rmd
+│           C7_step06_nct.Rmd
+│           C7_step07_fcgr3b_unique.Rmd
+│           C7_step08_agg_complement.Rmd
+│           C7_step09_arm_interactions.Rmd
+│           C7_step10_fcgr3b_vs_adcd.Rmd
+│           C7_step11_effector_activation.Rmd
+│           C7_step12_effector_to_sba.Rmd
+│           C7_step13_effector_aggregate.Rmd
+│           C7_step14_effector_functions.Rmd
+│
+├── R/                                # Helper functions sourced at knit time (NOT knitted directly)
+│   ├── shared_utils.R                # find_proj_file(), %||% operator
+│   ├── C0_connection_transform.R     # IgG standardisation / residual transform
+│   ├── C1_serology_helpers.R         # Arm contrast, bubble plots, paired-change helpers
+│   ├── C2_interval_helpers.R         # Half-life and decay-rate helpers (Oguti method)
+│   ├── C3_responder_helpers.R        # Responder classifier, elastic-net wrapper
+│   ├── C4_within_visit_helpers.R     # Within-visit and forward-prediction modelling engine
+│   ├── C7_effector_helpers.R         # Graphical-lasso network, bridge-centrality helpers
+│   ├── C8_subclass_balance_helpers.R # ILR subclass balance and mediation helpers
+│   └── colors.R                      # Colour palettes shared across components
+│
+├── code/                             # Build-once data preparation scripts
+│   │                                 # (NOT sourced during knit — run manually to rebuild data)
+│   ├── C0_build_interval_days.R      # Compute cord-to-8wk interval per subject
+│   ├── C0_get_8week_interval_days.R  # Extract and format 8-week interval days
+│   ├── C0_normalise_mat_to_inf_mfi.R # Cross-batch MFI normalisation (mat/cord → infant scale)
+│   └── C0_db_load_functions.R        # Database load helpers (MFI data extraction)
+│
+├── config/
+│   ├── endpoints.R                   # ANTIGEN_ORDER, ENDPOINTS, feature vocabulary
+│   └── endpoints_additions.R         # Parts 4/5 feature constants (ANTIGENS ← ANTIGEN_ORDER)
+│
+├── data/                             # NOT committed — see data/README.md
+│   └── README.md                     # Full data schema with per-component cross-reference
+│
+├── figures/                          # Static publication-quality figures
+│   ├── C0_coverage_matrix.png/.pdf   # Figure S: assay coverage matrix
+│   ├── C0_samples_flow.png/.pdf      # Figure S: sample flow diagram
+│   ├── C3_interval_robustness.png/.pdf # Figure S1: interval-robustness plot
+│   ├── C7_prn_pathway_figure4.png/.pdf # Figure 4: PRN effector pathway
+│   └── CK_block_ladder.png/.pdf      # Figure 6: CV block-ladder decomposition
+│
+├── docs/                             # GitHub Pages output — auto-generated by wflow_build()
+│   └── (do not edit manually)
+│
+└── scratch/                          # Archived pre-refactor files (146 files, not used)
