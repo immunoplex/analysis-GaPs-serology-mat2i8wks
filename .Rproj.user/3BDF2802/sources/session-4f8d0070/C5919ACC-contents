@@ -3,7 +3,9 @@
 /data/
 analysis/docs/
 analysis/site_libs/
+analysis/figures/
 analysis/*_files/
 analysis/*_cache/
 analysis/*.html
 *.Rproj
+.Rproj.user
