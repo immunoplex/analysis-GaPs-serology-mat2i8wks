@@ -34,6 +34,7 @@ Each component maps to a manuscript section and one or more analysis files:
 
 | Code | Rmd file(s) | Manuscript | What it does |
 |------|-------------|------------|--------------|
+| **C0** | `C0_data_harmonisation.Rmd` | Methods | Data harmonisation & IgG standardisation. Cross-batch MFI normalisation (standard-curve back-interpolation) and total-IgG standardisation of functional/subclass assays. Produces every `igg_standard_residuals_*` / `igg_standard_model_fit_*` input for C1, C4, C5, C7. Run once. |
 | **C1** | `C1_arm_contrast.Rmd` `C1_arm_contrast_forest.Rmd` | Results A | Maternal arm contrast at the 8-week baseline — bubble plots (Fig 1B/C) and forest plot (Fig 1A). Runs in both untransformed and IgG-standardised representations. |
 | **C2** | `C2_antibody_chain.Rmd` | Results B | Within-subject antibody changes across three transitions: maternal production (PregEarly→MatBirth), placental transfer (MatBirth→CordBlood), and postnatal decay (CordBlood→8 weeks). Fig 2, Table 1, half-life comparison with Oguti et al. |
 | **C3** | `C3_responder_phenotype.Rmd` | Results C | Predictors of maternal High/Low responder status. Elastic-net logistic regression (CV-AUC), pre-vaccination model, interval-robustness check. Fig 3, Table 2. |
@@ -135,6 +136,9 @@ gaps_system_serology/
 │
 ├── analysis/                         # PRIMARY RMD FILES — knit via wflow_build()
 │   ├── index.Rmd                     # Pipeline overview (GitHub Pages home)
+│   │
+│   ├── C0_standards_comparison.Rmd   # C0 · cross-batch MFI harmonisation
+│   ├── C0_standardise.Rmd            # C0 · looped IgG-standardisation engine
 │   │
 │   ├── C1_arm_contrast.Rmd           # Results A · arm contrast bubble plots (Fig 1B/C)
 │   ├── C1_arm_contrast_forest.Rmd    # Results A · forest plot (Fig 1A)

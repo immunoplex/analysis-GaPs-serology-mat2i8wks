@@ -150,6 +150,61 @@ verify_new_feature_columns <- function(data_long,
   )
 }
 
+## ---------------------------------------------------------------------------
+## C0 data-harmonisation / standardisation constants
+## Sourced by analysis/C0_data_harmonisation.Rmd and its child fragments.
+## ANTIGENS <- ANTIGEN_ORDER is assumed already defined in endpoints.R.
+## ---------------------------------------------------------------------------
+
+## Antigen / IgG vocabularies, keyed by window.
+## Antigen strings match ebaa_extra2$antigen EXACTLY (verified against d_set.RData).
+VOCAB <- list(
+  ## Infant window (M02/M05/M09), both arms: 9 antigens, full analyte panel
+  full = list(
+    antigenlist = c("DT","FHA","FIM","PRN","PT","TT","IPV1","IPV2","IPV3"),
+    igglist     = c("DT_IgG","FHA_IgG","FIM_IgG","PRN_IgG","PT_IgG","TT_IgG",
+                    "IPV1_IgG","IPV2_IgG","IPV3_IgG"),
+    fulligglist = c("PT_IgG","PRN_IgG","FHA_IgG","FIM_IgG","TT_IgG","DT_IgG",
+                    "IPV1_IgG","IPV2_IgG","IPV3_IgG")
+  ),
+  ## Maternal (P02/P09/M00) + cord/transfer (M00/M02/M05) windows: core 5 antigens
+  core5 = list(
+    antigenlist = c("DT","FHA","PRN","PT","TT"),
+    igglist     = c("DT_IgG","FHA_IgG","PRN_IgG","PT_IgG","TT_IgG"),
+    fulligglist = c("PT_IgG","PRN_IgG","FHA_IgG","TT_IgG","DT_IgG")
+  )
+)
+
+## Whole-bacterium functional assays are standardised against a SINGLE, biologically
+## chosen antigen's total IgG -- NOT their own antigen:
+##   SBA    ~ PRN total IgG
+##   WT-IgG ~ PRN total IgG
+##   PTNA   ~ PT  total IgG
+## The engine reassigns each WHOLE_* row's `antigen` to igg_antigen before the
+## per-antigen fit loop, so it is regressed on (and displayed under) that antigen.
+wholeassay_map <- tibble::tribble(
+  ~source_feature, ~igg_antigen, ~out_feature,
+  "WHOLE_SBA",     "PRN",        "PRN_SBA",
+  "WHOLE_WT_IgG",  "PRN",        "PRN_WT",
+  "WHOLE_PTNA",    "PT",         "PT_PTNA"
+)
+
+## Driver table: one row per arm x window. `vocab` selects a VOCAB entry.
+## `suffix` builds the output filenames; residual/modelfit names are held
+## IDENTICAL to what C1/C4/C5/C7 already expect (note wP-inf stays `_k`, not `_j`).
+std_config <- tibble::tribble(
+  ~arm, ~window, ~t0,   ~t1,   ~t2,   ~suffix,  ~vocab,
+  "aP", "inf",   "M02", "M05", "M09", "k",      "full",
+  "wP", "inf",   "M02", "M05", "M09", "k",      "full",
+  "aP", "mat",   "P02", "P09", "M00", "k_mat",  "core5",
+  "wP", "mat",   "P02", "P09", "M00", "k_mat",  "core5",
+  "aP", "trn",   "M00", "M02", "M05", "k_trn",  "core5",
+  "wP", "trn",   "M00", "M02", "M05", "k_trn",  "core5"
+)
+
+## All C0 intermediate outputs live in data/ (git-ignored).
+c0_out <- function(...) here::here("data", ...)
+
 # Usage:
 #   source("config/endpoints_additions.R")
 #   verify_new_feature_columns(ebaa_extra2)   # or data_raw

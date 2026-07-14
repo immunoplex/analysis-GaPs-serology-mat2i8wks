@@ -1,0 +1,664 @@
+```{r c0sc-setup, include=FALSE}
+## Child fragment of analysis/C0_data_harmonisation.Rmd
+## Packages (tidyverse, knitr, kableExtra, DT, scales, htmltools) are loaded
+## by the C0 parent setup chunk. Only fragment-specific data + helpers here.
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align = "center")
+
+load(file = here::here("data", "standards_sel.RData"))
+
+# ── Palettes ──────────────────────────────────────────────────────────────────
+plate_levels <- sort(unique(standards_sel$plate))
+n_plates     <- length(plate_levels)
+
+pal_base <- c(
+  "#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A",
+  "#B15928","#A6CEE3","#B2DF8A","#FB9A99","#FDBF6F",
+  "#CAB2D6","#FFFF99","#1B9E77","#D95F02","#7570B3"
+)
+plate_colors  <- setNames(pal_base[seq_along(plate_levels)], plate_levels)
+source_shapes <- c(NIBSC06_140 = 16, SD = 17)
+source_lty    <- c(NIBSC06_140 = "solid", SD = "dashed")
+set_colors    <- c(inf_baa = "#2171B5", mat_baa = "#CB181D")
+
+# ── Core normalization helpers ─────────────────────────────────────────────────
+
+# Fit a single log-log linear standard curve; returns named list of stats
+fit_log_lm <- function(log10_mfi, log10_conc) {
+  tryCatch({
+    m <- lm(log10_mfi ~ log10_conc)
+    list(
+      intercept = unname(coef(m)[1]),
+      slope     = unname(coef(m)[2]),
+      r_squared = summary(m)$r.squared,
+      adj_r2    = summary(m)$adj.r.squared,
+      rmse      = sqrt(mean(residuals(m)^2))
+    )
+  }, error = function(e) {
+    list(intercept = NA_real_, slope = NA_real_, r_squared = NA_real_,
+         adj_r2 = NA_real_, rmse = NA_real_)
+  })
+}
+
+# Normalize raw MFI from one set onto a target set's scale (log10 space).
+normalize_mfi <- function(raw_mfi, a_src, b_src, a_tgt, b_tgt) {
+  log10_raw  <- log10(pmax(raw_mfi, 0.5))      # guard against 0
+  log10_conc <- (log10_raw - a_src) / b_src    # invert source curve -> conc
+  10^(a_tgt + b_tgt * log10_conc)              # forward-predict on target
+}
+```
+
+## Approach
+
+The two sets (`inf_baa`, `mat_baa`) run their standard curves at **different concentration
+values**, so direct point-by-point ratio comparison is impossible. Instead this uses
+**standard-curve back-interpolation**:
+
+1. Fit `log10(MFI) ~ log10(concentration)` **independently** for each set within every
+   (feature × antigen × plate × source) group.
+2. To normalise a measurement from set **A** onto set **B**'s scale:
+   - *Invert* set A's curve to recover `log10(concentration)` from the observed MFI.
+   - *Forward-predict* what set B's curve would give at that concentration.
+3. In log10 space this is a linear transform:
+   `log10(norm_MFI) = cross_intercept + cross_slope × log10(raw_MFI)`.
+   A `cross_slope ≠ 1` means the correction is **concentration-dependent**.
+
+The exported `normalization_params.csv` (written to `data/`) can be joined to any sample
+data frame and the two-line formula applied to produce normalized MFI values comparable
+across sets.
+
+---
+
+## 1  Data Overview {.tabset}
+
+### Feature × Antigen × Set
+
+```{r c0sc-overview-structure}
+set_antigen_tbl <- standards_sel %>%
+  group_by(set, feature, antigen) %>%
+  dplyr::summarise(
+    n_obs     = n(),
+    n_plates  = n_distinct(plate),
+    n_sources = n_distinct(source),
+    n_conc    = n_distinct(concentration),
+    .groups   = "drop"
+  )
+
+overlap_tbl <- set_antigen_tbl %>%
+  pivot_wider(
+    id_cols     = c(feature, antigen),
+    names_from  = set,
+    values_from = c(n_obs, n_plates, n_sources, n_conc)
+  )
+
+datatable(overlap_tbl,
+          caption  = "Rows per feature x antigen by set (NA = absent)",
+          filter   = "top", rownames = FALSE,
+          options  = list(scrollX = TRUE, pageLength = 15))
+```
+
+### Concentration Ranges by Set
+
+```{r c0sc-overview-concentrations}
+conc_tbl <- standards_sel %>%
+  group_by(set, feature, antigen) %>%
+  dplyr::summarise(
+    n_conc   = n_distinct(concentration),
+    conc_min = min(concentration),
+    conc_max = max(concentration),
+    dil_min  = min(dilution),
+    dil_max  = max(dilution),
+    .groups  = "drop"
+  ) %>%
+  arrange(feature, antigen, set)
+
+datatable(conc_tbl, caption = "Concentration range per feature x antigen x set",
+          filter = "top", rownames = FALSE,
+          options = list(scrollX = TRUE, pageLength = 15))
+```
+
+### Antigen Name Mapping
+
+*`mat_baa` antigens carry a batch-code suffix (e.g. `act_42`).  The base name
+(column `antigen_base`) is used as the cross-set join key throughout.*
+
+```{r c0sc-overview-antigen-map}
+antigen_map <- standards_sel %>%
+  mutate(antigen_base = str_remove(antigen, "_\\d+$")) %>%
+  distinct(set, antigen, antigen_base) %>%
+  pivot_wider(names_from = set, values_from = antigen,
+              values_fn = ~ paste(unique(.x), collapse = " / ")) %>%
+  arrange(antigen_base)
+
+datatable(antigen_map,
+          caption  = "Antigen naming across sets (antigen_base = join key)",
+          rownames = FALSE,
+          options  = list(pageLength = 25, dom = "t"))
+```
+
+### Plate x Source
+
+```{r c0sc-overview-plate-source}
+plate_src_tbl <- standards_sel %>%
+  filter(!is.na(mfi)) %>%
+  group_by(set, plate, source) %>%
+  dplyr::summarise(
+    n_obs      = n(),
+    median_mfi = round(median(mfi), 1),
+    n_features = n_distinct(feature),
+    n_antigens = n_distinct(antigen),
+    .groups    = "drop"
+  )
+
+datatable(plate_src_tbl, caption = "Observations per set x plate x source",
+          filter = "top", rownames = FALSE,
+          options = list(scrollX = TRUE, pageLength = 20))
+```
+
+---
+
+## 2  Aggregate MFI
+
+```{r c0sc-aggregate}
+# Median MFI over any replicate beads / wells within each biological combination
+stds_agg <- standards_sel %>%
+  filter(!is.na(mfi)) %>%
+  group_by(set, feature, antigen, plate, source, concentration, dilution) %>%
+  dplyr::summarise(
+    median_mfi = median(mfi),
+    mean_mfi   = mean(mfi),
+    sd_mfi     = sd(mfi),
+    cv_pct     = sd(mfi) / mean(mfi) * 100,
+    n_reps     = n(),
+    .groups    = "drop"
+  ) %>%
+  mutate(
+    log10_conc   = log10(concentration),
+    log10_mfi    = log10(pmax(median_mfi, 0.5)),
+    antigen_base = str_remove(antigen, "_\\d+$")
+  )
+
+cat(sprintf("Aggregated rows : %d\n", nrow(stds_agg)))
+cat(sprintf("Sets            : %s\n", paste(unique(stds_agg$set), collapse = ", ")))
+cat(sprintf("Features        : %d\n", n_distinct(stds_agg$feature)))
+cat(sprintf("Antigens        : %d\n", n_distinct(stds_agg$antigen)))
+cat(sprintf("Plates          : %d\n", n_distinct(stds_agg$plate)))
+```
+
+---
+
+## 3  Standard Curve Fits
+
+A `log10(MFI) ~ log10(concentration)` model is fitted **separately** for each
+(set x feature x antigen x plate x source) group. Requires at least 3 distinct
+concentration points with non-zero variance.
+
+```{r c0sc-fit-curves}
+curve_fits <- stds_agg %>%
+  group_by(set, feature, antigen, plate, source) %>%
+  filter(n() >= 3, sd(log10_conc) > 0) %>%
+  nest() %>%
+  mutate(
+    n_pts      = map_int(data,  nrow),
+    conc_min   = map_dbl(data,  ~ min(.x$concentration)),
+    conc_max   = map_dbl(data,  ~ max(.x$concentration)),
+    mfi_min    = map_dbl(data,  ~ min(.x$median_mfi)),
+    mfi_max    = map_dbl(data,  ~ max(.x$median_mfi)),
+    stats      = map(data, ~ fit_log_lm(.x$log10_mfi, .x$log10_conc)),
+    intercept  = map_dbl(stats, "intercept"),
+    slope      = map_dbl(stats, "slope"),
+    r_squared  = map_dbl(stats, "r_squared"),
+    adj_r2     = map_dbl(stats, "adj_r2"),
+    rmse       = map_dbl(stats, "rmse")
+  ) %>%
+  select(-data, -stats) %>%
+  ungroup() %>%
+  mutate(antigen_base = str_remove(antigen, "_\\d+$"))
+
+cat(sprintf("Curve fits total  : %d\n", nrow(curve_fits)))
+cat(sprintf("  R2 >= 0.99      : %d  (%.0f%%)\n",
+            sum(curve_fits$r_squared >= 0.99, na.rm = TRUE),
+            100 * mean(curve_fits$r_squared >= 0.99, na.rm = TRUE)))
+cat(sprintf("  R2 < 0.95       : %d  (%.0f%%)\n",
+            sum(curve_fits$r_squared < 0.95, na.rm = TRUE),
+            100 * mean(curve_fits$r_squared < 0.95, na.rm = TRUE)))
+```
+
+### 3.1  Fit parameters table
+
+```{r c0sc-fit-quality-table}
+datatable(
+  curve_fits %>%
+    mutate(across(c(intercept, slope, r_squared, adj_r2, rmse), ~ round(.x, 4))) %>%
+    arrange(set, feature, antigen, source, plate),
+  caption  = "Standard curve fit parameters per set x feature x antigen x plate x source",
+  filter   = "top", rownames = FALSE,
+  options  = list(scrollX = TRUE, pageLength = 20)
+) %>%
+  formatStyle("r_squared",
+              background         = styleColorBar(c(0, 1), "lightgreen"),
+              backgroundSize     = "100% 70%",
+              backgroundRepeat   = "no-repeat",
+              backgroundPosition = "center") %>%
+  formatStyle("rmse",
+              backgroundColor = styleInterval(c(0.05, 0.15),
+                                              c("white", "#FFF3CD", "#FFCCCC")))
+```
+
+### 3.2  Curves: observed data + fitted lines {.tabset}
+
+*Points = observed median MFI.  Lines = fitted log-log linear model.
+Colour = plate, linetype = source.*
+
+```{r c0sc-std-curve-plot-fn}
+plot_std_curves_fitted <- function(feat) {
+  obs  <- stds_agg   %>% filter(feature == feat)
+  fits <- curve_fits %>% filter(feature == feat, !is.na(intercept))
+  if (nrow(fits) == 0) return(NULL)
+
+  pred_lines <- fits %>%
+    rowwise() %>%
+    mutate(log10_conc_seq = list(seq(log10(conc_min), log10(conc_max), length.out = 60))) %>%
+    ungroup() %>%
+    unnest(log10_conc_seq) %>%
+    mutate(log10_mfi_fit = intercept + slope * log10_conc_seq)
+
+  ggplot() +
+    geom_point(data = obs,
+               aes(x = log10_conc, y = log10_mfi, colour = plate, shape = set),
+               size = 1.8, alpha = 0.6) +
+    geom_line(data = pred_lines,
+              aes(x = log10_conc_seq, y = log10_mfi_fit, colour = plate,
+                  linetype = source, group = interaction(set, plate, source)),
+              linewidth = 0.55, alpha = 0.85) +
+    scale_colour_manual(values = plate_colors) +
+    scale_linetype_manual(values = source_lty) +
+    scale_shape_manual(values = c(inf_baa = 16, mat_baa = 17)) +
+    facet_wrap(~ antigen_base, scales = "free_y", ncol = 4) +
+    labs(title = paste("Standard curves (both sets) --", feat),
+         x = "log10(Concentration)", y = "log10(Median MFI)",
+         colour = "Plate", linetype = "Source", shape = "Set") +
+    theme_bw(base_size = 9) +
+    theme(legend.position = "bottom", legend.box = "vertical",
+          strip.text = element_text(face = "bold", size = 8))
+}
+```
+
+```{r c0sc-std-curves-fitted, results='asis', fig.width=16, fig.height=11}
+for (feat in sort(unique(stds_agg$feature))) {
+  cat(sprintf("\n#### %s\n\n", feat))
+  p <- plot_std_curves_fitted(feat)
+  if (!is.null(p)) print(p) else cat("*No data.*\n\n")
+  cat("\n\n")
+}
+```
+
+---
+
+## 4  Cross-Set Normalization Parameters
+
+For each (feature x antigen x plate x source) group, the fitted coefficients from both
+sets are paired.  The **cross-curve linear parameters** fully define the normalization:
+
+```
+log10(norm_MFI) = cross_intercept + cross_slope x log10(raw_MFI)
+```
+
+- `cross_slope = b_target / b_source` — deviation from 1 = concentration-dependent correction
+- `cross_intercept = a_target - a_source * cross_slope` — the overall log-scale offset
+
+```{r c0sc-cross-params}
+norm_params <- curve_fits %>%
+  select(set, feature, antigen_base, plate, source,
+         intercept, slope, r_squared, rmse,
+         n_pts, conc_min, conc_max, mfi_min, mfi_max) %>%
+  pivot_wider(
+    id_cols     = c(feature, antigen_base, plate, source),
+    names_from  = set,
+    values_from = c(intercept, slope, r_squared, rmse,
+                    n_pts, conc_min, conc_max, mfi_min, mfi_max)
+  ) %>%
+  filter(!is.na(intercept_inf_baa), !is.na(intercept_mat_baa)) %>%
+  mutate(
+    cross_slope_inf2mat     = slope_mat_baa / slope_inf_baa,
+    cross_intercept_inf2mat = intercept_mat_baa - intercept_inf_baa * cross_slope_inf2mat,
+    cross_slope_mat2inf     = slope_inf_baa / slope_mat_baa,
+    cross_intercept_mat2inf = intercept_inf_baa - intercept_mat_baa * cross_slope_mat2inf,
+    slope_dev_inf2mat = cross_slope_inf2mat - 1,
+    slope_dev_mat2inf = cross_slope_mat2inf - 1
+  )
+
+cat(sprintf("Groups with both curves fitted: %d\n", nrow(norm_params)))
+```
+
+### 4.1  Parameter table
+
+```{r c0sc-norm-param-table}
+datatable(
+  norm_params %>%
+    select(feature, antigen_base, plate, source,
+           cross_slope_mat2inf, cross_intercept_mat2inf, slope_dev_inf2mat,
+           r_squared_inf_baa, r_squared_mat_baa, rmse_inf_baa, rmse_mat_baa) %>%
+    mutate(across(where(is.numeric), ~ round(.x, 4))),
+  caption  = paste("Cross-curve normalization parameters.",
+                   "Apply: log10(norm_MFI) = cross_intercept + cross_slope x log10(raw_MFI)."),
+  filter   = "top", rownames = FALSE,
+  options  = list(scrollX = TRUE, pageLength = 20)
+) %>%
+  formatStyle("slope_dev_inf2mat",
+              backgroundColor = styleInterval(c(-0.1, 0.1),
+                                              c("#FDBB84","white","#FDBB84")))
+```
+
+### 4.2  Cross-slope distribution by feature
+
+```{r c0sc-cross-slope-plot, fig.width=14, fig.height=8}
+norm_params_long <- norm_params %>%
+  select(feature, antigen_base, plate, source,
+         `inf -> mat` = cross_slope_inf2mat,
+         `mat -> inf` = cross_slope_mat2inf) %>%
+  pivot_longer(c(`inf -> mat`, `mat -> inf`),
+               names_to = "direction", values_to = "cross_slope")
+
+ggplot(norm_params_long,
+       aes(x = cross_slope, y = antigen_base, colour = plate, shape = source)) +
+  geom_vline(xintercept = 1, linetype = "dashed", colour = "grey40") +
+  geom_point(size = 2.5, alpha = 0.85,
+             position = position_jitter(height = 0.18, width = 0)) +
+  scale_colour_manual(values = plate_colors) +
+  scale_shape_manual(values = source_shapes) +
+  facet_grid(direction ~ feature, scales = "free_y") +
+  labs(title = "Cross-slope by feature, antigen, plate, source",
+       subtitle = "1.0 = concentration-independent correction; != 1 = concentration-dependent",
+       x = "Cross-slope  (b_target / b_source)", y = "Antigen",
+       colour = "Plate", shape = "Source") +
+  theme_bw(base_size = 9) +
+  theme(legend.position = "bottom", legend.box = "vertical",
+        strip.text = element_text(face = "bold"))
+```
+
+---
+
+## 5  Scatter Plots: Raw inf_baa vs Predicted mat_baa {.tabset}
+
+```{r c0sc-scatter-fn}
+plot_scatter_feature <- function(feat) {
+  params <- norm_params %>% filter(feature == feat)
+  if (nrow(params) == 0) return(NULL)
+
+  inf_obs <- stds_agg %>%
+    filter(feature == feat, set == "inf_baa") %>%
+    left_join(
+      params %>% select(feature, antigen_base, plate, source,
+                        a_src = intercept_inf_baa, b_src = slope_inf_baa,
+                        a_tgt = intercept_mat_baa, b_tgt = slope_mat_baa),
+      by = c("feature","antigen_base","plate","source")
+    ) %>%
+    filter(!is.na(a_src)) %>%
+    mutate(mfi_x = median_mfi,
+           mfi_y = normalize_mfi(median_mfi, a_src, b_src, a_tgt, b_tgt)) %>%
+    filter(mfi_x > 0, mfi_y > 0, is.finite(log(mfi_x)), is.finite(log(mfi_y))) %>%
+    arrange(antigen_base, plate, source, concentration)
+
+  if (nrow(inf_obs) == 0) return(NULL)
+
+  ggplot(inf_obs, aes(x = mfi_x, y = mfi_y, colour = plate, shape = source)) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed",
+                colour = "grey40", linewidth = 0.5) +
+    geom_path(aes(group = interaction(plate, source)), alpha = 0.35, linewidth = 0.4) +
+    geom_point(aes(size = log10_conc), alpha = 0.85) +
+    scale_x_log10(labels = label_scientific()) +
+    scale_y_log10(labels = label_scientific()) +
+    annotation_logticks(sides = "bl", size = 0.2, alpha = 0.4) +
+    scale_colour_manual(values = plate_colors) +
+    scale_shape_manual(values = source_shapes) +
+    scale_size_continuous(name = "log10(Conc)", range = c(1, 4)) +
+    facet_wrap(~ antigen_base, scales = "free", ncol = 4) +
+    labs(title = paste("Raw inf_baa MFI vs Back-Interpolated mat_baa MFI --", feat),
+         subtitle = "Dashed = 1:1 target. Path: low to high concentration.",
+         x = "Observed inf_baa MFI",
+         y = "Predicted mat_baa MFI  (back-interpolated via standard curves)",
+         colour = "Plate", shape = "Source") +
+    theme_bw(base_size = 9) +
+    theme(legend.position = "bottom", legend.box = "vertical",
+          strip.text = element_text(face = "bold", size = 8))
+}
+```
+
+```{r c0sc-scatter-plots, results='asis', fig.width=16, fig.height=11}
+for (feat in sort(unique(stds_agg$feature))) {
+  cat(sprintf("\n#### %s\n\n", feat))
+  p <- plot_scatter_feature(feat)
+  if (!is.null(p)) print(p) else cat("*No groups with both sets fitted.*\n\n")
+  cat("\n\n")
+}
+```
+
+---
+
+## 6  Normalization Factor Curves {.tabset}
+
+```{r c0sc-norm-curve-fn}
+build_norm_curves <- function(feat) {
+  params <- norm_params %>%
+    filter(feature == feat, !is.na(cross_slope_inf2mat)) %>%
+    mutate(conc_lo = pmax(conc_min_inf_baa, conc_min_mat_baa),
+           conc_hi = pmin(conc_max_inf_baa, conc_max_mat_baa)) %>%
+    filter(conc_lo <= conc_hi)
+  if (nrow(params) == 0) return(NULL)
+
+  params %>%
+    rowwise() %>%
+    mutate(log10_conc_seq = list(seq(log10(conc_lo), log10(conc_hi), length.out = 80))) %>%
+    ungroup() %>%
+    unnest(log10_conc_seq) %>%
+    mutate(
+      mfi_inf_pred  = 10^(intercept_inf_baa + slope_inf_baa * log10_conc_seq),
+      mfi_mat_pred  = 10^(intercept_mat_baa + slope_mat_baa * log10_conc_seq),
+      norm_factor   = mfi_mat_pred / mfi_inf_pred,
+      log2_nf       = log2(norm_factor),
+      concentration = 10^log10_conc_seq
+    )
+}
+
+plot_norm_curves <- function(feat) {
+  d <- build_norm_curves(feat)
+  if (is.null(d)) return(NULL)
+
+  ggplot(d, aes(x = log10_conc_seq, y = log2_nf, colour = plate,
+                linetype = source, group = interaction(plate, source))) +
+    geom_hline(yintercept = 0, linetype = "dotted", colour = "grey40") +
+    geom_line(linewidth = 0.7, alpha = 0.9) +
+    scale_colour_manual(values = plate_colors) +
+    scale_linetype_manual(values = source_lty) +
+    facet_wrap(~ antigen_base, scales = "free_y", ncol = 4) +
+    labs(title = paste("Concentration-dependent normalization factor --", feat),
+         subtitle = "log2(mat_baa model / inf_baa model) at each concentration",
+         x = "log10(Concentration)", y = "log2(Normalization factor)",
+         colour = "Plate", linetype = "Source") +
+    theme_bw(base_size = 9) +
+    theme(legend.position = "bottom", legend.box = "vertical",
+          strip.text = element_text(face = "bold", size = 8))
+}
+```
+
+```{r c0sc-norm-curves, results='asis', fig.width=16, fig.height=11}
+for (feat in sort(unique(norm_params$feature))) {
+  cat(sprintf("\n#### %s\n\n", feat))
+  p <- plot_norm_curves(feat)
+  if (!is.null(p)) print(p) else cat("*Insufficient overlapping range.*\n\n")
+  cat("\n\n")
+}
+```
+
+---
+
+## 7  Validation: Normalized mat_baa vs Observed inf_baa {.tabset}
+
+```{r c0sc-validation}
+validation <- stds_agg %>%
+  filter(set == "mat_baa") %>%
+  left_join(
+    norm_params %>% select(feature, antigen_base, plate, source,
+                           a_src = intercept_mat_baa, b_src = slope_mat_baa,
+                           a_tgt = intercept_inf_baa, b_tgt = slope_inf_baa),
+    by = c("feature","antigen_base","plate","source")
+  ) %>%
+  filter(!is.na(a_src)) %>%
+  mutate(mfi_normalized = normalize_mfi(median_mfi, a_src, b_src, a_tgt, b_tgt),
+         log10_mfi_norm = log10(pmax(mfi_normalized, 0.5)))
+
+cat(sprintf("mat_baa observations with normalization applied: %d\n", nrow(validation)))
+```
+
+```{r c0sc-validate-plot-fn}
+plot_validate_feature <- function(feat) {
+  inf_d <- stds_agg %>%
+    filter(feature == feat, set == "inf_baa") %>%
+    mutate(layer = "inf_baa observed", log10_mfi_plot = log10_mfi)
+  mat_d <- validation %>%
+    filter(feature == feat) %>%
+    mutate(layer = "mat_baa normalised", log10_mfi_plot = log10_mfi_norm)
+
+  combined <- bind_rows(
+    inf_d %>% select(feature, antigen_base, plate, source,
+                     log10_conc, log10_mfi_plot, layer),
+    mat_d %>% select(feature, antigen_base, plate, source,
+                     log10_conc, log10_mfi_plot, layer)
+  ) %>% filter(!is.na(log10_mfi_plot))
+  if (nrow(combined) == 0) return(NULL)
+
+  ggplot(combined,
+         aes(x = log10_conc, y = log10_mfi_plot, colour = plate, shape = layer,
+             group = interaction(plate, source, layer))) +
+    geom_line(aes(linetype = source), linewidth = 0.45, alpha = 0.6) +
+    geom_point(size = 2, alpha = 0.8) +
+    scale_colour_manual(values = plate_colors) +
+    scale_shape_manual(values = c("inf_baa observed" = 16, "mat_baa normalised" = 17)) +
+    scale_linetype_manual(values = source_lty) +
+    facet_wrap(~ antigen_base, scales = "free_y", ncol = 4) +
+    labs(title = paste("Validation --", feat),
+         subtitle = "inf_baa observed (circles) vs mat_baa normalised to inf_baa scale (triangles)",
+         x = "log10(Concentration)", y = "log10(MFI)  [inf_baa scale]",
+         colour = "Plate", shape = "Layer", linetype = "Source") +
+    theme_bw(base_size = 9) +
+    theme(legend.position = "bottom", legend.box = "vertical",
+          strip.text = element_text(face = "bold", size = 8))
+}
+```
+
+```{r c0sc-validate-plots, results='asis', fig.width=16, fig.height=11}
+for (feat in sort(unique(validation$feature))) {
+  cat(sprintf("\n#### %s\n\n", feat))
+  p <- plot_validate_feature(feat)
+  if (!is.null(p)) print(p) else cat("*No data.*\n\n")
+  cat("\n\n")
+}
+```
+
+### Residual bias after normalization
+
+```{r c0sc-residuals, fig.width=16, fig.height=10}
+resid_tbl <- validation %>%
+  mutate(mfi_inf_modelpred = 10^(a_tgt + b_tgt * log10_conc),
+         residual_log2     = log2(mfi_normalized / mfi_inf_modelpred)) %>%
+  filter(is.finite(residual_log2))
+
+ggplot(resid_tbl,
+       aes(x = log10_conc, y = residual_log2, colour = plate, shape = source)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_point(size = 1.4, alpha = 0.7) +
+  scale_colour_manual(values = plate_colors) +
+  scale_shape_manual(values = source_shapes) +
+  facet_grid(antigen_base ~ feature, scales = "free_y") +
+  labs(title = "Post-normalization residuals",
+       subtitle = "log2(normalized mat_baa / inf_baa model prediction) -- target = 0",
+       x = "log10(Concentration)", y = "log2(residual)",
+       colour = "Plate", shape = "Source") +
+  theme_bw(base_size = 7) +
+  theme(legend.position = "bottom",
+        strip.text = element_text(face = "bold", size = 6))
+```
+
+---
+
+## 8  Normalization Heatmaps
+
+### 8.1  Cross-intercept (log-scale offset, inf -> mat)
+
+```{r c0sc-heatmap-intercept, fig.width=17, fig.height=9}
+ggplot(norm_params, aes(x = plate, y = antigen_base, fill = cross_intercept_inf2mat)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = round(cross_intercept_inf2mat, 2)), size = 2, colour = "black") +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#D6604D",
+                       midpoint = 0, name = "cross-\nintercept") +
+  facet_grid(source ~ feature, scales = "free", space = "free") +
+  labs(title = "Cross-intercept (inf->mat): overall log-scale offset", x = "Plate", y = "Antigen") +
+  theme_bw(base_size = 8) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+        strip.text  = element_text(face = "bold", size = 7))
+```
+
+### 8.2  Cross-slope deviation from 1.0
+
+*Values away from 0 = concentration-dependent correction needed.*
+
+```{r c0sc-heatmap-slope, fig.width=17, fig.height=9}
+ggplot(norm_params, aes(x = plate, y = antigen_base, fill = slope_dev_inf2mat)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = round(slope_dev_inf2mat, 3)), size = 2, colour = "black") +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#D6604D",
+                       midpoint = 0, name = "slope\ndev") +
+  facet_grid(source ~ feature, scales = "free", space = "free") +
+  labs(title = "Cross-slope deviation from 1 (inf->mat)",
+       subtitle = "0 = scalar correction;  != 0 = concentration-dependent correction",
+       x = "Plate", y = "Antigen") +
+  theme_bw(base_size = 8) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+        strip.text  = element_text(face = "bold", size = 7))
+```
+
+---
+
+## 9  Export
+
+```{r c0sc-export}
+# Standard curve fit parameters -> data/ (git-ignored)
+write.csv(curve_fits, c0_out("std_curve_fits.csv"), row.names = FALSE)
+
+# Cross-curve normalization lookup table -> data/ (git-ignored)
+write.csv(
+  norm_params %>%
+    select(feature, antigen_base, plate, source,
+           intercept_inf_baa, slope_inf_baa, intercept_mat_baa, slope_mat_baa,
+           cross_slope_inf2mat, cross_intercept_inf2mat,
+           cross_slope_mat2inf, cross_intercept_mat2inf,
+           slope_dev_inf2mat, slope_dev_mat2inf,
+           r_squared_inf_baa, r_squared_mat_baa, rmse_inf_baa, rmse_mat_baa),
+  c0_out("normalization_params.csv"), row.names = FALSE
+)
+
+cat(sprintf("std_curve_fits.csv       : %d rows -> data/\n", nrow(curve_fits)))
+cat(sprintf("normalization_params.csv : %d rows -> data/\n", nrow(norm_params)))
+```
+
+---
+
+## 10  Interpretation Guide
+
+| Observation | Meaning | Action |
+|---|---|---|
+| `cross_slope ~= 1` | Curves are parallel; correction is the same at all concentrations | Simple multiplier: `10^cross_intercept` |
+| `cross_slope != 1` | Curves diverge/converge; correction grows or shrinks with MFI | Must use the full linear transform |
+| Triangles overlay circles in §7 | Normalization successful | Proceed |
+| Triangles offset from circles | Systematic residual bias | Check R2; consider 4PL/5PL fits |
+| High RMSE in fit table | Log-log linear model is a poor fit | Flag those groups; consider non-linear model |
+
+**Core formula (apply to any sample observation):**
+
+```
+# mat_baa -> inf_baa:
+log10(norm_MFI) = cross_intercept_mat2inf  +  cross_slope_mat2inf  x  log10(raw_MFI)
+
+# inf_baa -> mat_baa:
+log10(norm_MFI) = cross_intercept_inf2mat  +  cross_slope_inf2mat  x  log10(raw_MFI)
+```

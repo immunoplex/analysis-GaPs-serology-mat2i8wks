@@ -1,0 +1,64 @@
+# Data Directory
+
+Data files are not included in this repository.
+Access is available through [mechanism TBC - link to data access statement].
+
+## Data Objects Required
+
+### Core serology data
+| File | Contents | Used in |
+|------|----------|---------|
+| `c_set.RData` | Full systems-serology bead array dataset (all timepoints, all antigens) | C0, C1, C2, C3, C4, C5, C7, C8 |
+| `c_set_w_act_pentamer.RData` | c_set with ACT pentamer antigen included | C0 only (pre-filtering) |
+| `d_set.RData` | Derived dataset post-harmonisation | C1–C8 all |
+| `inf_baa.RData` | Infant 8-week bead array assay data | C1, C5, C7 |
+| `mat_baa.RData` | Maternal delivery bead array data | C2, C3, C4 |
+| `mat_baa_norm.RData` | Maternal bead array after cross-batch normalisation | C4, C6 |
+| `totalIgG.RData` | Antigen-specific calibrated total IgG (all timepoints) | C1–C8 |
+| `clin_assess.RData` | Clinical and demographic variables | C3, C6 |
+| `plate_df.RData` | Plate layout and batch metadata | C0 |
+| `standards_sel.RData` | Selected standards for cross-calibration | C0 |
+
+### IgG standardisation residuals
+| File | Contents | Used in |
+|------|----------|---------|
+| `igg_standard_model_fit_ap_matpm_prevacvacc_k_mat.RData` | aP arm IgG-std model (maternal) | C0, C1, C4 |
+| `igg_standard_model_fit_wp_matpm_prevacvacc_k_mat.RData` | wP arm IgG-std model (maternal) | C0, C1, C4 |
+| `igg_standard_residuals_ap_matpm_prevacvacc_k.RData` | aP standardised residuals (infant) | C1, C5, C7 |
+| `igg_standard_residuals_ap_matpm_prevacvacc_k_mat.RData` | aP standardised residuals (maternal) | C4 |
+| `igg_standard_residuals_ap_matpm_prevacvacc_k_trn.RData` | aP standardised residuals (cord) | C4 |
+| `igg_standard_residuals_wp_matpm_prevacvacc_k.RData` | wP standardised residuals (infant) | C1, C5, C7 |
+| `igg_standard_residuals_wp_matpm_prevacvacc_k_mat.RData` | wP standardised residuals (maternal) | C4 |
+| `igg_standard_residuals_wp_matpm_prevacvacc_k_trn.RData` | wP standardised residuals (cord) | C4 |
+
+### Interval and timing data
+| File | Contents | Used in |
+|------|----------|---------|
+| `INTERVAL_DAYS_BY_SUBJECT.RData` | Exact cord-to-8wk interval per subject | C2 |
+
+### IgG subclass CSV exports
+| File | Contents | Used in |
+|------|----------|---------|
+| `mat_igg1_baa.csv` | Maternal IgG1 (long format) | C4, C8 |
+| `mat_igg2_baa.csv` | Maternal IgG2 (long format) | C8 |
+| `mat_igg3_baa.csv` | Maternal IgG3 (long format) | C8 |
+| `mat_igg4_baa.csv` | Maternal IgG4 (long format) | C8 |
+| `figure3_abc_data.csv` | Pre-computed data for Figure 3 panels | C3 |
+
+## Dataset Versions
+
+### Canonical dataset: `d_set.RData`
+`d_set` is the complete derived dataset used in all analyses. It supersedes
+`c_set` and contains additional ADCD timepoints (P02, P09, M00, P18) not
+present in the earlier version. All analysis files (`C1` through `CK`) load
+`d_set.RData`.
+
+Key objects in `d_set.RData`:
+- `ebaa_extra2` — full bead array dataset with extended ADCD coverage
+  (replaces `ebaa_extra` from `c_set.RData`)
+
+### Legacy dataset: `c_set.RData`
+Retained in `data/` for provenance but not used in any current analysis.
+`c_set_w_act_pentamer.RData` is similarly retained but not used.
+
+| `S1_data.csv` | Supplementary Table S1 summary: paired within-subject antibody changes across maternal production, placental transfer and postnatal decay. One row per transition × antigen × series × arm. Used in C7_effector_pathway.Rmd. |

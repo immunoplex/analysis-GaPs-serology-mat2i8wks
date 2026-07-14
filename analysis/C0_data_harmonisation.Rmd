@@ -1,0 +1,77 @@
+---
+title: "C0 · Data harmonisation & IgG standardisation"
+subtitle: "Cross-batch MFI normalisation and total-IgG standardisation of functional assays"
+author: "Anja Saso and Michael Scot Zens"
+output:
+  workflowr::wflow_html:
+    toc: true
+    number_sections: false
+    theme: cosmo
+    highlight: textmate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(here)
+library(tidyverse)
+library(cgam)
+library(MASS)
+library(DT)
+library(kableExtra)
+library(scales)
+
+# Force dplyr to win
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+
+source(here::here("config", "endpoints.R"),            local = TRUE)
+source(here::here("config", "endpoints_additions.R"),  local = TRUE)
+source(here::here("R", "C0_connection_transform.R"), local = TRUE)
+source(here::here("R", "colors.R"),               local = TRUE)
+
+## Gate the slow standardisation refit (cgam nsim=100 x every feature).
+## FALSE = document only; set TRUE to regenerate residuals into data/.
+run_standardisation <- FALSE
+```
+
+## Overview
+
+C0 prepares every downstream input for C1–C8/CK from the canonical
+d_set.RData (ebaa_extra2). Two stages:
+
+Harmonisation — cross-batch MFI normalisation via standard-curve
+back-interpolation (inf_baa ↔ mat_baa scales).
+IgG standardisation — regressing each functional / subclass assay on
+its antigen-specific total IgG; whole-bacterium assays are standardised
+against a single chosen antigen (SBA & WT-IgG → PRN_IgG; PTNA → PT_IgG).
+All intermediate outputs are written to data/ and are git-ignored.
+
+## Stage 1 · Harmonisation
+``` {r harmonise, child = here::here("analysis","parts","C0_standards_comparison.Rmd")}
+
+
+```
+
+## Stage 2 · IgG standardisation {.tabset}
+
+```{r standardise, results="asis"}
+if (run_standardisation) {
+  for (i in seq_len(nrow(std_config))) {
+    cfg_row <- std_config[i, ]
+    res <- knitr::knit_child(
+      here::here("analysis","parts","C0_standardise.Rmd"),
+      envir = environment(), quiet = TRUE)
+    cat(res, sep = "\n")
+  }
+} else {
+  cat("\n*Standardisation refit gated off ",
+      "(`run_standardisation <- FALSE`). ",
+      "Residual files in `data/` are used as-is by C1/C4/C5/C7.*\n")
+}
+
+
+
+```
+

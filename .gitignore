@@ -1,7 +1,7 @@
 # Keep the local data/ directory out of version control.
 # Anchored to the repository root (/gaps_system_serology).
-/data/
 analysis/docs/
+scratch/
 analysis/site_libs/
 analysis/figures/
 analysis/*_files/
@@ -14,10 +14,9 @@ analysis/*.html
 analysis/*_files/
 
 # Data files not shared in this repository
-data/*.RData
-data/*.csv
-!data/README.md
-!data/S1_data.csv
+data/*.RData          # covers all igg_standard_residuals_* / model_fit_* outputs
+data/*.csv            # covers normalization_params.csv, std_curve_fits.csv
+!data/README.md       # keep the data-dir README tracked
 
 # OS artefacts
 .DS_Store
