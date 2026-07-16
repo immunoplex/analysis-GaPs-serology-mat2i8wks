@@ -28,6 +28,14 @@ source(shared_utils("R/C7_effector_helpers.R"), local = FALSE, encoding = "UTF-8
 INF2_VISIT <- "InfMon2"   # data value (recoded M02); shown to readers as "8 weeks"
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # 8 Weeks: Whole-Bacterium Assays & Effector Functions — Maternal TdaP vs TT {#inf2-effectors}
 
 At the **infant baseline visit (8 weeks, before primary vaccination)** this part tests

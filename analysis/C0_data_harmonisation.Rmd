@@ -1,6 +1,6 @@
 ---
 title: "C0 · Data harmonisation & IgG standardisation"
-subtitle: "Cross-batch MFI normalisation and total-IgG standardisation of functional assays"
+subtitle: "Cross-batch MFI normalisation (standard-curve regression) and total-IgG standardisation of functional assays"
 author: "Anja Saso and Michael Scot Zens"
 output:
   workflowr::wflow_html:
@@ -8,6 +8,7 @@ output:
     number_sections: false
     theme: cosmo
     highlight: textmate
+    fig_path_ext: true
 ---
 
 ```{r setup, include=FALSE}
@@ -41,18 +42,613 @@ run_standardisation <- FALSE
 C0 prepares every downstream input for C1–C8/CK from the canonical
 d_set.RData (ebaa_extra2). Two stages:
 
-Harmonisation — cross-batch MFI normalisation via standard-curve
-back-interpolation (inf_baa ↔ mat_baa scales).
+Harmonisation — cross-batch MFI normalisation. The maternal / cord-blood
+assays (`mat_baa`) were run ~1 year after the infant assays (`inf_baa`), by
+different staff, on different plate layouts, using different biosamples. The
+**only** shared reference is the standard: the same composition, run over the
+same dilution series in both batches. We therefore normalise `mat_baa` onto the
+`inf_baa` scale by regressing the two batches' standard responses against each
+other, pooled across plates, and apply the fitted relationship to the
+maternal/cord test samples.
 IgG standardisation — regressing each functional / subclass assay on
 its antigen-specific total IgG; whole-bacterium assays are standardised
 against a single chosen antigen (SBA & WT-IgG → PRN_IgG; PTNA → PT_IgG).
 All intermediate outputs are written to data/ and are git-ignored.
 
 ## Stage 1 · Harmonisation
-``` {r harmonise, child = here::here("analysis","parts","C0_standards_comparison.Rmd")}
+```{r c0sc-setup, include=FALSE}
+## Child fragment of analysis/C0_data_harmonisation.Rmd
+## Packages (tidyverse, knitr, kableExtra, DT, scales, htmltools) are loaded
+## by the C0 parent setup chunk. Only fragment-specific data + helpers here.
 
+load(file = here::here("data", "standards_sel.RData"))       # observed standards, both sets
+load(file = here::here("data", "standard_grid_sel.RData"))   # 200-pt sigmoid fits, both sets
+load(file = here::here("data", "ebaa_extra2_plated.RData"))  # plated test samples
+
+# ── Normalisation configuration ───────────────────────────────────────────────
+grid_analytes <- c("ADCD", "IgG1", "IgG2", "IgG3", "IgG4")            # grid `feature`
+grid_antigens <- c("DT", "FHA", "IPV1", "IPV2", "IPV3", "PRN", "PT", "TT")
+src_pref      <- c("NIBSC06_140", "SD")   # standard source: primary, then fallback
+R2_MIN        <- 0.50                     # >= : concentration-dependent regression
+                                          #  < : constant mean-shift fallback
+norm_types    <- c("M", "C")              # maternal + cord normalised; B = reference
+N_GRID        <- 200L                     # common dilution grid resolution
+
+# ── Palettes ──────────────────────────────────────────────────────────────────
+plate_levels <- sort(unique(standards_sel$plate))
+n_plates     <- length(plate_levels)
+
+pal_base <- c(
+  "#1F78B4","#33A02C","#E31A1C","#FF7F00","#6A3D9A",
+  "#B15928","#A6CEE3","#B2DF8A","#FB9A99","#FDBF6F",
+  "#CAB2D6","#FFFF99","#1B9E77","#D95F02","#7570B3"
+)
+plate_colors  <- setNames(pal_base[seq_along(plate_levels)], plate_levels)
+source_shapes <- c(NIBSC06_140 = 16, SD = 17)
+source_lty    <- c(NIBSC06_140 = "solid", SD = "dashed")
+set_colors    <- c(inf_baa = "#2171B5", mat_baa = "#CB181D")
+method_colors <- c(regression = "#2171B5", mean_shift = "#D95F02")
+
+# ── Observed standards: harmonised antigen base + shared log10(dilution) axis ──
+# The maternal antigens carry a batch-code suffix (e.g. `pt_42`); antigen_base is
+# the cross-set join key. standards_sel$concentration is dilution-derived (it
+# falls as MFI rises); log10(dilution) is the axis both batches share exactly.
+std <- standards_sel %>%
+  dplyr::filter(!is.na(dilution), !is.na(mfi), dilution > 0) %>%
+  dplyr::mutate(antigen_base = str_to_upper(str_remove(antigen, "_\\d+$")),
+                ld           = log10(dilution))
+
+# ── Core helper: build one mat->inf calibration for feature x antigen x source ─
+# Pairs, at each shared dilution, observed INFANT MFI with the MATERNAL MFI read
+# off the maternal predicted grid (pooled across plates), then fits
+#   log10(inf_MFI) ~ log10(mat_MFI).
+# Also returns the slope-1 mean offset (the mean-shift fallback) and the maternal
+# MFI support used for out-of-range flagging.  Returns a 1-row tibble or NULL.
+build_calibration <- function(ft, agn, src) {
+  gm <- standard_grid_sel %>%
+    dplyr::filter(set == "mat_baa", feature == ft, antigen == agn, source == src)
+  mo <- std %>% dplyr::filter(set == "mat_baa", feature == ft, antigen_base == agn, source == src)
+  io <- std %>% dplyr::filter(set == "inf_baa", feature == ft, antigen_base == agn, source == src)
+  if (nrow(gm) == 0 || nrow(mo) == 0 || nrow(io) == 0) return(NULL)
+
+  # map each maternal grid curve onto log10(dilution) via its own observed range.
+  # Grid x rises with true concentration = FALLS with dilution, so orientation is
+  # inverse: grid_x_min -> most dilute (ld_max);  grid_x_max -> least dilute (ld_min).
+  rng <- mo %>% group_by(plate) %>%
+    dplyr::summarise(dlo = min(ld), dhi = max(ld), nu = n_distinct(ld), .groups = "drop") %>%
+    dplyr::filter(nu >= 3)
+  if (nrow(rng) == 0) return(NULL)
+
+  gm2 <- gm %>% inner_join(rng, by = "plate") %>%
+    group_by(plate) %>%
+    dplyr::mutate(ld = dhi + (concentration - min(concentration)) /
+                    (max(concentration) - min(concentration)) * (dlo - dhi)) %>%
+    ungroup()
+
+  # pooled maternal curve: median grid MFI across plates on a common ld grid
+  common <- seq(quantile(gm2$ld, 0.02), quantile(gm2$ld, 0.98), length.out = N_GRID)
+  mat_by_plate <- gm2 %>% group_by(plate) %>%
+    group_map(~ approx(arrange(.x, ld)$ld, arrange(.x, ld)$mfi, xout = common, rule = 1)$y)
+  mat_pooled <- apply(do.call(rbind, mat_by_plate), 2, median, na.rm = TRUE)
+
+  # infant observed anchors -> pooled maternal MFI at the same dilution
+  io <- io %>%
+    dplyr::mutate(log10_inf = log10(pmax(mfi, 0.5)),
+                  log10_mat = approx(common, mat_pooled, xout = ld, rule = 1)$y) %>%
+    dplyr::filter(is.finite(log10_inf), is.finite(log10_mat))
+  if (nrow(io) < 10) return(NULL)
+
+  fit <- lm(log10_inf ~ log10_mat, data = io)
+  tibble(
+    feature = ft, antigen = agn, source = src, n = nrow(io),
+    intercept = unname(coef(fit)[1]), slope = unname(coef(fit)[2]),
+    r_squared = summary(fit)$r.squared,
+    shift     = mean(io$log10_inf - io$log10_mat),   # slope-1 (mean-shift) offset
+    mat_lo    = min(io$log10_mat), mat_hi = max(io$log10_mat)
+  )
+}
+```
+
+## Approach
+
+`mat_baa` is placed on the `inf_baa` scale one **feature × antigen** at a time,
+pooled across plates (plate identity does not carry between the two runs):
+
+1. Both batches ran the standard over the **same dilution series**, so
+   `log10(dilution)` is the shared x-axis. At each dilution we pair the
+   **observed infant MFI** with the **maternal MFI** read off the maternal
+   predicted standard-curve grid (linearly interpolated; each grid curve is first
+   mapped back onto the dilution axis using its own observed range).
+2. Fit `log10(inf_MFI) ~ log10(mat_MFI)`. If `R² ≥ R2_MIN` the fitted line is the
+   **concentration-dependent** normalisation. If `R² < R2_MIN` (a near-flat,
+   low-signal standard where the slope is ill-determined) we fall back to a
+   **constant mean-shift** — `log10(norm) = log10(raw) + mean(log10_inf − log10_mat)` —
+   i.e. a slope-1, batch-offset correction for that feature × antigen.
+3. Apply to the maternal/cord (`sample_type` M, C) `mbaa` test samples. Infant
+   (`B`) samples are the reference scale and are left unchanged. Everything stays
+   in MFI space — nothing is expressed in concentration units.
+
+The exported `maternal_to_infant_calibration.csv` (written to `data/`) carries the
+per feature × antigen coefficients and the method used, and can be joined to any
+sample frame to reproduce the normalisation.
+
+---
+
+## 1  Data Overview {.tabset}
+
+### Feature × Antigen × Set
+
+```{r c0sc-overview-structure}
+set_antigen_tbl <- std %>%
+  group_by(set, feature, antigen_base) %>%
+  dplyr::summarise(
+    n_obs     = n(),
+    n_plates  = n_distinct(plate),
+    n_sources = n_distinct(source),
+    n_dil     = n_distinct(dilution),
+    .groups   = "drop"
+  )
+
+overlap_tbl <- set_antigen_tbl %>%
+  pivot_wider(
+    id_cols     = c(feature, antigen_base),
+    names_from  = set,
+    values_from = c(n_obs, n_plates, n_sources, n_dil)
+  )
+
+datatable(overlap_tbl,
+          caption  = "Observed standard rows per feature x antigen by set (NA = absent)",
+          filter   = "top", rownames = FALSE,
+          options  = list(scrollX = TRUE, pageLength = 15))
+```
+
+### Dilution Ranges by Set
+
+```{r c0sc-overview-dilutions}
+dil_tbl <- std %>%
+  group_by(set, feature, antigen_base) %>%
+  dplyr::summarise(
+    n_dil   = n_distinct(dilution),
+    dil_min = min(dilution),
+    dil_max = max(dilution),
+    .groups = "drop"
+  ) %>%
+  dplyr::arrange(feature, antigen_base, set)
+
+datatable(dil_tbl, caption = "Dilution range per feature x antigen x set",
+          filter = "top", rownames = FALSE,
+          options = list(scrollX = TRUE, pageLength = 15))
+```
+
+### Antigen Name Mapping
+
+*`mat_baa` antigens carry a batch-code suffix (e.g. `pt_42`). The base name
+(`antigen_base`) is the cross-set join key throughout.*
+
+```{r c0sc-overview-antigen-map}
+antigen_map <- standards_sel %>%
+  dplyr::mutate(antigen_base = str_to_upper(str_remove(antigen, "_\\d+$"))) %>%
+  distinct(set, antigen, antigen_base) %>%
+  pivot_wider(names_from = set, values_from = antigen,
+              values_fn = ~ paste(unique(.x), collapse = " / ")) %>%
+  dplyr::arrange(antigen_base)
+
+datatable(antigen_map,
+          caption  = "Antigen naming across sets (antigen_base = join key)",
+          rownames = FALSE,
+          options  = list(pageLength = 25, dom = "t"))
+```
+
+### Grid Coverage
+
+*The sigmoid standard-curve grid exists for a subset of features and antigens;
+normalisation is only defined where the grid and both observed sets overlap.*
+
+```{r c0sc-overview-grid}
+grid_cov <- standard_grid_sel %>%
+  group_by(feature, antigen) %>%
+  dplyr::summarise(sets    = paste(sort(unique(set)), collapse = "/"),
+                   plates  = n_distinct(plate),
+                   sources = paste(sort(unique(source)), collapse = "/"),
+                   pts     = n(), .groups = "drop")
+
+datatable(grid_cov, caption = "standard_grid_sel coverage (feature x antigen)",
+          filter = "top", rownames = FALSE,
+          options = list(scrollX = TRUE, pageLength = 20))
+```
+
+---
+
+## 2  Paired Standard Reference
+
+At every shared dilution the observed infant MFI is paired with the pooled
+maternal grid MFI, producing the regression training set for each
+feature × antigen.
+
+```{r c0sc-paired-reference}
+build_pairs <- function(ft, agn, src) {
+  gm <- standard_grid_sel %>%
+    dplyr::filter(set == "mat_baa", feature == ft, antigen == agn, source == src)
+  mo <- std %>% dplyr::filter(set == "mat_baa", feature == ft, antigen_base == agn, source == src)
+  io <- std %>% dplyr::filter(set == "inf_baa", feature == ft, antigen_base == agn, source == src)
+  if (nrow(gm) == 0 || nrow(mo) == 0 || nrow(io) == 0) return(NULL)
+  rng <- mo %>% group_by(plate) %>%
+    dplyr::summarise(dlo = min(ld), dhi = max(ld), nu = n_distinct(ld), .groups = "drop") %>%
+    dplyr::filter(nu >= 3)
+  if (nrow(rng) == 0) return(NULL)
+  gm2 <- gm %>% inner_join(rng, by = "plate") %>%
+    group_by(plate) %>%
+    dplyr::mutate(ld = dhi + (concentration - min(concentration)) /
+                    (max(concentration) - min(concentration)) * (dlo - dhi)) %>%
+    ungroup()
+  common <- seq(quantile(gm2$ld, 0.02), quantile(gm2$ld, 0.98), length.out = N_GRID)
+  mat_pooled <- apply(
+    do.call(rbind, gm2 %>% group_by(plate) %>%
+              group_map(~ approx(arrange(.x, ld)$ld, arrange(.x, ld)$mfi, xout = common, rule = 1)$y)),
+    2, median, na.rm = TRUE)
+  io %>%
+    dplyr::transmute(feature = ft, antigen = agn, source = src, ld,
+                     log10_inf = log10(pmax(mfi, 0.5)),
+                     log10_mat = approx(common, mat_pooled, xout = ld, rule = 1)$y) %>%
+    dplyr::filter(is.finite(log10_inf), is.finite(log10_mat))
+}
+
+# resolve source per (feature, antigen): NIBSC first, else SD
+src_choice <- map_dfr(grid_analytes, function(ft) {
+  map_dfr(grid_antigens, function(agn) {
+    for (src in src_pref) {
+      p <- build_pairs(ft, agn, src)
+      if (!is.null(p) && nrow(p) >= 10) return(tibble(feature = ft, antigen = agn, source = src))
+    }
+    tibble()
+  })
+})
+
+pairs_tbl <- src_choice %>%
+  pmap_dfr(function(feature, antigen, source) build_pairs(feature, antigen, source))
+
+cat(sprintf("Feature x antigen with a paired reference : %d\n", nrow(src_choice)))
+cat(sprintf("Paired standard points (total)            : %d\n", nrow(pairs_tbl)))
+```
+
+---
+
+## 3  Calibration Fits
+
+`log10(inf_MFI) ~ f(log10(mat_MFI))` is fitted per feature × antigen (pooled
+across plates). With `CALIB_METHOD = "spline"` the mapping is a **monotone-
+increasing constrained smoother** (`cgam::s.incr`), which is shape-free but
+order-preserving. Low-signal or point-poor standards fall back to a constant
+**mean-shift**. `CALIB_METHOD = "linear"` restores the legacy regression /
+mean-shift behaviour (`R² ≥ `r R2_MIN``).
+
+```{r c0sc-fit-calibrations}
+# ── Config reminder (define these in the c0sc-setup chunk) ───────────────────
+#   CALIB_METHOD <- "spline"   # "linear" (legacy) | "spline" (constrained GAM)
+#   N_CAL_GRID   <- 200L       # resolution of the exported calibration lookup
+#   MIN_PTS_SPL  <- 20L        # min paired points to attempt a spline
+#   MIN_SPAN_LD  <- 0.5        # min log10(mat) span (decades) to attempt a spline
+
+if (!exists("CALIB_METHOD")) CALIB_METHOD <- "spline"
+if (!exists("N_CAL_GRID"))   N_CAL_GRID   <- 200L
+if (!exists("MIN_PTS_SPL"))  MIN_PTS_SPL  <- 20L
+if (!exists("MIN_SPAN_LD"))  MIN_SPAN_LD  <- 0.5
+
+# ── Core fit: returns a 1-row tibble carrying a nested lookup grid, or NULL ────
+# Reuses build_pairs() for the (log10_mat, log10_inf) training set, then fits
+# either a monotone-increasing spline or the legacy linear/mean-shift model.
+# In every case the fitted mapping is materialised as a dense, monotone lookup
+# grid over [mat_lo, mat_hi] so it can be applied by interpolation and exported
+# as a flat CSV (no model objects persisted).
+build_calibration <- function(ft, agn, src) {
+  pr <- build_pairs(ft, agn, src)
+  if (is.null(pr) || nrow(pr) < 3) return(NULL)
+
+  mat_lo <- min(pr$log10_mat, na.rm = TRUE)
+  mat_hi <- max(pr$log10_mat, na.rm = TRUE)
+  if (!is.finite(mat_lo) || !is.finite(mat_hi) || mat_hi <= mat_lo) return(NULL)
+
+  xg   <- seq(mat_lo, mat_hi, length.out = N_CAL_GRID)
+  span <- mat_hi - mat_lo
+
+  # Diagnostics computed for every feature x antigen (feed §6 heatmaps as before)
+  fit_lm <- lm(log10_inf ~ log10_mat, data = pr)
+  r2     <- summary(fit_lm)$r.squared
+  slope  <- unname(coef(fit_lm)[2])
+  interc <- unname(coef(fit_lm)[1])
+  shift  <- mean(pr$log10_inf - pr$log10_mat)
+
+  # Decide method
+  want_spline <- CALIB_METHOD == "spline" &&
+                 nrow(pr) >= MIN_PTS_SPL &&
+                 span     >= MIN_SPAN_LD
+
+  method <- NA_character_; yg <- NULL
+
+  if (want_spline) {
+    fit_sp <- tryCatch(
+      cgam::cgam(log10_inf ~ s.incr(log10_mat), data = pr),
+      error = function(e) NULL
+    )
+    if (!is.null(fit_sp)) {
+      yg <- tryCatch(
+        as.numeric(predict(fit_sp,
+                    newData = data.frame(log10_mat = xg))$fit),
+        error = function(e) NULL
+      )
+    }
+    if (!is.null(yg) && all(is.finite(yg))) {
+      yg     <- cummax(yg)          # defensive numerical monotonicity
+      method <- "spline_incr"
+    }
+  }
+
+  # Fallbacks (also the whole path when CALIB_METHOD == "linear")
+  if (is.na(method)) {
+    if (CALIB_METHOD == "linear" && r2 >= R2_MIN) {
+      yg <- interc + slope * xg
+      method <- "regression"
+    } else {
+      yg <- xg + shift
+      method <- "mean_shift"
+    }
+  }
+
+  tibble(
+    feature = ft, antigen = agn, source = src, n = nrow(pr),
+    method  = method, r_squared = r2,
+    intercept = interc, slope = slope, shift = shift,
+    mat_lo = mat_lo, mat_hi = mat_hi,
+    grid = list(tibble(log10_mat_grid = xg, log10_inf_pred = yg))
+  )
+}
+
+calibration <- src_choice %>%
+  pmap_dfr(function(feature, antigen, source)
+             build_calibration(feature, antigen, source))
+
+cat(sprintf("Calibration method            : %s\n", CALIB_METHOD))
+cat(sprintf("Calibrations built            : %d\n", nrow(calibration)))
+cat(sprintf("  monotone spline             : %d\n",
+            sum(calibration$method == "spline_incr")))
+cat(sprintf("  linear regression           : %d\n",
+            sum(calibration$method == "regression")))
+cat(sprintf("  mean-shift fallback         : %d\n",
+            sum(calibration$method == "mean_shift")))
+```
+
+---
+
+## 4  Apply Normalisation to Test Samples
+
+The calibration is applied to maternal/cord `mbaa` rows by **monotone
+interpolation** against the fitted lookup grid; infant (`B`) rows are the
+reference scale and pass through unchanged. `rule = 2` clamps predictions at the
+fitted support ends, and `out_of_range` still flags any raw MFI beyond
+`[mat_lo, mat_hi]` for downstream censoring.
+
+```{r c0sc-apply}
+apply_lookup <- calibration %>%
+  dplyr::select(analyte = feature, antigen, norm_source = source,
+                norm_method = method, norm_slope = slope,
+                norm_intercept = intercept, norm_shift = shift,
+                norm_r2 = r_squared, mat_lo, mat_hi)
+
+# Long-format lookup grid, keyed the same way as apply_lookup
+apply_grid <- calibration %>%
+  dplyr::select(analyte = feature, antigen, grid) %>%
+  tidyr::unnest(grid)
+
+ebaa <- ebaa_extra2_plated %>% dplyr::mutate(.row = row_number())
+
+# Per feature x antigen interpolation helper (monotone grid -> predicted infant)
+interp_norm <- function(x_raw, ana, agn) {
+  g <- apply_grid %>% dplyr::filter(analyte == ana, antigen == agn)
+  if (nrow(g) < 2) return(rep(NA_real_, length(x_raw)))
+  approx(g$log10_mat_grid, g$log10_inf_pred, xout = x_raw, rule = 2)$y
+}
+
+applied <- ebaa %>%
+  dplyr::filter(assay == "mbaa", sample_type %in% norm_types,
+                !is.na(value_reported), value_reported > 0) %>%
+  inner_join(apply_lookup, by = c("analyte", "antigen")) %>%
+  dplyr::mutate(log10_mfi_raw = log10(value_reported)) %>%
+  group_by(analyte, antigen) %>%
+  dplyr::mutate(
+    log10_mfi_norm = interp_norm(log10_mfi_raw,
+                                 dplyr::first(analyte),
+                                 dplyr::first(antigen)),
+    mfi_norm       = 10^log10_mfi_norm,
+    out_of_range   = log10_mfi_raw < mat_lo | log10_mfi_raw > mat_hi,
+    norm_applied   = TRUE
+  ) %>%
+  ungroup() %>%
+  dplyr::select(.row, norm_source, norm_method, norm_slope, norm_intercept,
+                norm_shift, norm_r2, log10_mfi_norm, mfi_norm,
+                out_of_range, norm_applied)
+
+ebaa_extra2_normalised <- ebaa %>%
+  left_join(applied, by = ".row") %>%
+  dplyr::mutate(
+    norm_applied = coalesce(norm_applied, FALSE),
+    norm_status  = dplyr::case_when(
+      norm_applied                                              ~ paste0("normalized_", norm_method),
+      assay != "mbaa"                                           ~ "not_mbaa",
+      sample_type == "B"                                        ~ "reference_infant",
+      !sample_type %in% norm_types                              ~ "other_sampletype",
+      !analyte %in% grid_analytes | !antigen %in% grid_antigens ~ "no_curve_feature",
+      is.na(value_reported) | value_reported <= 0              ~ "nonpositive_mfi",
+      TRUE                                                      ~ "no_curve_feature"
+    ),
+    # analysis-ready infant-scale MFI: normalised for M/C, raw for infant B
+    log10_mfi_infantscale = dplyr::case_when(
+      norm_applied                                           ~ log10_mfi_norm,
+      norm_status == "reference_infant" & value_reported > 0 ~ log10(value_reported),
+      TRUE                                                   ~ NA_real_
+    ),
+    mfi_infantscale = 10^log10_mfi_infantscale
+  ) %>%
+  dplyr::select(-.row)
+
+cat(sprintf("Rows normalised (maternal/cord mbaa): %d\n",
+            sum(ebaa_extra2_normalised$norm_applied)))
+```
+
+```{r c0sc-apply-summary}
+status_tbl <- ebaa_extra2_normalised %>%
+  dplyr::filter(assay == "mbaa", sample_type %in% norm_types) %>%
+  dplyr::count(norm_status, name = "n") %>%
+  dplyr::arrange(desc(n))
+
+datatable(status_tbl, caption = "Normalisation status (maternal/cord mbaa scope)",
+          rownames = FALSE, options = list(dom = "t"))
+
+cat(sprintf("\nOut-of-range (flagged) among normalised: %d (%.1f%%)\n",
+            sum(ebaa_extra2_normalised$out_of_range, na.rm = TRUE),
+            100 * mean(ebaa_extra2_normalised$out_of_range[ebaa_extra2_normalised$norm_applied])))
+```
+
+---
+
+## 5  Validation: Normalised standards vs observed infant {.tabset}
+
+Applying each calibration back to its own maternal standard points should recover
+the infant standard response (residual ≈ 0 in log10 space).
+
+```{r c0sc-validation}
+validation <- pairs_tbl %>%
+  left_join(calibration, by = c("feature", "antigen", "source")) %>%
+  dplyr::mutate(
+    log10_norm    = if_else(method == "regression",
+                            intercept + slope * log10_mat, log10_mat + shift),
+    residual_log10 = log10_norm - log10_inf
+  ) %>%
+  dplyr::filter(is.finite(residual_log10))
+
+resid_summary <- validation %>%
+  group_by(feature, antigen, method) %>%
+  dplyr::summarise(bias = round(mean(residual_log10), 3),
+                   rmse = round(sqrt(mean(residual_log10^2)), 3),
+                   .groups = "drop")
+
+datatable(resid_summary,
+          caption = "Post-normalisation residuals on the standards (target bias = 0)",
+          filter = "top", rownames = FALSE,
+          options = list(scrollX = TRUE, pageLength = 20))
+```
+
+```{r c0sc-validate-plot, fig.width=16, fig.height=9}
+ggplot(validation,
+       aes(x = log10_mat, y = residual_log10, colour = method)) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_point(size = 0.9, alpha = 0.4) +
+  scale_colour_manual(values = method_colors) +
+  facet_grid(feature ~ antigen, scales = "free_x") +
+  labs(title = "Post-normalisation residuals on the standard curves",
+       subtitle = "log10(normalised maternal) - log10(observed infant); target = 0",
+       x = "log10(maternal MFI)", y = "residual (log10)", colour = "Method") +
+  theme_bw(base_size = 7) +
+  theme(legend.position = "bottom",
+        strip.text = element_text(face = "bold", size = 6))
+```
+
+---
+
+## 6  Calibration Summary Heatmaps
+
+### 6.1  Cross-batch slope (concentration dependence)
+
+```{r c0sc-heatmap-slope, fig.width=13, fig.height=6}
+ggplot(calibration, aes(x = antigen, y = feature, fill = slope)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = ifelse(method == "regression", sprintf("%.2f", slope), "shift")),
+            size = 2.6, colour = "black") +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#D6604D",
+                       midpoint = 1, name = "slope") +
+  labs(title = "Maternal->infant slope (1.0 = pure scale match)",
+       subtitle = "cells labelled 'shift' used the mean-shift fallback (R2 < threshold)",
+       x = "Antigen", y = "Feature") +
+  theme_bw(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### 6.2  Batch offset (mean log10 shift)
+
+```{r c0sc-heatmap-shift, fig.width=13, fig.height=6}
+ggplot(calibration, aes(x = antigen, y = feature, fill = shift)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  geom_text(aes(label = sprintf("%.2f", shift)), size = 2.6, colour = "black") +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#D6604D",
+                       midpoint = 0, name = "log10\nshift") +
+  labs(title = "Mean batch offset (log10 maternal -> infant)",
+       x = "Antigen", y = "Feature") +
+  theme_bw(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+---
+
+## 7  Export
+
+Two calibration artefacts are written to `data/` (git-ignored): a human-readable
+per feature × antigen **summary** (method + linear diagnostics + support), and a
+long-format **lookup grid** that reproduces the (possibly nonlinear) mapping by
+monotone interpolation — the same mechanism used in §4.
+
+```{r c0sc-export}
+# 1) Summary table (drop the nested grid list-column) -> data/
+write.csv(
+  calibration %>%
+    dplyr::select(feature, antigen, source, method, n, slope, intercept,
+                  shift, r_squared, mat_lo, mat_hi),
+  c0_out("maternal_to_infant_calibration.csv"), row.names = FALSE
+)
+
+# 2) Long-format lookup grid (the applicable calibration) -> data/
+calibration_grid <- calibration %>%
+  dplyr::select(feature, antigen, source, method, grid) %>%
+  tidyr::unnest(grid) %>%
+  dplyr::select(feature, antigen, source, method,
+                log10_mat_grid, log10_inf_pred)
+
+write.csv(
+  calibration_grid,
+  c0_out("maternal_to_infant_calibration_grid.csv"), row.names = FALSE
+)
+
+# 3) Normalised, plated test-sample frame -> data/
+save(ebaa_extra2_normalised, file = here::here("data", "ebaa_extra2_normalised.RData"))
+
+cat(sprintf("maternal_to_infant_calibration.csv      : %d rows -> data/\n",
+            nrow(calibration)))
+cat(sprintf("maternal_to_infant_calibration_grid.csv : %d rows -> data/\n",
+            nrow(calibration_grid)))
+cat(sprintf("ebaa_extra2_normalised.RData            : %d rows -> data/\n",
+            nrow(ebaa_extra2_normalised)))
+```
+
+---
+
+## 8  Interpretation Guide
+
+| Observation | Meaning | Action |
+|---|---|---|
+| `method = regression`, slope ≈ 1 | Batches differ by a near-constant scale | Use as-is |
+| `method = regression`, slope ≠ 1 | Correction depends on MFI level (concentration-dependent) | Use as-is |
+| `method = mean_shift` | Standard too flat/low-signal to fit a slope; constant offset applied | Treat those analytes cautiously |
+| Residuals in §5 centred on 0 | Calibration recovers the infant scale | Proceed |
+| `out_of_range = TRUE` | Sample MFI beyond the standard range (extrapolated) | Flag/censor downstream as needed |
+
+**Core formula (apply to any maternal/cord sample MFI):**
 
 ```
+# regression:  log10(norm_MFI) = intercept + slope * log10(raw_MFI)
+# mean_shift:  log10(norm_MFI) = log10(raw_MFI) + shift
+# join maternal_to_infant_calibration.csv by (feature/analyte, antigen)
+```
+
+Use `log10_mfi_infantscale` (or `mfi_infantscale`) as the analysis-ready,
+batch-harmonised value: normalised for maternal/cord, observed for infant.
 
 ## Stage 2 · IgG standardisation {.tabset}
 
@@ -61,8 +657,9 @@ if (run_standardisation) {
   for (i in seq_len(nrow(std_config))) {
     cfg_row <- std_config[i, ]
     res <- knitr::knit_child(
-      here::here("analysis","parts","C0_standardise.Rmd"),
-      envir = environment(), quiet = TRUE)
+  here::here("analysis", "parts", "C0_standardise.Rmd"),
+  quiet = TRUE
+)
     cat(res, sep = "\n")
   }
 } else {
@@ -70,8 +667,4 @@ if (run_standardisation) {
       "(`run_standardisation <- FALSE`). ",
       "Residual files in `data/` are used as-is by C1/C4/C5/C7.*\n")
 }
-
-
-
 ```
-

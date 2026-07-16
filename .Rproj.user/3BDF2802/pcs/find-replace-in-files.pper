@@ -1,15 +1,18 @@
 {
     "dialog-state": {
-        "query": "load_serology_data",
+        "query": "fig.path",
         "path": "",
         "regex": false,
         "caseSensitive": false,
         "wholeWord": false,
-        "filePatterns": [],
+        "filePatterns": [
+            "*.r",
+            "*.R"
+        ],
         "useGitGrep": true,
         "excludeGitIgnore": true,
         "excludeFilePatterns": [],
-        "resultsCount": 85,
+        "resultsCount": 0,
         "errorCount": 0,
         "replaceErrors": "",
         "projectRelative": true

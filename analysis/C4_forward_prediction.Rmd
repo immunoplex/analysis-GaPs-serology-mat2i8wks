@@ -62,6 +62,14 @@ clin_age <- clin %>% dplyr::select(subject_accession, maternal_age) %>% distinct
 ACCENT <- "#8A1538"; MARM_COL <- c(TdaP = "#3a8bd6", TT = "#e06a5a")
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # Design
 
 These two analyses formalise the section-D claim. Section D shows the **expanded

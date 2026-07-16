@@ -89,7 +89,7 @@ display_clinical <- function(key) {
   cat("####", strata_c[[key]]$label, sprintf("(n with outcome = %d)\n\n", nO))
 
   tbl <- s$univ_table %>%
-    mutate(R2 = ifelse(is.na(R2), "\u2014", sprintf("%.3f", R2)),
+    dplyr::mutate(R2 = ifelse(is.na(R2), "\u2014", sprintf("%.3f", R2)),
            adj_R2 = ifelse(is.na(adj_R2), "\u2014", sprintf("%.3f", adj_R2)),
            p_model = ifelse(is.na(p_model), "\u2014", sprintf("%.3g", p_model))) %>%
     dplyr::select(Label, Form, n, R2, adj_R2, p_model, sig)
@@ -151,12 +151,12 @@ mapnote("The cross-stratum matrix and the multivariate summary below feed the ",
 ```{r clin-cross, results='asis'}
 all_rows <- bind_rows(lapply(names(screens_c),
                              function(k) screens_c[[k]]$univ_table %>%
-                               mutate(Stratum = strata_c[[k]]$label)), .id = NULL) %>%
-  mutate(sig_chr = ifelse(is.na(p_model), "\u2014", pvalue_to_label(p_model)))
+                               dplyr::mutate(Stratum = strata_c[[k]]$label)), .id = NULL) %>%
+  dplyr::mutate(sig_chr = ifelse(is.na(p_model), "\u2014", pvalue_to_label(p_model)))
 
 # R2 (sig) matrix: rows = covariate x form, columns = stratum
 disp <- all_rows %>%
-  mutate(cell = ifelse(is.na(R2), "\u2014", sprintf("%.3f (%s)", R2, sig_chr))) %>%
+  dplyr::mutate(cell = ifelse(is.na(R2), "\u2014", sprintf("%.3f (%s)", R2, sig_chr))) %>%
   dplyr::select(Stratum, Label, Form, cell) %>%
   pivot_wider(id_cols = c(Label, Form), names_from = Stratum, values_from = cell)
 cat("### R\u00b2 (significance) Across All Strata\n\n")
@@ -198,7 +198,7 @@ cat("\n")
 
 ```{r clin-forest, fig.cap="Figure CC1. Univariate R\u00b2 for each covariate form across strata. Filled = p < threshold.", fig.height=7}
 plot_df <- all_rows %>%
-  mutate(sig_fill = !is.na(p_model) & p_model < clin_alpha,
+  dplyr::mutate(sig_fill = !is.na(p_model) & p_model < clin_alpha,
          Covariate_form = paste0(Label, "\n(", Form, ")"))
 ggplot(plot_df, aes(x = R2, y = reorder(Covariate_form, R2),
                     color = Stratum, shape = sig_fill)) +
@@ -222,7 +222,7 @@ sig_coef <- bind_rows(lapply(names(screens_c), function(k) {
     res <- sc$univ_res[[key2]]
     if (is.null(res) || is.null(res$tidy_coef)) return(NULL)
     res$tidy_coef %>% dplyr::filter(Predictor != "(Intercept)") %>%
-      mutate(Stratum = strata_c[[k]]$label, Covariate = lbl,
+      dplyr::mutate(Stratum = strata_c[[k]]$label, Covariate = lbl,
              lo = .data[[beta_lab]] - 1.96 * SE, hi = .data[[beta_lab]] + 1.96 * SE)
   }))
 }))

@@ -73,6 +73,14 @@ has_glmnet <- requireNamespace("glmnet", quietly = TRUE)
 has_cluster <- requireNamespace("cluster", quietly = TRUE)
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # Main figure (UNCHANGED from rev1)
 
 Everything in this section is identical to `09_figure4_three_panel_rev.Rmd`; it is

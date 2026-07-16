@@ -69,6 +69,14 @@ has_cluster <- requireNamespace("cluster", quietly = TRUE)
 ACCENT <- "#8A1538"; MARM_COL <- c(TdaP = "#1b5aa0", TT = "#c0297a")
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # What this tests
 
 The responder score is a function of maternal PT, FHA and PRN IgG — the same antibodies that

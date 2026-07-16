@@ -54,6 +54,14 @@ TO_VISIT   <- "MatBirth"
 MIN_PAIRED <- 10L
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # The Question
 
 Maternal antibody is measured at an **early-pregnancy, pre-vaccination visit** (`PregEarly`)

@@ -138,6 +138,14 @@ render_sequential <- function(tag, measure) {
 }
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # Background: what the pro-/tolerogenic ratio assumes
 
 Our earlier analyses summarised each antigen's IgG-subclass response as a single

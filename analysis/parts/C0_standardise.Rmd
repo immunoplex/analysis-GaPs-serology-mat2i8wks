@@ -1,5 +1,5 @@
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+## knitr::opts_chunk$set(echo = TRUE)
 ## workflowr::wflow_build(files = here("./analysis/standard_serology_igg_ap_matpm_prevacvacc_j.Rmd"))
 ## code below generates files which match standard_serology_igg_v2.wp_matpm.rmd for vaccinated and boosted visits
 ## code below written to test revised code for t.test() from R update 

@@ -53,7 +53,7 @@ unstandardized_data <- data_raw %>%
   dplyr::select(subject_accession, visit_name, arm_name, infant_arm,
                 antigen, analyte, feature, value_reported, log_assay_value) %>%
   distinct(subject_accession, visit_name, feature, .keep_all = TRUE) %>%
-  mutate(across(c(antigen, analyte, feature, arm_name, infant_arm), as.character))
+  dplyr::mutate(across(c(antigen, analyte, feature, arm_name, infant_arm), as.character))
 unstandardized_data$standstat <- "untransformed"
 
 if (have_std) {
@@ -112,7 +112,7 @@ run_bubble_cell <- function(ss, visit, strat_name) {
         caption = sprintf("Effect grid \u2014 %s, %s, %s.", ss, visit, strat_name)))
   cat("\n")
   bubble_stats_acc[[paste(ss, visit, strat_name, sep = " | ")]] <<-
-    res$stats %>% mutate(scale = ss, visit = visit, stratum = strat_name)
+    res$stats %>% dplyr::mutate(scale = ss, visit = visit, stratum = strat_name)
 }
 ```
 
@@ -150,7 +150,7 @@ if (nrow(all_bubble_stats) > 0) {
   for (ss in scales) for (strat_name in names(strata_defs)) {
     sub <- all_bubble_stats %>%
       dplyr::filter(scale == ss, stratum == strat_name) %>%
-      mutate(cell = sprintf("%+.2f %s", effect_size, pvalue_to_label(p_adj)))
+      dplyr::mutate(cell = sprintf("%+.2f %s", effect_size, pvalue_to_label(p_adj)))
     # keep antigen x analyte that are significant in at least one visit
     keep <- sub %>% group_by(antigen, analyte) %>%
       dplyr::summarize(any_sig = any(significant, na.rm = TRUE), .groups = "drop") %>%
@@ -163,7 +163,7 @@ if (nrow(all_bubble_stats) > 0) {
     wide <- sub %>%
       dplyr::select(antigen, analyte, visit, cell) %>%
       pivot_wider(names_from = visit, values_from = cell) %>%
-      arrange(antigen, analyte)
+      dplyr::arrange(antigen, analyte)
     cat(sprintf("\n### %s \u2014 %s\n\n", ss, strat_name))
     print(knitr::kable(wide,
       caption = sprintf("Signed effect (median TT\u2212TdaP) with significance, by visit \u2014 %s, %s. Significant in \u22651 visit only.", ss, strat_name),

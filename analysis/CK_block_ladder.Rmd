@@ -59,6 +59,14 @@ source(shared_utils("R/C1_serology_helpers.R"),         local = FALSE, encoding 
 data_raw <- load_serology_data(shared_utils("data/d_set.RData"))
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # Data assembly
 
 The modelling frame is identical to Results C–F, except the design/clinical base

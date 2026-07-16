@@ -18,6 +18,14 @@ library(tidyr)
 library(htmltools)
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 ```{r data}
 ## ---------------------------------------------------------------------------
 ## Input: the Supplemental Table S1 summary, one row per

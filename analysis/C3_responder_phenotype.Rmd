@@ -82,6 +82,14 @@ has_glmnet  <- requireNamespace("glmnet",  quietly = TRUE)
 nt <- if (exists("new_ntracker", mode = "function")) new_ntracker() else NULL
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 ---
 
 # Analytical Framework

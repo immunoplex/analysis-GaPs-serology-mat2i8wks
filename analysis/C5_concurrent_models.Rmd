@@ -83,6 +83,14 @@ RUN_NCT    <- isTRUE(params$run_nct)
 nt <- new_ntracker()
 ```
 
+```{r dplyr-guards, include=FALSE}
+# Force dplyr to win over any masking packages loaded above (e.g. MASS, data.table).
+select  <- dplyr::select
+filter  <- dplyr::filter
+mutate  <- dplyr::mutate
+arrange <- dplyr::arrange
+```
+
 # `r cfg$outcome_label`: Concurrent Within-Visit Antibody Analysis {-}
 
 This is a **focused, expanded extract** of the full config-driven serology pipeline.
