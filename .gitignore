@@ -8,7 +8,8 @@ analysis/*_files/
 analysis/*_cache/
 analysis/*.html
 *.Rproj
-.Rproj.user
+.Rproj.user/*
+*.sh
 
 # knitr figure cache — build artefacts, figures are served from docs/
 analysis/*_files/
